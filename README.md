@@ -14,7 +14,7 @@ PHPWarden is being designed as a standalone CLI with Docker-based tools and adap
 
 ## Development status
 
-The project is in early development. The Go CLI can validate configuration, inspect Git scope, and run a PHP debug checker through the explicit worker command. The Docker launcher, published images, and agent integrations are not available yet.
+The project is in early development. The Go CLI can validate configuration, inspect Git scope, and run a PHP debug checker through the explicit worker command. A development Docker image runs that worker with PHP 8.4 and Git. The Docker launcher, published images, and agent integrations are not available yet.
 
 ## Build and try the CLI
 
@@ -72,6 +72,33 @@ Reports follow the [v1 report schema](schemas/report-v1.schema.json), which is e
 
 Current worker reports have no resolved image/toolset metadata. Framework discovery and image compatibility validation are still pending; this is a working debug worker rather than a complete Docker release.
 
+## Run the development Docker image
+
+Build from this repository with Docker; Go and PHP are installed inside the build/runtime images:
+
+```sh
+docker build -f docker/Dockerfile -t phpwarden:debug-php8.4-dev .
+```
+
+From the Git project you want to check, with an existing `.phpwarden.yaml`, run:
+
+```sh
+docker run --rm --pull=never --network=none --read-only \
+  --cap-drop=ALL --security-opt=no-new-privileges:true \
+  --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777 \
+  --user "$(id -u):$(id -g)" \
+  --mount "type=bind,source=$PWD,target=/workspace,readonly" \
+  phpwarden:debug-php8.4-dev worker check --only debug --format json
+```
+
+Set `php.runtime` to `"8.4"` and configure explicit `scope.include` roots and an available diff base. The example configuration uses PHP 8.3; adjust it before using this image. Append `--mode full` for a full scan or `--base origin/main` to override the diff base. The command returns the worker's exit code and JSON report.
+
+This image contains only the debug checker, PHP 8.4.26, and Git. It requires no host PHP, Composer, or Go, and no project `vendor` directory. The image defaults to UID/GID 10001; the command above uses your UID/GID to read private project directories. Check mode mounts the project read-only and uses a private temporary filesystem. Git trusts only the known `/workspace` mount through the image's system configuration.
+
+Use a local Docker daemon with access to the source directory. Mount the entire Git repository for monorepos and pass `--project /workspace/path/to/project`. Linked worktrees or separate Git directories whose metadata lives outside the mount need additional path mapping; the launcher will handle those separately. Container paths in findings remain relative to the configured project.
+
+The tag is local and unpublished. Base images are pinned by digest, while Alpine packages still come from their package repositories. Release package locks, platform/framework compatibility entries, resolved image metadata, and automatic pull/run remain future work. The current image is tested on Linux amd64 and does not establish a Drupal version support matrix.
+
 ## Repository checks
 
 Requires Go 1.26.5, PHP 8.4 with tokenizer, Python 3.12, and Git. From the repository root:
@@ -90,6 +117,13 @@ php -l internal/checker/debug/helper.php
 
 Go tests exercise configuration validation, defaults and overrides, project selection in monorepos and Git worktrees, and the actual compiled CLI's JSON output and exit codes. Scope tests also materialize the existing patch fixtures and verify file/line selection, unusual filenames, deletion/rename behavior, exclusions, and merge-base semantics. The JSON schema is embedded in the binary; configuration validation needs no network access or Docker.
 
-Python fixture tests validate the scenario data and Git states. The separate worker acceptance suite builds the real CLI, runs all six fixtures in four scope modes with the real PHP helper, and compares semantic findings and exit codes. It also injects process failures, checks optional policies, and tests configuration overrides. These are worker/process tests; Docker image integration remains a separate milestone.
+Python fixture tests validate the scenario data and Git states. The separate worker acceptance suite builds the real CLI, runs all six fixtures in four scope modes with the real PHP helper, and compares semantic findings and exit codes. It also injects process failures, checks optional policies, and tests configuration overrides.
 
-GitHub Actions checks Go formatting, vet, race tests, a standalone build, PHP helper syntax, and worker acceptance alongside Ruff and Python fixture validation. The worker test environment uses PHP 8.4. The image build matrix is not configured yet.
+The Docker suite runs the same six fixtures in four modes against the real image, checks read-only mounts and the default non-root user, verifies operation without host PHP/Go, and covers concurrent containers, runtime mismatch, and monorepo paths. Run it explicitly after building the image; it requires Python, Git, and Docker, without host PHP or Go:
+
+```sh
+PHPWARDEN_TEST_IMAGE=phpwarden:debug-php8.4-dev \
+  python3 -m unittest tests.acceptance.docker_worker -v
+```
+
+GitHub Actions checks Go formatting, vet, race tests, a standalone build, PHP helper syntax, and worker acceptance alongside Ruff and Python fixture validation. A separate Docker job builds the Linux amd64 development image and runs the Docker suite. The worker test environment uses PHP 8.4. Image publishing and a version/platform matrix are not configured yet.
