@@ -3,15 +3,13 @@ profile: drupal
 framework:
   version: auto
 php:
-  runtime: "8.3"
+  runtime: "8.4"
   target:
-    min: "8.3"
-    max: "8.3"
+    min: "8.4"
+    max: "8.4"
 scope:
   mode: diff
   base: origin/main
-  include:
-    - web/modules/custom
 tools:
   debug:
     enabled: true

@@ -1,0 +1,72 @@
+package worker
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"path/filepath"
+	"reflect"
+	"time"
+
+	"github.com/rchehd/phpwarden/internal/config"
+	"github.com/rchehd/phpwarden/internal/discovery"
+	"github.com/rchehd/phpwarden/internal/report"
+	"github.com/rchehd/phpwarden/internal/runner"
+	"github.com/rchehd/phpwarden/internal/runrequest"
+	"github.com/rchehd/phpwarden/internal/toolset"
+)
+
+func Execute(ctx context.Context, root string, request runrequest.Request, process runner.Process) report.Report {
+	failure := func(code string, err error) report.Report {
+		result := report.New()
+		if request.RunID != "" {
+			result.RunID = request.RunID
+		}
+		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: code, Stage: "worker", Message: err.Error()})
+		result.Finalize()
+		return result
+	}
+	if err := request.Validate(); err != nil {
+		return failure("request_invalid", err)
+	}
+	if request.Toolset != toolset.DebugID {
+		return failure("toolset_mismatch", fmt.Errorf("worker does not support requested toolset %q", request.Toolset))
+	}
+	location := config.Location{Root: root, Path: filepath.Join(root, request.ConfigFile)}
+	if err := request.Matches(location); err != nil {
+		return failure("stale", err)
+	}
+	effective, err := config.Load(location)
+	if err != nil {
+		return failure("config_invalid", err)
+	}
+	if request.Project != nil {
+		effective, err = discovery.Apply(location, effective)
+		if err != nil {
+			return failure("discovery_invalid", err)
+		}
+		if !reflect.DeepEqual(request.Project, effective.Project) {
+			return failure("stale", fmt.Errorf("project discovery does not match the host request"))
+		}
+	}
+	loadedJSON, _ := json.Marshal(effective.Config)
+	requestedJSON, _ := json.Marshal(request.Config)
+	if !bytes.Equal(loadedJSON, requestedJSON) || effective.SourceHash != request.Fingerprint["config"] {
+		return failure("stale", fmt.Errorf("mounted configuration does not match the host request"))
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(effective.Config.Runner.TimeoutSeconds)*time.Second)
+	defer cancel()
+	result := analyze(ctx, location, effective.Config, request.Selection, request.OnlyDebug, process)
+	result.RunID = request.RunID
+	result.Environment.Image, result.Environment.Toolset = &request.Image, &request.Toolset
+	if err := request.Matches(location); err != nil {
+		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "stale", Stage: "worker", Message: err.Error()})
+		result.Finalize()
+	}
+	if err := discovery.Unchanged(location, effective); err != nil {
+		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "stale", Stage: "worker", Message: err.Error()})
+		result.Finalize()
+	}
+	return result
+}

@@ -23,6 +23,7 @@ type Report struct {
 }
 
 type Environment struct {
+	FrameworkVersion *string `json:"framework_version,omitempty"`
 	PHPRuntime       *string `json:"php_runtime"`
 	RequestedRuntime string  `json:"requested_runtime"`
 	TargetMin        string  `json:"php_target_min"`

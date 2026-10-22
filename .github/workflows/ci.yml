@@ -24,6 +24,8 @@ jobs:
         run: python -m unittest tests.acceptance.docker_worker -v
         env:
           PHPWARDEN_TEST_IMAGE: phpwarden:debug-php8.4-dev
+      - name: Run public launcher fixture tests
+        run: python -m unittest tests.acceptance.launcher_cli -v
 
   go:
     name: Go CLI and configuration

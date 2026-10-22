@@ -104,7 +104,7 @@ func Build(ctx context.Context, options Options) (Selection, error) {
 		return result, err
 	}
 	if len(options.Include) == 0 {
-		return result, fmt.Errorf("source roots are unresolved; set scope.include explicitly until profile discovery is available")
+		return result, fmt.Errorf("source roots are unresolved; set scope.include or configure a discoverable Drupal layout")
 	}
 	roots := make([]string, 0, len(options.Include))
 	for _, include := range options.Include {

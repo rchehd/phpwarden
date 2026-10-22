@@ -5,18 +5,25 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/rchehd/phpwarden/internal/config"
+	"github.com/rchehd/phpwarden/internal/discovery"
+	"github.com/rchehd/phpwarden/internal/launcher"
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/runner"
+	"github.com/rchehd/phpwarden/internal/runrequest"
 	"github.com/rchehd/phpwarden/internal/scope"
+	"github.com/rchehd/phpwarden/internal/toolset"
 	"github.com/rchehd/phpwarden/internal/worker"
 	"github.com/rchehd/phpwarden/schemas"
 )
 
 const usage = `Usage: phpwarden config <validate|show> [options]
        phpwarden scope [PATH...] [options]
+       phpwarden resolve [options]
+       phpwarden check [PATH...] [options]
        phpwarden worker check [PATH...] [options]
 
 Options:
@@ -30,10 +37,11 @@ Scope options:
   --mode diff|full     Override configured mode
   --base REF           Diff base ref
   --whole-files        Include all lines of selected diff files
-  --only debug         Explicitly select the debug checker (worker only)
+  --only debug         Explicitly select the debug checker
 
-Scope inspection requires explicit scope.include roots until profile discovery is available.
-Worker check requires PHP in its execution environment. Docker launcher and init are not available yet.
+Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
+Check uses the local development Docker image (Linux amd64, PHP runtime/target 8.4).
+Worker check requires PHP in its execution environment. Published images and init are not available yet.
 `
 
 type options struct {
@@ -50,14 +58,15 @@ type options struct {
 }
 
 type response struct {
-	Version     int               `json:"version"`
-	Command     string            `json:"command"`
-	Valid       bool              `json:"valid"`
-	ExitCode    int               `json:"exit_code"`
-	Location    *config.Location  `json:"location,omitempty"`
-	Effective   *config.Effective `json:"effective,omitempty"`
-	Scope       *scope.Selection  `json:"scope,omitempty"`
-	Diagnostics []diagnostic      `json:"diagnostics"`
+	Version     int                `json:"version"`
+	Command     string             `json:"command"`
+	Valid       bool               `json:"valid"`
+	ExitCode    int                `json:"exit_code"`
+	Location    *config.Location   `json:"location,omitempty"`
+	Effective   *config.Effective  `json:"effective,omitempty"`
+	Scope       *scope.Selection   `json:"scope,omitempty"`
+	Selection   *toolset.Selection `json:"selection,omitempty"`
+	Diagnostics []diagnostic       `json:"diagnostics"`
 }
 
 type diagnostic struct {
@@ -67,6 +76,10 @@ type diagnostic struct {
 }
 
 func Run(arguments []string, cwd string, stdout, stderr io.Writer) int {
+	return RunContext(context.Background(), arguments, cwd, os.Stdin, stdout, stderr)
+}
+
+func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Reader, stdout, stderr io.Writer) int {
 	args, err := parse(arguments)
 	if err != nil {
 		return fail(stdout, stderr, args, "usage", err)
@@ -79,18 +92,36 @@ func Run(arguments []string, cwd string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "phpwarden dev")
 		return 0
 	}
+	if len(args.command) == 2 && args.command[0] == "worker" && args.command[1] == "execute" {
+		if len(arguments) != 2 {
+			return writeReport(stdout, stderr, "json", report.InputError("request", fmt.Errorf("worker execute accepts only its stdin request")))
+		}
+		decoder := json.NewDecoder(io.LimitReader(stdin, 32<<20))
+		decoder.DisallowUnknownFields()
+		var request runrequest.Request
+		if err := decoder.Decode(&request); err != nil {
+			return writeReport(stdout, stderr, "json", report.InputError("request", err))
+		}
+		var extra any
+		if err := decoder.Decode(&extra); err != io.EOF {
+			return writeReport(stdout, stderr, "json", report.InputError("request", fmt.Errorf("expected one run request")))
+		}
+		return writeReport(stdout, stderr, "json", worker.Execute(ctx, cwd, request, runner.Exec{}))
+	}
 	isScope := len(args.command) > 0 && args.command[0] == "scope"
 	isWorker := workerCommand(args)
+	isCheck := len(args.command) > 0 && args.command[0] == "check"
+	isResolve := len(args.command) == 1 && args.command[0] == "resolve"
 	isConfig := len(args.command) == 2 && args.command[0] == "config" &&
 		(args.command[1] == "validate" || args.command[1] == "show")
-	if !isScope && !isConfig && !isWorker {
-		return fail(stdout, stderr, args, "usage", fmt.Errorf("expected config validate, config show, scope, or worker check; use --help"))
+	if !isScope && !isConfig && !isWorker && !isCheck && !isResolve {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("expected config validate/show, resolve, scope, check, or worker check; use --help"))
 	}
-	if !isScope && !isWorker && (args.mode != "" || args.base != "" || args.wholeFiles) {
+	if !isScope && !isWorker && !isCheck && (args.mode != "" || args.base != "" || args.wholeFiles) {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("scope options require the scope command"))
 	}
-	if args.only != "" && (!isWorker || args.only != "debug") {
-		return fail(stdout, stderr, args, "usage", fmt.Errorf("--only supports debug in worker check; unknown or unavailable checker %q", args.only))
+	if args.only != "" && ((!isWorker && !isCheck) || args.only != "debug") {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("--only supports debug in check/worker check; unknown or unavailable checker %q", args.only))
 	}
 	location, err := config.Resolve(config.LocationOptions{CWD: cwd, Project: args.project, Config: args.config})
 	if err != nil {
@@ -100,31 +131,53 @@ func Run(arguments []string, cwd string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(stdout, stderr, args, "config", err)
 	}
+	if !isConfig || args.command[1] == "show" {
+		effective, err = discovery.Apply(location, effective)
+		if err != nil {
+			return fail(stdout, stderr, args, "discovery", err)
+		}
+	}
 	if isScope {
 		return showScope(args, cwd, location, effective.Config, stdout, stderr)
 	}
-	if isWorker {
+	if isWorker || isCheck {
 		workerArgs := args
-		workerArgs.command = args.command[1:]
+		if isWorker {
+			workerArgs.command = args.command[1:]
+		}
 		options, err := scopeOptions(workerArgs, cwd, location, effective.Config)
 		if err != nil {
 			return fail(stdout, stderr, args, "usage", err)
 		}
-		result := worker.Check(context.Background(), location, effective, options, args.only == "debug", runner.Exec{})
+		var result report.Report
+		if isCheck {
+			result = launcher.Check(ctx, location, effective, options, args.only == "debug", runner.Exec{})
+		} else {
+			result = worker.Check(ctx, location, effective, options, args.only == "debug", runner.Exec{})
+		}
 		return writeReport(stdout, stderr, args.format, result)
 	}
 	result := response{
 		Version: 1, Command: strings.Join(args.command, " "), Valid: true,
 		Location: &location, Diagnostics: []diagnostic{},
 	}
-	if args.command[1] == "show" {
+	if isConfig && args.command[1] == "show" {
 		result.Effective = &effective
+	}
+	if isResolve {
+		selection, err := toolset.Resolve(effective.Config)
+		if err != nil {
+			return fail(stdout, stderr, args, "compatibility", err)
+		}
+		result.Selection = &selection
 	}
 	if args.format == "json" {
 		if err := writeJSON(stdout, result); err != nil {
 			fmt.Fprintln(stderr, err)
 			return 3
 		}
+	} else if isResolve {
+		fmt.Fprintf(stdout, "Development toolset: %s\nImage: %s\nPlatform: %s\n", result.Selection.ID, result.Selection.Image, result.Selection.Platform)
 	} else if args.command[1] == "show" {
 		fmt.Fprintf(stdout, "Project: %s\nConfig: %s\n", location.Root, location.Path)
 		if err := writeJSON(stdout, effective); err != nil {
@@ -269,7 +322,7 @@ func writeScope(args options, location config.Location, selection scope.Selectio
 }
 
 func fail(stdout, stderr io.Writer, args options, stage string, err error) int {
-	if workerCommand(args) {
+	if workerCommand(args) || len(args.command) > 0 && args.command[0] == "check" {
 		return writeReport(stdout, stderr, args.format, report.InputError(stage, err))
 	}
 	if args.format == "json" {

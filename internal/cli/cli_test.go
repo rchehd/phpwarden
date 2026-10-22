@@ -2,11 +2,15 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/rchehd/phpwarden/internal/report"
 )
 
 func project(t *testing.T) string {
@@ -81,6 +85,56 @@ func TestHelpAndVersionDoNotNeedConfig(t *testing.T) {
 		var stdout, stderr bytes.Buffer
 		if code := Run(args, t.TempDir(), &stdout, &stderr); code != 0 || stdout.Len() == 0 || stderr.Len() != 0 {
 			t.Fatalf("unexpected help/version output: exit=%d stdout=%s stderr=%s", code, &stdout, &stderr)
+		}
+	}
+}
+
+func TestResolveDoesNotInvokeDockerAndRejectsScopeFlags(t *testing.T) {
+	root := project(t)
+	filename := filepath.Join(root, ".phpwarden.yaml")
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filename, bytes.ReplaceAll(data, []byte("8.3"), []byte("8.4")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", t.TempDir())
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"resolve", "--project", root, "--format", "json"}, root, &stdout, &stderr)
+	want := 0
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		want = 2
+	}
+	if code != want || stderr.Len() != 0 {
+		t.Fatalf("offline resolve failed: %d %s %s", code, &stdout, &stderr)
+	}
+	var result response
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if code == 0 && (result.Selection == nil || !result.Selection.Development) {
+		t.Fatalf("missing development selection: %+v", result)
+	}
+	for _, args := range [][]string{{"resolve", "--base", "main"}, {"resolve", "--only", "debug"}} {
+		stdout.Reset()
+		stderr.Reset()
+		if code := Run(args, root, &stdout, &stderr); code != 2 {
+			t.Fatalf("unsupported resolve options accepted: %v", args)
+		}
+	}
+}
+
+func TestWorkerExecuteRejectsInvalidStdinRequests(t *testing.T) {
+	for _, input := range []string{"", "{}", `{"unknown":1}`, "{} {}"} {
+		var stdout, stderr bytes.Buffer
+		code := RunContext(context.Background(), []string{"worker", "execute"}, t.TempDir(), strings.NewReader(input), &stdout, &stderr)
+		var result report.Report
+		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+			t.Fatalf("missing JSON error for %q: %v: %s", input, err, &stderr)
+		}
+		if code != 2 && code != 3 || result.Complete || result.ExitCode != code || result.Verdict != "error" {
+			t.Fatalf("invalid request accepted: %q: %+v", input, result)
 		}
 	}
 }

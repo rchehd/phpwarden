@@ -43,6 +43,7 @@
         "type": "object", "additionalProperties": false,
         "required": ["php_runtime", "requested_runtime", "php_target_min", "php_target_max", "image", "toolset", "protocol"],
         "properties": {
+          "framework_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
           "php_runtime": {"type": ["string", "null"]},
           "requested_runtime": {"type": "string"},
           "php_target_min": {"type": "string"}, "php_target_max": {"type": "string"},
