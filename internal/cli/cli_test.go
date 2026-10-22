@@ -116,6 +116,10 @@ func TestResolveDoesNotInvokeDockerAndRejectsScopeFlags(t *testing.T) {
 	if code == 0 && (result.Selection == nil || !result.Selection.Development) {
 		t.Fatalf("missing development selection: %+v", result)
 	}
+	if code == 0 && (result.Selection.Release != "development" || result.Selection.Entry != "drupal-debug-dev-php8.4" ||
+		result.Selection.Preset.ID != "drupal-debug" || result.Selection.Tools["php"] != "8.4.26") {
+		t.Fatalf("missing bundled manifest provenance: %+v", result.Selection)
+	}
 	for _, args := range [][]string{{"resolve", "--base", "main"}, {"resolve", "--only", "debug"}} {
 		stdout.Reset()
 		stderr.Reset()

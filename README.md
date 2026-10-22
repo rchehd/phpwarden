@@ -110,7 +110,11 @@ phpwarden check --whole-files
 phpwarden check web/modules/custom/demo
 ```
 
-`resolve` selects the bundled development toolset offline. It currently accepts only Linux amd64, profile `drupal`, and PHP runtime/target `"8.4"`. This toolset runs only the tokenizer-based debug checker and does not claim compatibility with a particular installed Drupal version. PHPStan and other framework-dependent tools will require a tested release compatibility catalog.
+`resolve` reads the compatibility manifest embedded in the CLI, without Docker or network access. Its JSON selection includes the manifest release, entry, preset, tool versions, image, and platform. The bundled manifest currently contains only the development debug entry: Linux amd64, profile `drupal`, and PHP runtime/target `"8.4"`. This entry is explicitly independent of Drupal APIs and does not establish a Drupal version support matrix.
+
+The manifest schema is [manifest-v1.schema.json](schemas/manifest-v1.schema.json); the bundled data lives in [internal/toolset/manifest-v1.json](internal/toolset/manifest-v1.json). Release entries specify a framework version constraint, PHP runtime and exact patch, supported target range, versioned preset, toolset and exact tool versions, capabilities, and platform-specific image references pinned as `registry/repository@sha256:…`. Resolution requires one matching entry, including the project's Composer PHP requirements. Missing or ambiguous matches fail; entry order does not determine priority. A toolset/image may serve multiple non-overlapping framework ranges.
+
+Only the tested development image is bundled today. Release-selection tests use synthetic fixtures, which do not advertise actual Drupal/tool compatibility or published images. Registry pulls, real release entries, package locks, and release matrix tests remain pending. Project configuration cannot override the bundled manifest or select an arbitrary image.
 
 `check` computes Git scope on the host, verifies the local image's platform/protocol/toolset/PHP labels, and starts it by its inspected image ID. It sends a versioned request with effective settings, selected files/lines, input checksums, and the expected PHP version over stdin. The worker verifies inputs and its actual PHP version; the launcher also rechecks host checksums and Git scope. Linked worktrees and monorepos work without mounting external Git metadata into the worker.
 

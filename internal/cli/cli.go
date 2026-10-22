@@ -177,7 +177,12 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 			return 3
 		}
 	} else if isResolve {
-		fmt.Fprintf(stdout, "Development toolset: %s\nImage: %s\nPlatform: %s\n", result.Selection.ID, result.Selection.Image, result.Selection.Platform)
+		label := "Toolset"
+		if result.Selection.Development {
+			label = "Development toolset"
+		}
+		fmt.Fprintf(stdout, "%s: %s\nManifest: %s\nEntry: %s\nImage: %s\nPlatform: %s\n", label,
+			result.Selection.ID, result.Selection.Release, result.Selection.Entry, result.Selection.Image, result.Selection.Platform)
 	} else if args.command[1] == "show" {
 		fmt.Fprintf(stdout, "Project: %s\nConfig: %s\n", location.Root, location.Path)
 		if err := writeJSON(stdout, effective); err != nil {

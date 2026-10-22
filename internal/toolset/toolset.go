@@ -2,40 +2,109 @@ package toolset
 
 import (
 	"fmt"
+	"maps"
 	"runtime"
+	"slices"
+	"strings"
 
 	"github.com/rchehd/phpwarden/internal/compatibility"
 	"github.com/rchehd/phpwarden/internal/config"
+	"github.com/rchehd/phpwarden/internal/phpconstraint"
 )
 
 const DebugID = "debug-dev-v1-php8.4"
 const DebugPHPVersion = "8.4.26"
 
 type Selection struct {
-	FrameworkVersion *string  `json:"framework_version,omitempty"`
-	ID               string   `json:"id"`
-	Image            string   `json:"image"`
-	Platform         string   `json:"platform"`
-	Protocol         int      `json:"protocol"`
-	Capabilities     []string `json:"capabilities"`
-	Development      bool     `json:"development"`
-	PHPVersion       string   `json:"php_version"`
+	Release          string            `json:"release"`
+	Entry            string            `json:"entry"`
+	Preset           Preset            `json:"preset"`
+	Tools            map[string]string `json:"tools"`
+	FrameworkVersion *string           `json:"framework_version,omitempty"`
+	ID               string            `json:"id"`
+	Image            string            `json:"image"`
+	Platform         string            `json:"platform"`
+	Protocol         int               `json:"protocol"`
+	Capabilities     []string          `json:"capabilities"`
+	Development      bool              `json:"development"`
+	PHPVersion       string            `json:"php_version"`
 }
 
 func Resolve(effective config.Effective) (Selection, error) {
-	cfg := effective.Config
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		return Selection{}, fmt.Errorf("development toolset is currently tested only on Linux amd64")
-	}
-	if cfg.Profile != "drupal" || cfg.PHP.Runtime != "8.4" || cfg.PHP.Target.Min != "8.4" || cfg.PHP.Target.Max != "8.4" {
-		return Selection{}, fmt.Errorf("development debug toolset requires profile drupal and PHP runtime/target 8.4; no release compatibility catalog is available yet")
-	}
-	selected := Selection{ID: DebugID, Image: "phpwarden:debug-php8.4-dev", Platform: "linux/amd64", Protocol: 1, Capabilities: []string{"debug"}, Development: true, PHPVersion: DebugPHPVersion}
-	if err := compatibility.CheckRuntime(effective.Project, selected.PHPVersion); err != nil {
+	catalog, err := bundled()
+	if err != nil {
 		return Selection{}, err
 	}
-	if cfg.Framework.Version != "auto" && cfg.Framework.Version != "" {
-		selected.FrameworkVersion = &cfg.Framework.Version
+	return catalog.Resolve(effective, runtime.GOOS+"/"+runtime.GOARCH)
+}
+
+func (catalog Catalog) Resolve(effective config.Effective, platform string) (Selection, error) {
+	cfg := effective.Config
+	if _, err := compatibility.ValidatePHP(cfg, effective.Project); err != nil {
+		return Selection{}, err
 	}
-	return selected, nil
+	framework := cfg.Framework.Version
+	if framework != "" && framework != "auto" {
+		version, err := phpconstraint.StableVersion(framework)
+		if err != nil || version != framework {
+			return Selection{}, fmt.Errorf("framework resolution requires a canonical exact stable version")
+		}
+	}
+	var matches []Selection
+	var rejected []string
+	for _, item := range catalog.entries {
+		if item.Profile != cfg.Profile || item.PHP.Runtime != cfg.PHP.Runtime {
+			continue
+		}
+		covers, complete, err := item.targets.MinorRange(cfg.PHP.Target.Min, cfg.PHP.Target.Max)
+		if err != nil {
+			return Selection{}, err
+		}
+		if !covers || !complete {
+			continue
+		}
+		if item.Framework != nil {
+			if framework == "" || framework == "auto" {
+				continue
+			}
+			allows, err := item.framework.Allows(framework)
+			if err != nil || !allows {
+				continue
+			}
+		}
+		for _, image := range item.Images {
+			if image.Platform != platform {
+				continue
+			}
+			if err := compatibility.CheckRuntime(effective.Project, item.PHP.Version); err != nil {
+				rejected = append(rejected, item.ID+": "+err.Error())
+				continue
+			}
+			selected := Selection{Release: catalog.release, Entry: item.ID, Preset: item.Preset, Tools: maps.Clone(item.Tools),
+				ID: item.Toolset, Image: image.Reference, Platform: platform, Protocol: catalog.protocol,
+				Capabilities: slices.Clone(item.Capabilities), Development: item.Development, PHPVersion: item.PHP.Version}
+			if framework != "" && framework != "auto" {
+				selected.FrameworkVersion = new(framework)
+			}
+			matches = append(matches, selected)
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0], nil
+	}
+	if len(matches) > 1 {
+		ids := make([]string, len(matches))
+		for i, selected := range matches {
+			ids[i] = selected.Entry
+		}
+		slices.Sort(ids)
+		return Selection{}, fmt.Errorf("ambiguous compatibility manifest %q: matching entries %s", catalog.release, strings.Join(ids, ", "))
+	}
+	detail := ""
+	if len(rejected) > 0 {
+		slices.Sort(rejected)
+		detail = "; " + strings.Join(rejected, "; ")
+	}
+	return Selection{}, fmt.Errorf("no compatible entry in manifest %q for profile=%s framework=%s PHP runtime=%s target=%s..%s platform=%s%s",
+		catalog.release, cfg.Profile, framework, cfg.PHP.Runtime, cfg.PHP.Target.Min, cfg.PHP.Target.Max, platform, detail)
 }

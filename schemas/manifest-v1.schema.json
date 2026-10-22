@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rchehd/phpwarden/schemas/manifest-v1.schema.json",
+  "title": "PHPWarden bundled compatibility manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "release", "protocol", "entries"],
+  "properties": {
+    "version": {"const": 1},
+    "release": {"$ref": "#/$defs/id"},
+    "protocol": {"const": 1},
+    "entries": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/entry"}
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"},
+    "minor": {"type": "string", "pattern": "^[1-9][0-9]*\\.(0|[1-9][0-9]*)$"},
+    "exactVersion": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+([+-][a-zA-Z0-9.-]+)?$"},
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "profile", "preset", "framework", "php", "toolset", "tools", "capabilities", "development", "images"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "profile": {"enum": ["drupal"]},
+        "preset": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version"],
+          "properties": {
+            "id": {"$ref": "#/$defs/id"},
+            "version": {"$ref": "#/$defs/exactVersion"}
+          }
+        },
+        "framework": {"type": ["string", "null"], "minLength": 1, "maxLength": 4096},
+        "php": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["runtime", "version", "targets"],
+          "properties": {
+            "runtime": {"$ref": "#/$defs/minor"},
+            "version": {"$ref": "#/$defs/exactVersion"},
+            "targets": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["min", "max"],
+              "properties": {
+                "min": {"$ref": "#/$defs/minor"},
+                "max": {"$ref": "#/$defs/minor"}
+              }
+            }
+          }
+        },
+        "toolset": {"$ref": "#/$defs/id"},
+        "tools": {
+          "type": "object",
+          "required": ["php"],
+          "propertyNames": {"$ref": "#/$defs/id"},
+          "additionalProperties": {"$ref": "#/$defs/exactVersion"}
+        },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/id"}
+        },
+        "development": {"type": "boolean"},
+        "images": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["platform", "reference"],
+            "properties": {
+              "platform": {"enum": ["linux/amd64", "linux/arm64"]},
+              "reference": {"type": "string", "minLength": 1, "maxLength": 512}
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -10,6 +10,8 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -135,12 +137,16 @@ func localEndpoint(ctx context.Context, process runner.Process) error {
 func inspect(ctx context.Context, selection toolset.Selection, process runner.Process) (string, error) {
 	result := process.Run(ctx, runner.Command{Name: "docker", Args: []string{"image", "inspect", selection.Image}})
 	if result.Err != nil || result.ExitCode != 0 {
+		if !selection.Development {
+			return "", fmt.Errorf("selected release image %s is unavailable locally; registry pull is not implemented yet: %s %v", selection.Image, strings.TrimSpace(string(result.Stderr)), result.Err)
+		}
 		return "", fmt.Errorf("development image %s is unavailable; build it with docker build -f docker/Dockerfile -t %s .: %s %v", selection.Image, selection.Image, strings.TrimSpace(string(result.Stderr)), result.Err)
 	}
 	var images []struct {
-		ID           string `json:"Id"`
-		OS           string `json:"Os"`
-		Architecture string `json:"Architecture"`
+		ID           string   `json:"Id"`
+		OS           string   `json:"Os"`
+		Architecture string   `json:"Architecture"`
+		RepoDigests  []string `json:"RepoDigests"`
 		Config       struct {
 			Labels map[string]string `json:"Labels"`
 		} `json:"Config"`
@@ -149,12 +155,19 @@ func inspect(ctx context.Context, selection toolset.Selection, process runner.Pr
 		return "", fmt.Errorf("expected exactly one inspected Docker image")
 	}
 	image := images[0]
-	if image.OS+"/"+image.Architecture != selection.Platform || image.Config.Labels["io.phpwarden.protocol"] != "1" ||
-		image.Config.Labels["io.phpwarden.toolset"] != selection.ID || image.Config.Labels["io.phpwarden.checkers"] != "debug" {
+	actualCapabilities := strings.Split(image.Config.Labels["io.phpwarden.checkers"], ",")
+	expectedCapabilities := slices.Clone(selection.Capabilities)
+	slices.Sort(actualCapabilities)
+	slices.Sort(expectedCapabilities)
+	if image.OS+"/"+image.Architecture != selection.Platform || image.Config.Labels["io.phpwarden.protocol"] != strconv.Itoa(selection.Protocol) ||
+		image.Config.Labels["io.phpwarden.toolset"] != selection.ID || !slices.Equal(actualCapabilities, expectedCapabilities) {
 		return "", fmt.Errorf("local image platform, protocol or capabilities do not match the selected toolset")
 	}
 	if image.Config.Labels["io.phpwarden.php-version"] != selection.PHPVersion {
-		return "", fmt.Errorf("local image PHP version label does not match the selected toolset; rebuild the development image")
+		return "", fmt.Errorf("local image PHP version label does not match the selected toolset")
+	}
+	if !selection.Development && !slices.Contains(image.RepoDigests, selection.Image) {
+		return "", fmt.Errorf("local image repository digest does not match the selected manifest image")
 	}
 	return image.ID, nil
 }
