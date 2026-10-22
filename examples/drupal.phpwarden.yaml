@@ -1,0 +1,17 @@
+version: 1
+profile: drupal
+framework:
+  version: auto
+php:
+  runtime: "8.3"
+  target:
+    min: "8.3"
+    max: "8.3"
+scope:
+  mode: diff
+  base: origin/main
+tools:
+  debug:
+    enabled: true
+    required: true
+    fail_on: error

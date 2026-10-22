@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rchehd/phpwarden/schemas/config-v1.schema.json",
+  "title": "PHPWarden project configuration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "profile", "php"],
+  "properties": {
+    "version": {"type": "integer", "const": 1},
+    "profile": {"type": "string", "enum": ["drupal"]},
+    "framework": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {"type": "string", "pattern": "^(auto|[0-9]+\\.[0-9]+\\.[0-9]+)$", "default": "auto"}
+      }
+    },
+    "php": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime", "target"],
+      "properties": {
+        "runtime": {"$ref": "#/$defs/phpVersion"},
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min", "max"],
+          "properties": {
+            "min": {"$ref": "#/$defs/phpVersion"},
+            "max": {"$ref": "#/$defs/phpVersion"}
+          }
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {"type": "string", "enum": ["diff", "full"], "default": "diff"},
+        "base": {"type": "string", "minLength": 1},
+        "include": {"$ref": "#/$defs/include"},
+        "exclude": {"$ref": "#/$defs/exclude"},
+        "whole_files": {"type": "boolean", "default": false}
+      }
+    },
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 2147483647, "default": 300}
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "debug": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean", "default": true},
+            "required": {"type": "boolean", "default": true},
+            "fail_on": {"type": "string", "enum": ["error", "warning", "never"], "default": "error"},
+            "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 2147483647, "default": 120},
+            "include": {"$ref": "#/$defs/include"},
+            "exclude": {"$ref": "#/$defs/exclude"},
+            "functions": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\\\[A-Za-z_][A-Za-z0-9_]*)*$"}
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "phpVersion": {"type": "string", "pattern": "^[1-9][0-9]*\\.(0|[1-9][0-9]*)$"},
+    "include": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "exclude": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

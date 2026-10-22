@@ -9,6 +9,30 @@ permissions:
   contents: read
 
 jobs:
+  go:
+    name: Go CLI and configuration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Check formatting
+        run: |
+          files=$(gofmt -l cmd internal schemas)
+          if [ -n "$files" ]; then
+            printf '%s\n' "$files"
+            exit 1
+          fi
+      - name: Vet
+        run: go vet ./...
+      - name: Unit and CLI acceptance tests
+        run: go test -race ./...
+      - name: Build standalone CLI
+        run: CGO_ENABLED=0 go build -trimpath -o /tmp/phpwarden ./cmd/phpwarden
+
   test-fixtures:
     name: Test infrastructure and Git fixtures
     runs-on: ubuntu-24.04
