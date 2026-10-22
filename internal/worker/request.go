@@ -44,7 +44,7 @@ func Execute(ctx context.Context, root string, request runrequest.Request, proce
 	if request.Project != nil {
 		effective, err = discovery.Apply(location, effective)
 		if err != nil {
-			return failure("discovery_invalid", err)
+			return failure("stale", fmt.Errorf("project metadata changed or is no longer valid: %w", err))
 		}
 		if !reflect.DeepEqual(request.Project, effective.Project) {
 			return failure("stale", fmt.Errorf("project discovery does not match the host request"))
@@ -58,8 +58,14 @@ func Execute(ctx context.Context, root string, request runrequest.Request, proce
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(effective.Config.Runner.TimeoutSeconds)*time.Second)
 	defer cancel()
 	result := analyze(ctx, location, effective.Config, request.Selection, request.OnlyDebug, process)
+	validateRuntime(&result, effective)
 	result.RunID = request.RunID
 	result.Environment.Image, result.Environment.Toolset = &request.Image, &request.Toolset
+	if result.Environment.PHPRuntime != nil && request.RuntimeVersion != "" &&
+		(result.Environment.PHPVersion == nil || *result.Environment.PHPVersion != request.RuntimeVersion) {
+		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "runtime_version_mismatch", Stage: "worker", Message: "actual PHP version does not match the selected image version"})
+		result.Finalize()
+	}
 	if err := request.Matches(location); err != nil {
 		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "stale", Stage: "worker", Message: err.Error()})
 		result.Finalize()

@@ -32,6 +32,9 @@ func Discover(root string) (profile.Facts, error) {
 	if err := version(lock, &facts); err != nil {
 		return facts, err
 	}
+	if err := compatibility(reader, composer, lock, &facts); err != nil {
+		return facts, err
+	}
 	scaffold, err := objectAt(composer, "extra", "drupal-scaffold", "locations")
 	if err != nil {
 		return facts, err

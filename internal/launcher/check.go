@@ -36,7 +36,7 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 		}
 		return result
 	}
-	selected, err := toolset.Resolve(effective.Config)
+	selected, err := toolset.Resolve(effective)
 	if err != nil {
 		return report.InputError("compatibility", err)
 	}
@@ -64,6 +64,7 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 	if err != nil {
 		return failure("stale", err)
 	}
+	request.RuntimeVersion = selected.PHPVersion
 	input, err := json.Marshal(request)
 	if err != nil {
 		return failure("request_invalid", err)
@@ -152,6 +153,9 @@ func inspect(ctx context.Context, selection toolset.Selection, process runner.Pr
 		image.Config.Labels["io.phpwarden.toolset"] != selection.ID || image.Config.Labels["io.phpwarden.checkers"] != "debug" {
 		return "", fmt.Errorf("local image platform, protocol or capabilities do not match the selected toolset")
 	}
+	if image.Config.Labels["io.phpwarden.php-version"] != selection.PHPVersion {
+		return "", fmt.Errorf("local image PHP version label does not match the selected toolset; rebuild the development image")
+	}
 	return image.ID, nil
 }
 
@@ -191,6 +195,10 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 		if request.Config.Framework.Version != "auto" && request.Config.Framework.Version != "" &&
 			(result.Environment.FrameworkVersion == nil || *result.Environment.FrameworkVersion != request.Config.Framework.Version) {
 			return result, fmt.Errorf("worker report does not match the resolved framework version")
+		}
+		if result.Environment.PHPRuntime != nil && request.RuntimeVersion != "" &&
+			(result.Environment.PHPVersion == nil || *result.Environment.PHPVersion != request.RuntimeVersion) {
+			return result, fmt.Errorf("worker PHP version does not match the selected image")
 		}
 	}
 	for _, finding := range result.Findings {

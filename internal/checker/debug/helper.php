@@ -68,6 +68,7 @@ try {
     echo json_encode([
         'version' => 1,
         'runtime' => PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION,
+        'php_version' => PHP_VERSION,
         'findings' => $findings,
     ], JSON_THROW_ON_ERROR), "\n";
 } catch (Throwable $error) {

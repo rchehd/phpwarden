@@ -8,6 +8,22 @@ type Facts struct {
 	SourceRoots   []string          `json:"source_roots"`
 	Exclusions    []string          `json:"exclusions"`
 	Inputs        map[string]string `json:"inputs"`
+	Installed     *Installed        `json:"installed"`
+	PHP           []PHPRequirement  `json:"php_requirements"`
+	PlatformPHP   *string           `json:"platform_php"`
+}
+
+type Installed struct {
+	Path    string  `json:"path"`
+	Status  string  `json:"status"`
+	Version *string `json:"version"`
+}
+
+type PHPRequirement struct {
+	Source     string `json:"source"`
+	Constraint string `json:"constraint"`
+	Dev        bool   `json:"dev"`
+	Conflict   bool   `json:"conflict"`
 }
 
 type Defaults struct {

@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"slices"
 
+	"github.com/rchehd/phpwarden/internal/compatibility"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/profile/drupal"
 )
@@ -24,7 +25,7 @@ func Apply(location config.Location, effective config.Effective) (config.Effecti
 	version := effective.Config.Framework.Version
 	if version != "auto" {
 		if facts.Version != nil && *facts.Version != version {
-			return effective, fmt.Errorf("configured Drupal version %s conflicts with locked %s", version, *facts.Version)
+			return effective, fmt.Errorf("configured Drupal version %s conflicts with discovered %s from %s", version, *facts.Version, *facts.VersionSource)
 		}
 		if facts.Version == nil {
 			source := "project_config"
@@ -57,6 +58,11 @@ func Apply(location config.Location, effective config.Effective) (config.Effecti
 	if facts.WebRoot == nil {
 		effective.Pending = append(effective.Pending, "profile.exclusions")
 	}
+	pending, err := compatibility.ValidatePHP(effective.Config, effective.Project)
+	if err != nil {
+		return effective, err
+	}
+	effective.Pending = append(effective.Pending, pending...)
 	return effective, nil
 }
 

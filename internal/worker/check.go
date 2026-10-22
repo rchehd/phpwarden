@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rchehd/phpwarden/internal/checker/debug"
+	"github.com/rchehd/phpwarden/internal/compatibility"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/profile"
@@ -50,6 +51,7 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 		return failure("stale", err)
 	}
 	result = analyze(ctx, location, cfg, selection, onlyDebug, process)
+	validateRuntime(&result, effective)
 	after, err := runrequest.Snapshot(location, selection)
 	if err != nil {
 		return failure("stale", err)
@@ -94,9 +96,33 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, s
 	result.Findings = append(result.Findings, outcome.Findings...)
 	result.Diagnostics = append(result.Diagnostics, outcome.Diagnostics...)
 	result.Environment.PHPRuntime = outcome.Runtime
+	result.Environment.PHPVersion = outcome.PHPVersion
 	if outcome.Runtime != nil && *outcome.Runtime != cfg.PHP.Runtime {
 		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "runtime_mismatch", Stage: "worker", Message: fmt.Sprintf("worker PHP runtime %s does not match configured %s", *outcome.Runtime, cfg.PHP.Runtime)})
 	}
 	result.Finalize()
 	return result
+}
+
+func validateRuntime(result *report.Report, effective config.Effective) {
+	for _, pending := range effective.Pending {
+		if pending == "php.runtime.patch" || pending == "php.target.patch" || pending == "framework.installed_version" {
+			if pending != "php.runtime.patch" || result.Environment.PHPVersion == nil {
+				result.Environment.CompatibilityPending = append(result.Environment.CompatibilityPending, pending)
+			}
+		}
+	}
+	if effective.Project == nil || len(effective.Project.PHP) == 0 || result.Environment.PHPRuntime == nil {
+		return
+	}
+	var err error
+	if result.Environment.PHPVersion == nil {
+		err = fmt.Errorf("worker must report its full PHP version to verify Composer requirements")
+	} else {
+		err = compatibility.CheckRuntime(effective.Project, *result.Environment.PHPVersion)
+	}
+	if err != nil {
+		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "php_compatibility", Stage: "worker", Message: err.Error()})
+		result.Finalize()
+	}
 }

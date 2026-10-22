@@ -5,11 +5,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/rchehd/phpwarden/internal/config"
+	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/runner"
 	"github.com/rchehd/phpwarden/internal/scope"
 )
@@ -18,6 +20,40 @@ type processFunc func(context.Context, runner.Command) runner.Result
 
 func (process processFunc) Run(ctx context.Context, command runner.Command) runner.Result {
 	return process(ctx, command)
+}
+
+func TestActualPHPPatchMustSatisfyComposerRequirements(t *testing.T) {
+	for _, patch := range []string{"8.4.26", "8.4.27", ""} {
+		t.Run(patch, func(t *testing.T) {
+			location, effective, options := fixture(t)
+			if err := os.WriteFile(filepath.Join(location.Root, "composer.json"), []byte(`{"require":{"php":">=8.4.27 <9"}}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			var err error
+			effective, err = discovery.Apply(location, effective)
+			if err != nil {
+				t.Fatal(err)
+			}
+			process := processFunc(func(context.Context, runner.Command) runner.Result {
+				data := `{"version":1,"runtime":"8.4","findings":[]}`
+				if patch != "" {
+					data = `{"version":1,"runtime":"8.4","php_version":"` + patch + `","findings":[]}`
+				}
+				return runner.Result{Stdout: []byte(data)}
+			})
+			result := Check(context.Background(), location, effective, options, false, process)
+			want := 3
+			if patch == "8.4.27" {
+				want = 0
+			}
+			if result.ExitCode != want || result.Complete != (want == 0) {
+				t.Fatalf("patch check failed: %+v", result)
+			}
+			if want == 0 && !slices.Contains(result.Environment.CompatibilityPending, "php.target.patch") {
+				t.Fatal("target patch uncertainty was hidden")
+			}
+		})
+	}
 }
 
 func fixture(t *testing.T) (config.Location, config.Effective, scope.Options) {

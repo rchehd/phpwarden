@@ -14,12 +14,13 @@ RUN apk add --no-cache git ca-certificates \
     && addgroup -S -g 10001 phpwarden \
     && adduser -S -D -H -u 10001 -G phpwarden phpwarden \
     && git config --system --add safe.directory /workspace \
-    && php -r 'if (!function_exists("token_get_all")) { exit(1); }'
+    && php -r 'if (!function_exists("token_get_all") || PHP_VERSION !== "8.4.26") { exit(1); }'
 
 COPY --from=build /out/phpwarden /usr/local/bin/phpwarden
 LABEL org.opencontainers.image.title="PHPWarden debug worker" \
     io.phpwarden.protocol="1" \
     io.phpwarden.toolset="debug-dev-v1-php8.4" \
+    io.phpwarden.php-version="8.4.26" \
     io.phpwarden.checkers="debug"
 
 WORKDIR /workspace

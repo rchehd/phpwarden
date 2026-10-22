@@ -14,22 +14,24 @@ import (
 	"unicode/utf8"
 
 	"github.com/rchehd/phpwarden/internal/config"
+	"github.com/rchehd/phpwarden/internal/phpconstraint"
 	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/projectpath"
 	"github.com/rchehd/phpwarden/internal/scope"
 )
 
 type Request struct {
-	Version     int               `json:"version"`
-	RunID       string            `json:"run_id"`
-	ConfigFile  string            `json:"config_file"`
-	Config      config.Config     `json:"config"`
-	Project     *profile.Facts    `json:"project,omitempty"`
-	Selection   scope.Selection   `json:"selection"`
-	Fingerprint map[string]string `json:"fingerprint"`
-	OnlyDebug   bool              `json:"only_debug"`
-	Image       string            `json:"image"`
-	Toolset     string            `json:"toolset"`
+	Version        int               `json:"version"`
+	RunID          string            `json:"run_id"`
+	ConfigFile     string            `json:"config_file"`
+	Config         config.Config     `json:"config"`
+	Project        *profile.Facts    `json:"project,omitempty"`
+	Selection      scope.Selection   `json:"selection"`
+	Fingerprint    map[string]string `json:"fingerprint"`
+	OnlyDebug      bool              `json:"only_debug"`
+	Image          string            `json:"image"`
+	Toolset        string            `json:"toolset"`
+	RuntimeVersion string            `json:"runtime_version,omitempty"`
 }
 
 var imageID = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
@@ -51,6 +53,12 @@ func Build(location config.Location, effective config.Effective, selection scope
 func (request Request) Validate() error {
 	if request.Version != 1 || !runID.MatchString(request.RunID) || !imageID.MatchString(request.Image) || request.Toolset == "" {
 		return fmt.Errorf("invalid run request version, identity, or image/toolset")
+	}
+	if request.RuntimeVersion != "" {
+		canonical, err := phpconstraint.StableVersion(request.RuntimeVersion)
+		if err != nil || canonical != request.RuntimeVersion {
+			return fmt.Errorf("expected a canonical stable image PHP version")
+		}
 	}
 	if err := projectpath.Validate(request.ConfigFile); err != nil {
 		return err

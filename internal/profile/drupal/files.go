@@ -60,32 +60,40 @@ func (reader reader) directory(name string) (bool, error) {
 }
 
 func (reader reader) object(name string) (map[string]any, error) {
-	info, err := reader.probe(name)
-	if err != nil || info == nil {
+	value, exists, err := reader.document(name)
+	if err != nil || !exists {
 		return nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("discovery input %q must be a regular JSON file", name)
-	}
-	data, err := os.ReadFile(filepath.Join(reader.root, filepath.FromSlash(name)))
-	if err != nil {
-		return nil, err
-	}
-	reader.inputs[name] = fmt.Sprintf("sha256:%x", sha256.Sum256(data))
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	value, err := jsonValue(decoder, 0)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", name, err)
-	}
-	if _, err := decoder.Token(); err != io.EOF {
-		return nil, fmt.Errorf("%s: expected one JSON document", name)
 	}
 	object, ok := value.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("%s: expected a JSON object", name)
 	}
 	return object, nil
+}
+
+func (reader reader) document(name string) (any, bool, error) {
+	info, err := reader.probe(name)
+	if err != nil || info == nil {
+		return nil, false, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, true, fmt.Errorf("discovery input %q must be a regular JSON file", name)
+	}
+	data, err := os.ReadFile(filepath.Join(reader.root, filepath.FromSlash(name)))
+	if err != nil {
+		return nil, true, err
+	}
+	reader.inputs[name] = fmt.Sprintf("sha256:%x", sha256.Sum256(data))
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	value, err := jsonValue(decoder, 0)
+	if err != nil {
+		return nil, true, fmt.Errorf("%s: %w", name, err)
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return nil, true, fmt.Errorf("%s: expected one JSON document", name)
+	}
+	return value, true, nil
 }
 
 func jsonValue(decoder *json.Decoder, depth int) (any, error) {

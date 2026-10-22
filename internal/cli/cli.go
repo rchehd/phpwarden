@@ -165,7 +165,7 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		result.Effective = &effective
 	}
 	if isResolve {
-		selection, err := toolset.Resolve(effective.Config)
+		selection, err := toolset.Resolve(effective)
 		if err != nil {
 			return fail(stdout, stderr, args, "compatibility", err)
 		}
@@ -370,6 +370,9 @@ func writeReport(stdout, stderr io.Writer, format string, result report.Report) 
 			label = "PARTIAL"
 		}
 		fmt.Fprintf(stdout, "%s (%d findings)\n", label, len(result.Findings))
+		if result.Environment != nil && len(result.Environment.CompatibilityPending) > 0 {
+			fmt.Fprintf(stdout, "Compatibility pending: %s\n", strings.Join(result.Environment.CompatibilityPending, ", "))
+		}
 		for _, finding := range result.Findings {
 			if finding.Path != nil && finding.Line != nil {
 				fmt.Fprintf(stdout, "%q:%d: %s\n", *finding.Path, *finding.Line, finding.Message)

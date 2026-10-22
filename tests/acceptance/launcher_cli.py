@@ -241,6 +241,73 @@ class LauncherCLITest(unittest.TestCase):
             self.assertEqual(result["exit_code"], 2)
             self.assertIn("conflicts", result["diagnostics"][0]["message"])
 
+    def test_composer_php_and_installed_version_compatibility(self):
+        with materialize(FIXTURES / "added-debug") as scenario:
+            self.configure(scenario.root, scenario.base)
+            composer = {
+                "require": {"php": "^8.3"},
+                "require-dev": {"php": "^8.4"},
+                "config": {"vendor-dir": "dependencies", "platform": {"php": "8.4.0"}},
+            }
+            lock = {
+                "packages": [
+                    {"name": "drupal/core", "version": "11.2.5", "require": {"php": ">=8.3"}}
+                ],
+                "packages-dev": [{"name": "test/tool", "require": {"php": "^8.4"}}],
+                "platform": {"php": "^8.3"},
+                "platform-dev": [],
+            }
+            composer_file = scenario.root / "composer.json"
+            composer_file.write_text(json.dumps(composer))
+            (scenario.root / "composer.lock").write_text(json.dumps(lock))
+            result = self.run_cli(scenario.root, ["check"], scenario.env)
+            self.assertEqual(result["exit_code"], 1, result)
+            self.assertEqual(result["environment"]["php_version"], "8.4.26")
+            shown = self.run_cli(scenario.root, ["config", "show"], scenario.env)["effective"]
+            self.assertEqual(shown["project"]["installed"]["status"], "absent")
+            installed_file = scenario.root / "dependencies/composer/installed.json"
+            installed_file.parent.mkdir(parents=True)
+            installed = {"packages": [{"name": "drupal/core", "version": "11.2.5"}], "dev": True}
+            installed_file.write_text(json.dumps(installed))
+            (scenario.root / "dependencies/autoload.php").write_text(
+                "<?php var_dump(100); file_put_contents('MUST_NOT_EXIST', 'executed');\n"
+            )
+            before = snapshot(scenario.root)
+            result = self.run_cli(scenario.root, ["check", "--mode", "full"], scenario.env)
+            self.assertEqual(result["exit_code"], 1, result)
+            self.assertEqual(len(result["findings"]), 1)
+            self.assertEqual(snapshot(scenario.root), before)
+            self.assertFalse((scenario.root / "MUST_NOT_EXIST").exists())
+            shown = self.run_cli(scenario.root, ["config", "show"], scenario.env)["effective"]
+            self.assertEqual(shown["project"]["installed"]["status"], "verified")
+            installed["packages"][0]["version"] = "11.2.6"
+            installed_file.write_text(json.dumps(installed))
+            result = self.run_cli(scenario.root, ["check"], scenario.env)
+            self.assertEqual(result["exit_code"], 2)
+            self.assertIn("installed", result["diagnostics"][0]["message"])
+            installed["packages"][0]["version"] = "11.2.5"
+            installed_file.write_text(json.dumps(installed))
+            composer["require"]["php"] = ">=8.5"
+            composer_file.write_text(json.dumps(composer))
+            result = self.run_cli(scenario.root, ["check"], scenario.env)
+            self.assertEqual(result["exit_code"], 2)
+            self.assertIn("PHP runtime", result["diagnostics"][0]["message"])
+            composer["require"]["php"] = ">=8.4.27 <9"
+            composer["config"]["platform"]["php"] = "8.4.27"
+            composer_file.write_text(json.dumps(composer))
+            shown = self.run_cli(scenario.root, ["config", "show"], scenario.env)["effective"]
+            self.assertIn("php.runtime.patch", shown["pending"])
+            result = self.run_cli(scenario.root, ["check"], scenario.env)
+            self.assertEqual(result["exit_code"], 2)
+            self.assertEqual(result["diagnostics"][0]["code"], "compatibility_invalid")
+            self.assertIn("8.4.26", result["diagnostics"][0]["message"])
+            composer["require"]["php"] = ">=8.4.25 <9"
+            composer["config"]["platform"]["php"] = "8.4.25"
+            composer_file.write_text(json.dumps(composer))
+            result = self.run_cli(scenario.root, ["check"], scenario.env)
+            self.assertEqual(result["exit_code"], 1, result)
+            self.assertEqual(result["environment"]["compatibility_pending"], ["php.target.patch"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -73,7 +73,7 @@ func dockerDouble(t *testing.T, location config.Location, calls *[]runner.Comman
 		case "context":
 			return runner.Result{Stdout: []byte(`"unix:///var/run/docker.sock"`)}
 		case "image":
-			return runner.Result{Stdout: []byte(`[{"Id":"` + testImage + `","Os":"linux","Architecture":"amd64","Config":{"Labels":{"io.phpwarden.protocol":"1","io.phpwarden.toolset":"` + toolset.DebugID + `","io.phpwarden.checkers":"debug"}}}]`)}
+			return runner.Result{Stdout: []byte(`[{"Id":"` + testImage + `","Os":"linux","Architecture":"amd64","Config":{"Labels":{"io.phpwarden.protocol":"1","io.phpwarden.toolset":"` + toolset.DebugID + `","io.phpwarden.checkers":"debug","io.phpwarden.php-version":"8.4.26"}}}]`)}
 		case "run":
 			for _, argument := range []string{"--read-only", "--network=none", "--cap-drop=ALL", "--security-opt=no-new-privileges:true", "--pull=never", testImage} {
 				if !slices.Contains(command.Args, argument) {
@@ -90,7 +90,7 @@ func dockerDouble(t *testing.T, location config.Location, calls *[]runner.Comman
 				t.Fatal(err)
 			}
 			php := processFunc(func(context.Context, runner.Command) runner.Result {
-				return runner.Result{Stdout: []byte(`{"version":1,"runtime":"8.4","findings":[{"path":"src/demo.php","line":2,"function":"var_dump"}]}`)}
+				return runner.Result{Stdout: []byte(`{"version":1,"runtime":"8.4","php_version":"8.4.26","findings":[{"path":"src/demo.php","line":2,"function":"var_dump"}]}`)}
 			})
 			result := worker.Execute(ctx, location.Root, request, php)
 			data, err := json.Marshal(result)

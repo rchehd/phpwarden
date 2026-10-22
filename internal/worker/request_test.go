@@ -90,42 +90,53 @@ func TestRequestWorkerDoesNotNeedGitAndRejectsChangedInputs(t *testing.T) {
 
 func TestComposerChangesDuringWorkerExecutionAreStale(t *testing.T) {
 	for _, before := range []bool{false, true} {
-		location, effective, options := fixture(t)
-		filename := filepath.Join(location.Root, "composer.lock")
-		if err := os.WriteFile(filename, []byte(`{"packages":[{"name":"drupal/core","version":"11.2.5"}]}`), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		var err error
-		effective, err = discovery.Apply(location, effective)
-		if err != nil {
-			t.Fatal(err)
-		}
-		selection, err := scope.Build(context.Background(), options)
-		if err != nil {
-			t.Fatal(err)
-		}
-		request, err := runrequest.Build(location, effective, selection, false, "sha256:"+strings.Repeat("a", 64), toolset.DebugID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		mutate := func() {
-			if err := os.WriteFile(filename, []byte(`{"packages":[{"name":"drupal/core","version":"11.2.6"}]}`), 0o644); err != nil {
+		for _, metadata := range []string{"composer.lock", "vendor/composer/installed.json"} {
+			location, effective, options := fixture(t)
+			filename := filepath.Join(location.Root, "composer.lock")
+			if err := os.WriteFile(filename, []byte(`{"packages":[{"name":"drupal/core","version":"11.2.5"}]}`), 0o644); err != nil {
 				t.Fatal(err)
 			}
-		}
-		if before {
-			mutate()
-		}
-		process := processFunc(func(context.Context, runner.Command) runner.Result {
-			if before {
-				t.Fatal("changed metadata must be rejected before running PHP")
+			if metadata != "composer.lock" {
+				filename = filepath.Join(location.Root, metadata)
+				if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filename, []byte(`{"packages":[{"name":"drupal/core","version":"11.2.5"}]}`), 0o644); err != nil {
+					t.Fatal(err)
+				}
 			}
-			mutate()
-			return cleanResult()
-		})
-		result := Execute(context.Background(), location.Root, request, process)
-		if result.ExitCode != 3 || result.Complete || result.Diagnostics[len(result.Diagnostics)-1].Code != "stale" {
-			t.Fatalf("changed Composer metadata accepted: %+v", result)
+			var err error
+			effective, err = discovery.Apply(location, effective)
+			if err != nil {
+				t.Fatal(err)
+			}
+			selection, err := scope.Build(context.Background(), options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request, err := runrequest.Build(location, effective, selection, false, "sha256:"+strings.Repeat("a", 64), toolset.DebugID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mutate := func() {
+				if err := os.WriteFile(filename, []byte(`{"packages":[{"name":"drupal/core","version":"11.2.6"}]}`), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if before {
+				mutate()
+			}
+			process := processFunc(func(context.Context, runner.Command) runner.Result {
+				if before {
+					t.Fatal("changed metadata must be rejected before running PHP")
+				}
+				mutate()
+				return cleanResult()
+			})
+			result := Execute(context.Background(), location.Root, request, process)
+			if result.ExitCode != 3 || result.Complete || result.Diagnostics[len(result.Diagnostics)-1].Code != "stale" {
+				t.Fatalf("changed Composer metadata accepted: %+v", result)
+			}
 		}
 	}
 }

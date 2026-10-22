@@ -27,12 +27,14 @@ type Outcome struct {
 	Findings    []report.Finding
 	Diagnostics []report.Diagnostic
 	Runtime     *string
+	PHPVersion  *string
 }
 
 type helperReport struct {
-	Version  int    `json:"version"`
-	Runtime  string `json:"runtime"`
-	Findings []struct {
+	Version    int    `json:"version"`
+	Runtime    string `json:"runtime"`
+	PHPVersion string `json:"php_version,omitempty"`
+	Findings   []struct {
 		Path     string `json:"path"`
 		Line     int    `json:"line"`
 		Function string `json:"function"`
@@ -102,6 +104,12 @@ func Run(ctx context.Context, root string, selection scope.Selection, cfg config
 		}
 	}
 	result.Runtime = &parsed.Runtime
+	if parsed.PHPVersion != "" {
+		if !strings.HasPrefix(parsed.PHPVersion, parsed.Runtime+".") {
+			return fail("error", "invalid_report", "PHP patch version does not match reported minor")
+		}
+		result.PHPVersion = &parsed.PHPVersion
+	}
 	for _, row := range parsed.Findings {
 		if selection.Contains(row.Path, row.Line) {
 			result.Findings = append(result.Findings, report.Finding{Checker: "debug", Rule: "debug.call", Kind: "code", Severity: "error", Message: "Debug function " + row.Function + "() is called", Path: &row.Path, Line: &row.Line})
