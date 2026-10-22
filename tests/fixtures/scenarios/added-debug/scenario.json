@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "id": "added-debug",
+  "state": "unstaged",
+  "patch": "change.patch",
+  "changed_files": ["web/modules/custom/demo/demo.module"],
+  "verdicts": {"diff": "fail", "full": "fail"},
+  "findings": [
+    {
+      "checker": "debug",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 4,
+      "contains": "var_dump($value)",
+      "modes": ["diff", "full"]
+    }
+  ]
+}

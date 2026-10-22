@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "id": "legacy-debug",
+  "state": "unstaged",
+  "patch": "change.patch",
+  "regressions": ["INV-09"],
+  "changed_files": ["web/modules/custom/demo/demo.module"],
+  "verdicts": {"diff": "pass", "full": "fail"},
+  "findings": [
+    {
+      "checker": "debug",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 3,
+      "contains": "var_dump('legacy')",
+      "modes": ["full"]
+    }
+  ]
+}

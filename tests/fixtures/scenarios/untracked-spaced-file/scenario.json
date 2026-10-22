@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "id": "untracked-spaced-file",
+  "state": "untracked",
+  "regressions": ["INV-07"],
+  "changed_files": ["web/modules/custom/demo/new file.php"],
+  "verdicts": {"diff": "fail", "full": "fail"},
+  "findings": [
+    {
+      "checker": "debug",
+      "path": "web/modules/custom/demo/new file.php",
+      "line": 3,
+      "contains": "var_dump('new')",
+      "modes": ["diff", "full"]
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+import unittest
+from pathlib import Path
+
+from tests.support.scenarios import materialize
+
+FIXTURES = Path(__file__).parent / "fixtures" / "scenarios"
+
+
+class ScenarioFixturesTest(unittest.TestCase):
+    def scenarios(self):
+        directories = sorted(path for path in FIXTURES.iterdir() if path.is_dir())
+        self.assertGreater(len(directories), 0, "No scenario fixtures found")
+        return directories
+
+    def test_changed_files_match_scenario_manifest(self):
+        for directory in self.scenarios():
+            with self.subTest(scenario=directory.name), materialize(directory) as scenario:
+                self.assertEqual(scenario.changed_files(), scenario.spec["changed_files"])
+
+    def test_git_state_matches_scenario_manifest(self):
+        for directory in self.scenarios():
+            with self.subTest(scenario=directory.name), materialize(directory) as scenario:
+                status = scenario.git("status", "--porcelain=v1", "-z")
+                state = scenario.spec["state"]
+                if state == "committed":
+                    self.assertEqual(status, b"")
+                    self.assertNotEqual(
+                        scenario.git("rev-parse", "HEAD").decode().strip(), scenario.base
+                    )
+                else:
+                    prefix = {"unstaged": b" M ", "staged": b"M  ", "untracked": b"?? "}[state]
+                    self.assertTrue(status.startswith(prefix), status)
+                self.assertEqual(scenario.git("rev-parse", "main").decode().strip(), scenario.base)
+
+    def test_expected_findings_point_to_fixture_content(self):
+        for directory in self.scenarios():
+            with self.subTest(scenario=directory.name), materialize(directory) as scenario:
+                for finding in scenario.spec["findings"]:
+                    path = (scenario.root / finding["path"]).resolve()
+                    self.assertTrue(path.is_relative_to(scenario.root))
+                    lines = path.read_text().splitlines()
+                    self.assertGreater(finding["line"], 0)
+                    self.assertLessEqual(finding["line"], len(lines))
+                    self.assertIn(finding["contains"], lines[finding["line"] - 1])
+
+    def test_verdicts_are_consistent_with_declared_findings(self):
+        for directory in self.scenarios():
+            with self.subTest(scenario=directory.name), materialize(directory) as scenario:
+                for mode in ("diff", "full"):
+                    findings = [row for row in scenario.spec["findings"] if mode in row["modes"]]
+                    expected = "fail" if findings else "pass"
+                    self.assertEqual(scenario.spec["verdicts"][mode], expected)
+
+    def test_scenarios_are_isolated_and_removed_after_use(self):
+        directory = FIXTURES / "added-debug"
+        with materialize(directory) as first, materialize(directory) as second:
+            self.assertNotEqual(first.root, second.root)
+            (first.root / "local-marker").write_text("first scenario only\n")
+            self.assertFalse((second.root / "local-marker").exists())
+            roots = (first.root, second.root)
+        for root in roots:
+            self.assertFalse(root.exists())
+
+
+if __name__ == "__main__":
+    unittest.main()
