@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/rchehd/phpwarden/internal/profile"
+	"github.com/rchehd/phpwarden/internal/projectpath"
 	"github.com/rchehd/phpwarden/schemas"
 	"go.yaml.in/yaml/v3"
 )
@@ -225,7 +226,7 @@ func markProvenance(values map[string]any, prefix string, sources map[string]str
 func validateValues(cfg Config) error {
 	for _, values := range [][]string{cfg.Scope.Include, cfg.Tools.Debug.Include} {
 		for _, value := range values {
-			if err := validateRelative(value); err != nil {
+			if err := projectpath.Validate(value); err != nil {
 				return err
 			}
 		}

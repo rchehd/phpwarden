@@ -10,6 +10,8 @@ php:
 scope:
   mode: diff
   base: origin/main
+  include:
+    - web/modules/custom
 tools:
   debug:
     enabled: true
