@@ -68,6 +68,7 @@ type Effective struct {
 	Config     Config            `json:"config"`
 	Provenance map[string]string `json:"provenance"`
 	Pending    []string          `json:"pending"`
+	SourceHash string            `json:"-"`
 }
 
 var coreExcludes = []string{"**/.git", "**/.git/**", "**/vendor/**", "**/node_modules/**"}

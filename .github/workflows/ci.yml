@@ -19,6 +19,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: tokenizer
+          coverage: none
+          tools: none
       - name: Check formatting
         run: |
           files=$(gofmt -l cmd internal schemas)
@@ -32,6 +41,10 @@ jobs:
         run: go test -race ./...
       - name: Build standalone CLI
         run: CGO_ENABLED=0 go build -trimpath -o /tmp/phpwarden ./cmd/phpwarden
+      - name: Lint PHP helper
+        run: php -l internal/checker/debug/helper.php
+      - name: Worker fixture acceptance tests
+        run: python -m unittest tests.acceptance.worker_cli -v
 
   test-fixtures:
     name: Test infrastructure and Git fixtures

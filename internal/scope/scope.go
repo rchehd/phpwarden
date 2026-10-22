@@ -48,6 +48,23 @@ func (selection Selection) Contains(filename string, line int) bool {
 	return false
 }
 
+func (selection Selection) Filter(includes, excludes []string, applicable func(string) bool) Selection {
+	result := selection
+	result.Files, result.LineMap = []string{}, map[string][]Range{}
+	roots := make([]string, len(includes))
+	for i, name := range includes {
+		roots[i] = path.Clean(name)
+	}
+	for _, filename := range selection.Files {
+		if len(roots) > 0 && !inRoots(filename, roots) || excluded(filename, excludes) || !applicable(filename) {
+			continue
+		}
+		result.Files = append(result.Files, filename)
+		result.LineMap[filename] = selection.LineMap[filename]
+	}
+	return result
+}
+
 func Build(ctx context.Context, options Options) (Selection, error) {
 	result := Selection{Mode: options.Mode, WholeFiles: options.WholeFiles, Files: []string{}, LineMap: map[string][]Range{}}
 	if result.Mode == "" {

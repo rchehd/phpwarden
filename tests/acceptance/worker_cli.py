@@ -1,0 +1,157 @@
+import json
+import shutil
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+from tests.support.scenarios import materialize
+
+ROOT = Path(__file__).resolve().parents[2]
+FIXTURES = ROOT / "tests" / "fixtures" / "scenarios"
+
+
+class WorkerCLITest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.temporary = tempfile.TemporaryDirectory(prefix="phpwarden-cli-")
+        cls.addClassCleanup(cls.temporary.cleanup)
+        cls.binary = Path(cls.temporary.name) / "phpwarden"
+        subprocess.run(
+            ["go", "build", "-o", str(cls.binary), "./cmd/phpwarden"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            timeout=120,
+        )
+        cls.runtime = subprocess.run(
+            ["php", "-r", 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;'],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout
+
+    def configure(self, scenario, **debug):
+        config = {
+            "version": 1,
+            "profile": "drupal",
+            "php": {
+                "runtime": self.runtime,
+                "target": {"min": self.runtime, "max": self.runtime},
+            },
+            "scope": {"include": ["web/modules/custom"], "base": scenario.base},
+            "tools": {"debug": debug},
+        }
+        (scenario.root / ".phpwarden.yaml").write_text(json.dumps(config))
+
+    def run_worker(self, scenario, arguments=(), env=None):
+        completed = subprocess.run(
+            [str(self.binary), "worker", "check", "--format", "json", *arguments],
+            cwd=scenario.root,
+            env=env or scenario.env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        self.assertEqual(completed.stderr, "", completed.stderr)
+        report = json.loads(completed.stdout)
+        self.assertEqual(completed.returncode, report["exit_code"], report)
+        self.assertEqual(report["version"], 1)
+        self.assertTrue(report["run_id"])
+        return report
+
+    def test_real_worker_matches_fixture_expectations(self):
+        for directory in sorted(FIXTURES.iterdir()):
+            for mode in ("diff", "full", "whole-files", "paths"):
+                with self.subTest(scenario=directory.name, mode=mode):
+                    with materialize(directory) as scenario:
+                        self.configure(scenario)
+                        arguments = {
+                            "diff": [],
+                            "full": ["--mode", "full"],
+                            "whole-files": ["--whole-files"],
+                            "paths": scenario.spec["changed_files"],
+                        }[mode]
+                        report = self.run_worker(scenario, arguments)
+                        expected_mode = "diff" if mode == "diff" else "full"
+                        verdict = scenario.spec["verdicts"][expected_mode]
+                        self.assertEqual(report["verdict"], verdict, report)
+                        self.assertEqual(report["exit_code"], 1 if verdict == "fail" else 0)
+                        self.assertTrue(report["complete"], report)
+                        self.assertEqual(report["diagnostics"], [])
+                        expected = sorted(
+                            (row["checker"], row["path"], row["line"])
+                            for row in scenario.spec["findings"]
+                            if expected_mode in row["modes"]
+                        )
+                        actual = sorted(
+                            (row["checker"], row["path"], row["line"]) for row in report["findings"]
+                        )
+                        self.assertEqual(actual, expected)
+                        self.assertFalse((scenario.root / "vendor").exists())
+
+    def test_process_failures_and_optional_policy(self):
+        for name, script, settings, code, status in (
+            ("missing", None, {}, 3, "unavailable"),
+            ("malformed", "echo '{}'", {}, 3, "error"),
+            ("crash", "exit 70", {}, 3, "error"),
+            ("timeout", "exec /bin/sleep 5", {"timeout_seconds": 1}, 3, "error"),
+            ("optional", None, {"required": False}, 0, "unavailable"),
+        ):
+            with self.subTest(case=name), materialize(FIXTURES / "added-debug") as scenario:
+                self.configure(scenario, **settings)
+                with tempfile.TemporaryDirectory(prefix="phpwarden-path-") as temporary:
+                    directory = Path(temporary)
+                    (directory / "git").symlink_to(shutil.which("git"))
+                    if script is not None:
+                        executable = directory / "php"
+                        executable.write_text("#!/bin/sh\n" + script + "\n")
+                        executable.chmod(0o755)
+                    env = scenario.env | {"PATH": str(directory)}
+                    report = self.run_worker(scenario, env=env)
+                    self.assertEqual(report["exit_code"], code, report)
+                    self.assertFalse(report["complete"])
+                    self.assertEqual(report["checks"][0]["status"], status)
+                    self.assertTrue(report["diagnostics"])
+
+    def test_explicit_selection_overrides_disabled_checker(self):
+        with materialize(FIXTURES / "added-debug") as scenario:
+            self.configure(scenario, enabled=False)
+            report = self.run_worker(scenario)
+            self.assertEqual(report["exit_code"], 0)
+            self.assertEqual(report["checks"][0]["reason"], "disabled")
+            report = self.run_worker(scenario, ["--only", "debug"])
+            self.assertEqual(report["exit_code"], 1)
+            report = self.run_worker(scenario, ["--only", "phpstna"])
+            self.assertEqual(report["exit_code"], 2)
+            self.assertEqual(report["verdict"], "error")
+
+    def test_runtime_mismatch_is_blocking(self):
+        with materialize(FIXTURES / "added-debug") as scenario:
+            self.configure(scenario, required=False)
+            filename = scenario.root / ".phpwarden.yaml"
+            config = json.loads(filename.read_text())
+            config["php"]["runtime"] = "99.0"
+            filename.write_text(json.dumps(config))
+            report = self.run_worker(scenario)
+            self.assertEqual(report["exit_code"], 3)
+            self.assertIn("runtime_mismatch", [row["code"] for row in report["diagnostics"]])
+
+    def test_checker_settings_change_real_results(self):
+        with materialize(FIXTURES / "added-debug") as scenario:
+            self.configure(scenario, functions=["print_r"])
+            self.assertEqual(self.run_worker(scenario)["findings"], [])
+            self.configure(scenario, fail_on="never")
+            report = self.run_worker(scenario)
+            self.assertEqual(report["exit_code"], 0)
+            self.assertEqual(len(report["findings"]), 1)
+            self.assertTrue(report["complete"])
+            self.configure(scenario, exclude=["**/*.module"])
+            report = self.run_worker(scenario)
+            self.assertEqual(report["exit_code"], 0)
+            self.assertEqual(report["checks"][0]["reason"], "no_files")
+
+
+if __name__ == "__main__":
+    unittest.main()

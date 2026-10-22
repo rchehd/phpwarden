@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"os/exec"
@@ -91,6 +92,7 @@ func Load(location Location) (Effective, error) {
 	if err != nil {
 		return Effective{}, err
 	}
+	result.SourceHash = fmt.Sprintf("%x", sha256.Sum256(data))
 	for name, paths := range map[string][]string{
 		"scope.include":       result.Config.Scope.Include,
 		"tools.debug.include": result.Config.Tools.Debug.Include,

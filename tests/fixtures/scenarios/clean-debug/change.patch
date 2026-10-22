@@ -1,0 +1,7 @@
+diff --git a/web/modules/custom/demo/demo.module b/web/modules/custom/demo/demo.module
+--- a/web/modules/custom/demo/demo.module
++++ b/web/modules/custom/demo/demo.module
+@@ -3 +3,3 @@
+ $value = 'var_dump($value)';
++// var_dump($value);
++$label = 'print_r($value)';

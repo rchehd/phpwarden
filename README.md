@@ -14,7 +14,7 @@ PHPWarden is being designed as a standalone CLI with Docker-based tools and adap
 
 ## Development status
 
-The project is in early development. The Go CLI can validate configuration, show effective settings with their sources, and inspect Git analysis scope. Code checks, Docker images, and agent integrations are not available yet.
+The project is in early development. The Go CLI can validate configuration, inspect Git scope, and run a PHP debug checker through the explicit worker command. The Docker launcher, published images, and agent integrations are not available yet.
 
 ## Build and try the CLI
 
@@ -28,11 +28,11 @@ bin/phpwarden config show --config examples/drupal.phpwarden.yaml --format json
 
 For a project, save its configuration as `.phpwarden.yaml` in the project root. The CLI finds the nearest configuration from the current directory up to the Git worktree root, or accepts an explicit `--project` or `--config` path. Explicit paths also allow configuration validation outside Git. Relative command-line paths are resolved from the caller's directory.
 
-Validation checks YAML structure, the [v1 schema](schemas/config-v1.schema.json), PHP target ranges, and path boundaries. It rejects unknown fields and checker IDs, duplicate keys, aliases, and numeric PHP versions. Currently only the `debug` configuration section is recognized; the checker itself is not implemented yet.
+Validation checks YAML structure, the [v1 schema](schemas/config-v1.schema.json), PHP target ranges, and path boundaries. It rejects unknown fields and checker IDs, duplicate keys, aliases, and numeric PHP versions. Currently only the `debug` checker is implemented.
 
 `config show` includes core and Drupal defaults, explicit project overrides, and their provenance. Its `pending` list identifies values that need framework discovery. Configuration validation does not verify installed Drupal dependencies, Composer constraints, or available Docker images yet. The example PHP versions illustrate the configuration format and do not declare a supported image combination.
 
-Configuration commands return exit `0` for valid input, `2` for usage/configuration errors, and `3` for output failures. With `--format json`, stdout contains a single JSON document. These configuration responses are separate from the future code-check report.
+Configuration commands return exit `0` for valid input, `2` for usage/configuration errors, and `3` for output failures. With `--format json`, stdout contains a single JSON document. These configuration responses are separate from the worker's code-check report.
 
 ## Inspect analysis scope
 
@@ -51,9 +51,30 @@ JSON `scope.files` contains project-relative paths. `scope.line_map` maps each p
 
 Scope inspection currently requires explicit, existing `scope.include` roots; automatic Drupal layout discovery and core/contrib exclusions are still pending. Adjust the example's `web/modules/custom` path to your project. Core vendor/node_modules exclusions remain active. Symlinks and nested submodules are not traversed. Non-UTF-8 filenames and unavailable Git history produce errors. This command inspects scope and does not run code checkers or declare the code clean.
 
+## Debug worker
+
+The worker command runs directly in its execution environment and requires PHP with the tokenizer extension. Its PHP minor version must match `php.runtime`. The intended deployment is inside a preselected tool image; direct execution is currently available for development and testing. The public `phpwarden check` Docker launcher is still pending, and does not fall back to host PHP.
+
+In a configured project with explicit source roots:
+
+```sh
+phpwarden worker check --only debug --base origin/main --format json
+phpwarden worker check --mode full
+phpwarden worker check --whole-files
+phpwarden worker check web/modules/custom/demo
+```
+
+The checker tokenizes PHP source without executing it or loading project dependencies. Defaults prohibit `var_dump`, `print_r`, `dpm`, `dsm`, and `kint`; `tools.debug.functions` replaces that list. It recognizes direct calls, including multiline calls and leading backslashes, and ignores comments, string literals, declarations, object/static methods, attributes, and first-class callable acquisition. Variable calls, imported function aliases, and full namespace/shadowing resolution are not covered. It does not check PHP syntax or JavaScript debug statements.
+
+`tools.debug.enabled`, `required`, `fail_on`, `timeout_seconds`, `include`, and `exclude` control execution. `--only debug` explicitly enables the checker even when disabled in configuration. Reporting uses the shared Git line map. No project `vendor` directory is required.
+
+Reports follow the [v1 report schema](schemas/report-v1.schema.json), which is embedded and validated before output. Exit codes are `0` for no blocking findings, `1` for blocking findings, `2` for input errors, and `3` for required checker/process failures or changed inputs. Optional failures return `complete: false` and a visible `PARTIAL` text result. The worker checks file/configuration checksums and recomputes scope after analysis. Each helper run owns and removes its temporary directory.
+
+Current worker reports have no resolved image/toolset metadata. Framework discovery and image compatibility validation are still pending; this is a working debug worker rather than a complete Docker release.
+
 ## Repository checks
 
-Requires Go 1.26.5, Python 3.12, and Git. From the repository root:
+Requires Go 1.26.5, PHP 8.4 with tokenizer, Python 3.12, and Git. From the repository root:
 
 ```sh
 python3 -m venv .venv
@@ -63,10 +84,12 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests -v
 go vet ./...
 go test -race ./...
+php -l internal/checker/debug/helper.php
+.venv/bin/python -m unittest tests.acceptance.worker_cli -v
 ```
 
 Go tests exercise configuration validation, defaults and overrides, project selection in monorepos and Git worktrees, and the actual compiled CLI's JSON output and exit codes. Scope tests also materialize the existing patch fixtures and verify file/line selection, unusual filenames, deletion/rename behavior, exclusions, and merge-base semantics. The JSON schema is embedded in the binary; configuration validation needs no network access or Docker.
 
-Python tests validate the code-check scenario fixtures and their declared expectations. They do not run the planned code checkers yet. Each scenario creates a temporary Git repository from initial files and a patch or untracked files, then removes it after the test.
+Python fixture tests validate the scenario data and Git states. The separate worker acceptance suite builds the real CLI, runs all six fixtures in four scope modes with the real PHP helper, and compares semantic findings and exit codes. It also injects process failures, checks optional policies, and tests configuration overrides. These are worker/process tests; Docker image integration remains a separate milestone.
 
-GitHub Actions checks Go formatting, vet, race tests, and a standalone build, alongside Ruff and the Python fixture tests, on pushes and pull requests.
+GitHub Actions checks Go formatting, vet, race tests, a standalone build, PHP helper syntax, and worker acceptance alongside Ruff and Python fixture validation. The worker test environment uses PHP 8.4. The image build matrix is not configured yet.

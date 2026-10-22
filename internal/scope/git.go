@@ -50,6 +50,7 @@ func (repo repository) git(args ...string) ([]byte, error) {
 			command.Env = append(command.Env, value)
 		}
 	}
+	command.Env = append(command.Env, "GIT_OPTIONAL_LOCKS=0")
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
 	output, err := command.Output()

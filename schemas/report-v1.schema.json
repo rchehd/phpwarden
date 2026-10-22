@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rchehd/phpwarden/schemas/report-v1.schema.json",
+  "title": "PHPWarden check report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "run_id", "verdict", "complete", "exit_code", "profile", "scope", "environment", "checks", "findings", "diagnostics"],
+  "properties": {
+    "version": {"const": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "verdict": {"enum": ["pass", "fail", "error"]},
+    "complete": {"type": "boolean"},
+    "exit_code": {"enum": [0, 1, 2, 3, 130]},
+    "profile": {"type": ["string", "null"]},
+    "scope": {
+      "anyOf": [{"type": "null"}, {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mode", "base_ref", "merge_base", "whole_files", "files", "line_map"],
+        "properties": {
+          "mode": {"enum": ["diff", "full", "paths"]},
+          "base_ref": {"type": ["string", "null"]},
+          "merge_base": {"type": ["string", "null"]},
+          "whole_files": {"type": "boolean"},
+          "files": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "line_map": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [{"type": "null"}, {
+                "type": "array",
+                "items": {
+                  "type": "object", "additionalProperties": false, "required": ["start", "end"],
+                  "properties": {"start": {"type": "integer", "minimum": 1}, "end": {"type": "integer", "minimum": 1}}
+                }
+              }]
+            }
+          }
+        }
+      }]
+    },
+    "environment": {
+      "anyOf": [{"type": "null"}, {
+        "type": "object", "additionalProperties": false,
+        "required": ["php_runtime", "requested_runtime", "php_target_min", "php_target_max", "image", "toolset", "protocol"],
+        "properties": {
+          "php_runtime": {"type": ["string", "null"]},
+          "requested_runtime": {"type": "string"},
+          "php_target_min": {"type": "string"}, "php_target_max": {"type": "string"},
+          "image": {"type": ["string", "null"]}, "toolset": {"type": ["string", "null"]},
+          "protocol": {"const": 1}
+        }
+      }]
+    },
+    "checks": {"type": "array", "items": {"$ref": "#/$defs/check"}},
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "diagnostics": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["code", "stage", "message", "checker"],
+        "properties": {
+          "code": {"type": "string", "minLength": 1}, "stage": {"type": "string", "minLength": 1},
+          "message": {"type": "string", "minLength": 1}, "checker": {"type": ["string", "null"]}
+        }
+      }
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"exit_code": {"const": 0}}}, "then": {"properties": {"verdict": {"const": "pass"}}}},
+    {"if": {"properties": {"exit_code": {"const": 1}}}, "then": {"properties": {"verdict": {"const": "fail"}, "complete": {"const": true}}}},
+    {"if": {"properties": {"exit_code": {"enum": [2, 3, 130]}}}, "then": {"properties": {"verdict": {"const": "error"}, "complete": {"const": false}}}}
+  ],
+  "$defs": {
+    "check": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "status", "required", "fail_on", "reason"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "status": {"enum": ["passed", "failed", "skipped", "unavailable", "error"]},
+        "required": {"type": "boolean"}, "fail_on": {"enum": ["error", "warning", "never"]},
+        "reason": {"type": ["string", "null"]}
+      },
+      "if": {"properties": {"status": {"enum": ["skipped", "unavailable", "error"]}}},
+      "then": {"properties": {"reason": {"type": "string", "minLength": 1}}}
+    },
+    "finding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["checker", "rule", "kind", "severity", "message", "path", "line", "column"],
+      "properties": {
+        "checker": {"type": "string", "minLength": 1}, "rule": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["code", "syntax", "global"]}, "severity": {"enum": ["error", "warning", "info"]},
+        "message": {"type": "string", "minLength": 1},
+        "path": {"type": ["string", "null"]}, "line": {"type": ["integer", "null"]},
+        "column": {"type": ["integer", "null"], "minimum": 1}
+      },
+      "if": {"properties": {"kind": {"const": "global"}}},
+      "then": {"properties": {"path": {"type": "null"}, "line": {"type": "null"}, "column": {"type": "null"}}},
+      "else": {"properties": {"path": {"type": "string", "minLength": 1}, "line": {"type": "integer", "minimum": 1}}}
+    }
+  }
+}

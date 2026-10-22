@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "clean-debug",
+  "state": "unstaged",
+  "patch": "change.patch",
+  "changed_files": ["web/modules/custom/demo/demo.module"],
+  "verdicts": {"diff": "pass", "full": "pass"},
+  "findings": []
+}
