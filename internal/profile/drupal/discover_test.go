@@ -97,12 +97,24 @@ func TestUnknownVersionsStayUnresolved(t *testing.T) {
 	}
 }
 
+func TestDuplicateKeysUseLastValueWithWarning(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "composer.json", `{"extra":{"drupal-scaffold":{"locations":{"web-root":"docroot"}}},"extra":{"drupal-scaffold":{"locations":{"web-root":"web"},"locations":{"web-root":"web"}}}}`)
+	facts, err := Discover(root)
+	want := []string{
+		`composer.json: duplicate JSON key "extra"; the last value is used, as in Composer`,
+		`composer.json: duplicate JSON key "extra.drupal-scaffold.locations"; the last value is used, as in Composer`,
+	}
+	if err != nil || facts.WebRoot == nil || *facts.WebRoot != "web" || !slices.Equal(facts.Warnings, want) {
+		t.Fatalf("duplicate keys not resolved like Composer: %+v %v", facts, err)
+	}
+}
+
 func TestUnsafeAmbiguousOrMalformedMetadataFails(t *testing.T) {
 	cases := map[string]string{
 		"malformed":          `{`,
 		"non-object":         `[]`,
 		"trailing JSON":      `{} {}`,
-		"duplicate":          `{"extra":{},"extra":{}}`,
 		"null extra":         `{"extra":null}`,
 		"traversal":          `{"extra":{"drupal-scaffold":{"locations":{"web-root":"../outside"}}}}`,
 		"absolute":           `{"extra":{"drupal-scaffold":{"locations":{"web-root":"/outside"}}}}`,

@@ -383,6 +383,11 @@ func writeReport(stdout, stderr io.Writer, format string, result report.Report) 
 		if result.Environment != nil && len(result.Environment.CompatibilityPending) > 0 {
 			fmt.Fprintf(stdout, "Compatibility pending: %s\n", strings.Join(result.Environment.CompatibilityPending, ", "))
 		}
+		if result.Environment != nil {
+			for _, warning := range result.Environment.DiscoveryWarnings {
+				fmt.Fprintf(stdout, "Discovery warning: %s\n", warning)
+			}
+		}
 		for _, finding := range result.Findings {
 			if finding.Path != nil && finding.Line != nil {
 				fmt.Fprintf(stdout, "%q:%d: %s\n", *finding.Path, *finding.Line, finding.Message)

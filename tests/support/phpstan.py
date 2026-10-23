@@ -168,3 +168,38 @@ def check_phpstan_project_config(test, configure, run):
         result = run(scenario, ["--only", "phpstan"])
         test.assertEqual(result["exit_code"], 0, result)
         test.assertEqual(len(result["findings"]), 0, result)
+
+
+def check_phpstan_dependency_mismatch(test, configure, run):
+    with materialize(FIXTURES / "phpstan-type-added") as scenario:
+        configure(scenario)
+        filename = scenario.root / ".phpwarden.yaml"
+        config = json.loads(filename.read_text())
+        (scenario.root / "composer.json").write_text('{"extra": {"stale": true}, "extra": {}}\n')
+        (scenario.root / "composer.lock").write_text(
+            '{"packages": [{"name": "drupal/core", "version": "11.3.16"}]}\n'
+        )
+        installed = scenario.root / "vendor/composer/installed.json"
+        installed.parent.mkdir(parents=True)
+        installed.write_text('{"packages": [{"name": "drupal/core", "version": "10.4.4"}]}\n')
+        (scenario.root / "vendor/autoload.php").write_text("<?php\n")
+        warnings = [
+            'composer.json: duplicate JSON key "extra"; the last value is used, as in Composer',
+            "installed drupal/core 10.4.4 conflicts with composer.lock version 11.3.16",
+        ]
+        for required, exit_code in ((True, 3), (False, 0)):
+            with test.subTest(required=required):
+                config["tools"]["phpstan"] = {"drupal": False, "required": required}
+                filename.write_text(json.dumps(config))
+                result = run(scenario, [])
+                test.assertEqual(result["exit_code"], exit_code, result)
+                test.assertFalse(result["complete"], result)
+                test.assertEqual(result["environment"]["discovery_warnings"], warnings)
+                statuses = {row["id"]: row["status"] for row in result["checks"]}
+                test.assertEqual(statuses["phpstan"], "unavailable", result)
+                test.assertEqual(statuses["syntax"], "passed", result)
+                test.assertEqual(statuses["debug"], "passed", result)
+                test.assertEqual(
+                    [row["code"] for row in result["diagnostics"]],
+                    ["project_dependencies_mismatch"],
+                )

@@ -69,7 +69,7 @@ func TestInstalledVersionCanSupplyMissingLockVersion(t *testing.T) {
 	}
 }
 
-func TestConflictingMalformedAndUnsafeInstalledMetadataFails(t *testing.T) {
+func TestConflictingMalformedAndUnsafeInstalledMetadataIsInvalid(t *testing.T) {
 	for _, contents := range []string{
 		`{"packages":[{"name":"drupal/core","version":"11.2.6"}]}`,
 		`{"packages":[{"name":"drupal/core","version":"11.x-dev"}]}`,
@@ -83,8 +83,10 @@ func TestConflictingMalformedAndUnsafeInstalledMetadataFails(t *testing.T) {
 		root := t.TempDir()
 		write(t, root, "composer.lock", `{"packages":[{"name":"drupal/core","version":"11.2.5"}]}`)
 		write(t, root, "vendor/composer/installed.json", contents)
-		if _, err := Discover(root); err == nil {
-			t.Fatalf("inconsistent installed metadata accepted: %s", contents)
+		facts, err := Discover(root)
+		if err != nil || facts.Installed.Status != "invalid" || facts.Installed.Error == nil || !slices.Contains(facts.Warnings, *facts.Installed.Error) ||
+			facts.Version == nil || *facts.Version != "11.2.5" {
+			t.Fatalf("inconsistent installed metadata accepted: %s: %+v %v", contents, facts, err)
 		}
 	}
 	root, outside := t.TempDir(), t.TempDir()
@@ -95,8 +97,8 @@ func TestConflictingMalformedAndUnsafeInstalledMetadataFails(t *testing.T) {
 	if err := os.Symlink(filepath.Join(outside, "installed.json"), filepath.Join(root, "vendor", "composer", "installed.json")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Discover(root); err == nil {
-		t.Fatal("installed metadata symlink followed")
+	if facts, err := Discover(root); err != nil || facts.Installed.Status != "invalid" {
+		t.Fatalf("installed metadata symlink followed: %+v %v", facts, err)
 	}
 }
 
@@ -114,6 +116,18 @@ func TestPHPRequirementsHaveProductionAndDevProvenance(t *testing.T) {
 	for _, source := range []string{"composer.json:require.php", "composer.json:require-dev.php", "composer.lock:platform.php", "composer.lock:packages:drupal/core:require.php", "composer.lock:packages-dev:test/tool:require.php"} {
 		if !slices.ContainsFunc(facts.PHP, func(requirement profile.PHPRequirement) bool { return requirement.Source == source }) {
 			t.Errorf("missing source %s", source)
+		}
+	}
+}
+
+func TestInvalidInstalledMetadataIsDeterministic(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "composer.lock", `{"packages":[{"name":"drupal/core","version":"11.3.16"},{"name":"drupal/core-recommended","version":"11.3.16"}]}`)
+	write(t, root, "vendor/composer/installed.json", `{"packages":[{"name":"drupal/core-recommended","version":"10.4.4"},{"name":"drupal/core","version":"10.4.4"}]}`)
+	for range 20 {
+		facts, err := Discover(root)
+		if err != nil || facts.Installed.Error == nil || *facts.Installed.Error != "installed drupal/core 10.4.4 conflicts with composer.lock version 11.3.16" {
+			t.Fatalf("installed metadata error is not stable: %+v %v", facts.Installed, err)
 		}
 	}
 }

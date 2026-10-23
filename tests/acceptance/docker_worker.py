@@ -22,6 +22,7 @@ from tests.support.phpcs import (
     check_phpcs_settings,
 )
 from tests.support.phpstan import (
+    check_phpstan_dependency_mismatch,
     check_phpstan_fixtures,
     check_phpstan_project_config,
     check_phpstan_settings,
@@ -239,6 +240,9 @@ class DockerWorkerTest(unittest.TestCase):
 
     def test_phpstan_project_config(self):
         check_phpstan_project_config(self, self.configure, self.run_check)
+
+    def test_phpstan_dependency_mismatch(self):
+        check_phpstan_dependency_mismatch(self, self.configure, self.run_check)
 
     def test_no_host_php_or_go_and_no_runtime_build_tools(self):
         with materialize(FIXTURES / "added-debug") as scenario:

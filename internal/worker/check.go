@@ -59,7 +59,7 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 	if err := discovery.Unchanged(location, effective); err != nil {
 		return failure("stale", err)
 	}
-	result = analyze(ctx, location, cfg, selection, only, process)
+	result = analyze(ctx, location, cfg, effective.Project, selection, only, process)
 	validateRuntime(&result, effective)
 	after, err := runrequest.Snapshot(location, selection, only)
 	if err != nil {
@@ -88,7 +88,7 @@ func newReport(cfg config.Config, selection scope.Selection) report.Report {
 	return result
 }
 
-func analyze(ctx context.Context, location config.Location, cfg config.Config, selection scope.Selection, only []string, process runner.Process) report.Report {
+func analyze(ctx context.Context, location config.Location, cfg config.Config, project *profile.Facts, selection scope.Selection, only []string, process runner.Process) report.Report {
 	result := newReport(cfg, selection)
 	defaults, ok := profile.Lookup(cfg.Profile)
 	if !ok {
@@ -102,7 +102,11 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, s
 		if id == "phpstan" {
 			settings := cfg.Tools.PHPStan
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
-			outcome = phpstan.Run(ctx, location.Root, phpstan.Select(selection, settings, cfg.Profile), settings, cfg.PHP.Target, process)
+			dependencies := ""
+			if project != nil && project.Installed != nil && project.Installed.Error != nil {
+				dependencies = *project.Installed.Error
+			}
+			outcome = phpstan.Run(ctx, location.Root, phpstan.Select(selection, settings, cfg.Profile), settings, cfg.PHP.Target, dependencies, process)
 		} else if id == "phpcs" {
 			settings := cfg.Tools.PHPCS
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
@@ -171,6 +175,9 @@ func validateRuntime(result *report.Report, effective config.Effective) {
 				result.Environment.CompatibilityPending = append(result.Environment.CompatibilityPending, pending)
 			}
 		}
+	}
+	if effective.Project != nil && len(effective.Project.Warnings) > 0 {
+		result.Environment.DiscoveryWarnings = slices.Clone(effective.Project.Warnings)
 	}
 	if effective.Project == nil || len(effective.Project.PHP) == 0 || result.Environment.PHPRuntime == nil {
 		return

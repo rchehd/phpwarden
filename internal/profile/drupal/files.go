@@ -14,8 +14,9 @@ import (
 )
 
 type reader struct {
-	root   string
-	inputs map[string]string
+	root     string
+	inputs   map[string]string
+	warnings *[]string
 }
 
 func (reader reader) probe(name string) (os.FileInfo, error) {
@@ -86,9 +87,13 @@ func (reader reader) document(name string) (any, bool, error) {
 	reader.inputs[name] = fmt.Sprintf("sha256:%x", sha256.Sum256(data))
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
-	value, err := jsonValue(decoder, 0)
+	duplicates := []string{}
+	value, err := jsonValue(decoder, 0, "", &duplicates)
 	if err != nil {
 		return nil, true, fmt.Errorf("%s: %w", name, err)
+	}
+	for _, key := range duplicates {
+		*reader.warnings = append(*reader.warnings, fmt.Sprintf("%s: duplicate JSON key %q; the last value is used, as in Composer", name, key))
 	}
 	if _, err := decoder.Token(); err != io.EOF {
 		return nil, true, fmt.Errorf("%s: expected one JSON document", name)
@@ -96,7 +101,7 @@ func (reader reader) document(name string) (any, bool, error) {
 	return value, true, nil
 }
 
-func jsonValue(decoder *json.Decoder, depth int) (any, error) {
+func jsonValue(decoder *json.Decoder, depth int, parent string, duplicates *[]string) (any, error) {
 	if depth > 128 {
 		return nil, fmt.Errorf("JSON nesting exceeds discovery limit")
 	}
@@ -115,10 +120,11 @@ func jsonValue(decoder *json.Decoder, depth int) (any, error) {
 			if !ok {
 				return nil, fmt.Errorf("expected a JSON object key")
 			}
+			child := strings.TrimPrefix(parent+"."+name, ".")
 			if _, exists := result[name]; exists {
-				return nil, fmt.Errorf("duplicate JSON key %q", name)
+				*duplicates = append(*duplicates, child)
 			}
-			value, err := jsonValue(decoder, depth+1)
+			value, err := jsonValue(decoder, depth+1, child, duplicates)
 			if err != nil {
 				return nil, err
 			}
@@ -130,7 +136,7 @@ func jsonValue(decoder *json.Decoder, depth int) (any, error) {
 	if token == json.Delim('[') {
 		result := []any{}
 		for decoder.More() {
-			value, err := jsonValue(decoder, depth+1)
+			value, err := jsonValue(decoder, depth+1, fmt.Sprintf("%s[%d]", parent, len(result)), duplicates)
 			if err != nil {
 				return nil, err
 			}

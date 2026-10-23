@@ -16,6 +16,7 @@ from tests.support.phpcs import (
     check_phpcs_settings,
 )
 from tests.support.phpstan import (
+    check_phpstan_dependency_mismatch,
     check_phpstan_fixtures,
     check_phpstan_project_config,
     check_phpstan_settings,
@@ -160,6 +161,9 @@ class WorkerCLITest(unittest.TestCase):
 
     def test_phpstan_project_config(self):
         check_phpstan_project_config(self, self.configure, self.run_worker)
+
+    def test_phpstan_dependency_mismatch(self):
+        check_phpstan_dependency_mismatch(self, self.configure, self.run_worker)
 
     def test_missing_yaml_bundle_never_loads_project_autoload(self):
         with materialize(YAML_FIXTURES / "yaml-duplicate-key") as scenario:

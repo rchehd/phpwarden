@@ -106,7 +106,7 @@ func TestPHPStanFailuresCannotPass(t *testing.T) {
 				}
 				return result
 			})
-			result := run(context.Background(), root, selection, settings(t), config.Target{Min: "8.4", Max: "8.4"}, fakeBundle(t), process)
+			result := run(context.Background(), root, selection, settings(t), config.Target{Min: "8.4", Max: "8.4"}, "", fakeBundle(t), process)
 			if name == "valid" {
 				if result.Check.Status != "passed" || len(result.Diagnostics) != 0 || len(result.Findings) != 0 {
 					t.Fatalf("valid report outside diff rejected: %+v", result)
@@ -129,31 +129,39 @@ func TestMissingInputsAndCancellation(t *testing.T) {
 		t.Fatal("unexpected process")
 		return runner.Result{}
 	})
-	result := run(context.Background(), root, selection, settings(t), config.Target{}, "/nonexistent-phpwarden-bundle", unused)
+	result := run(context.Background(), root, selection, settings(t), config.Target{}, "", "/nonexistent-phpwarden-bundle", unused)
 	if result.Check.Status != "unavailable" || result.Diagnostics[0].Code != "dependencies_missing" {
 		t.Fatalf("bundle failure hidden: %+v", result)
 	}
 	cfg := settings(t)
 	cfg.Drupal = true
-	result = run(context.Background(), root, selection, cfg, config.Target{}, fakeBundle(t), unused)
+	result = run(context.Background(), root, selection, cfg, config.Target{}, "", fakeBundle(t), unused)
 	if result.Check.Status != "unavailable" || result.Diagnostics[0].Code != "project_dependencies_missing" {
 		t.Fatalf("missing project dependencies hidden: %+v", result)
 	}
+	write(t, root, "vendor/autoload.php", "<?php\n")
+	result = run(context.Background(), root, selection, settings(t), config.Target{}, "installed drupal/core 10.4.4 conflicts with composer.lock version 11.3.16", fakeBundle(t), unused)
+	if result.Check.Status != "unavailable" || result.Diagnostics[0].Code != "project_dependencies_mismatch" || !strings.Contains(result.Diagnostics[0].Message, "10.4.4") {
+		t.Fatalf("mismatched project dependencies hidden: %+v", result)
+	}
+	if err := os.RemoveAll(filepath.Join(root, "vendor")); err != nil {
+		t.Fatal(err)
+	}
 	cfg = settings(t)
 	cfg.Config = "missing.neon"
-	result = run(context.Background(), root, selection, cfg, config.Target{}, fakeBundle(t), unused)
+	result = run(context.Background(), root, selection, cfg, config.Target{}, "", fakeBundle(t), unused)
 	if result.Check.Status != "error" || result.Diagnostics[0].Code != "config_invalid" {
 		t.Fatalf("missing config hidden: %+v", result)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	result = run(ctx, root, selection, settings(t), config.Target{}, fakeBundle(t), unused)
+	result = run(ctx, root, selection, settings(t), config.Target{}, "", fakeBundle(t), unused)
 	if result.Check.Status != "error" || result.Diagnostics[0].Code != "checker_timeout" {
 		t.Fatalf("cancelled check passed: %+v", result)
 	}
 	cfg = settings(t)
 	cfg.Enabled = false
-	result = run(ctx, root, selection, cfg, config.Target{}, "", unused)
+	result = run(ctx, root, selection, cfg, config.Target{}, "", "", unused)
 	if result.Check.Status != "skipped" || *result.Check.Reason != "disabled" {
 		t.Fatalf("disabled checker ran: %+v", result)
 	}

@@ -11,12 +11,14 @@ type Facts struct {
 	Installed     *Installed        `json:"installed"`
 	PHP           []PHPRequirement  `json:"php_requirements"`
 	PlatformPHP   *string           `json:"platform_php"`
+	Warnings      []string          `json:"warnings"`
 }
 
 type Installed struct {
 	Path    string  `json:"path"`
 	Status  string  `json:"status"`
 	Version *string `json:"version"`
+	Error   *string `json:"error,omitempty"`
 }
 
 type PHPRequirement struct {

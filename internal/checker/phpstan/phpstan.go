@@ -61,13 +61,14 @@ type nativeReport struct {
 	Errors []string        `json:"errors"`
 }
 
-func Run(ctx context.Context, root string, selection scope.Selection, cfg config.PHPStan, target config.Target, process runner.Process) checker.Outcome {
+// A nonempty dependencies error means installed packages do not match composer.lock.
+func Run(ctx context.Context, root string, selection scope.Selection, cfg config.PHPStan, target config.Target, dependencies string, process runner.Process) checker.Outcome {
 	executable, _ := os.Executable()
 	bundle := filepath.Clean(filepath.Join(filepath.Dir(executable), "..", "lib", "phpwarden", "phpstan"))
-	return run(ctx, root, selection, cfg, target, bundle, process)
+	return run(ctx, root, selection, cfg, target, dependencies, bundle, process)
 }
 
-func run(ctx context.Context, root string, selection scope.Selection, cfg config.PHPStan, target config.Target, bundle string, process runner.Process) checker.Outcome {
+func run(ctx context.Context, root string, selection scope.Selection, cfg config.PHPStan, target config.Target, dependencies, bundle string, process runner.Process) checker.Outcome {
 	result := checker.Outcome{Check: report.Check{ID: "phpstan", Status: "passed", Required: cfg.Required, FailOn: cfg.FailOn}, Findings: []report.Finding{}, Diagnostics: []report.Diagnostic{}}
 	if !cfg.Enabled || len(selection.Files) == 0 {
 		reason := "no_files"
@@ -96,6 +97,9 @@ func run(ctx context.Context, root string, selection scope.Selection, cfg config
 	}
 	if cfg.Drupal && autoload == "" {
 		return fail("unavailable", "project_dependencies_missing", "Drupal PHPStan analysis requires the project's installed Composer dependencies; run composer install in the project environment")
+	}
+	if dependencies != "" && autoload != "" {
+		return fail("unavailable", "project_dependencies_mismatch", "PHPStan analysis needs installed Composer dependencies that match composer.lock ("+dependencies+"); run composer install in the project environment")
 	}
 	if _, err := os.Stat(filepath.Join(bundle, "vendor/autoload.php")); err != nil {
 		return fail("unavailable", "dependencies_missing", "Bundled PHPStan dependencies are unavailable beside the worker binary; rebuild or reinstall the toolset")

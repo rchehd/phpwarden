@@ -2,6 +2,7 @@ package drupal
 
 import (
 	"fmt"
+	"maps"
 	"path"
 	"slices"
 	"strings"
@@ -61,7 +62,11 @@ func compatibility(reader reader, composer, lock map[string]any, facts *profile.
 		}
 	}
 	slices.SortFunc(facts.PHP, func(a, b profile.PHPRequirement) int { return strings.Compare(a.Source, b.Source) })
-	return installed(reader, path.Clean(vendor), lock, facts)
+	if err := installed(reader, path.Clean(vendor), lock, facts); err != nil {
+		facts.Installed.Status, facts.Installed.Error = "invalid", new(err.Error())
+		facts.Warnings = append(facts.Warnings, err.Error())
+	}
+	return nil
 }
 
 func phpRequirement(object map[string]any, section, source string, dev bool, facts *profile.Facts) error {
@@ -145,7 +150,8 @@ func installed(reader reader, vendor string, lock map[string]any, facts *profile
 		}
 		versions[name] = strings.TrimPrefix(text, "v")
 	}
-	for name, text := range versions {
+	for _, name := range slices.Sorted(maps.Keys(versions)) {
+		text := versions[name]
 		for _, section := range []string{"packages", "packages-dev"} {
 			entries, _ := lock[section].([]any)
 			for _, value := range entries {

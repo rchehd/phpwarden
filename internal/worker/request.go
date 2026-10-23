@@ -57,7 +57,7 @@ func Execute(ctx context.Context, root string, request runrequest.Request, proce
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(effective.Config.Runner.TimeoutSeconds)*time.Second)
 	defer cancel()
-	result := analyze(ctx, location, effective.Config, request.Selection, request.Only, process)
+	result := analyze(ctx, location, effective.Config, effective.Project, request.Selection, request.Only, process)
 	validateRuntime(&result, effective)
 	result.RunID = request.RunID
 	result.Environment.Image, result.Environment.Toolset = &request.Image, &request.Toolset

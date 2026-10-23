@@ -27,6 +27,7 @@ type Environment struct {
 	PHPRuntime           *string  `json:"php_runtime"`
 	PHPVersion           *string  `json:"php_version,omitempty"`
 	CompatibilityPending []string `json:"compatibility_pending,omitempty"`
+	DiscoveryWarnings    []string `json:"discovery_warnings,omitempty"`
 	RequestedRuntime     string   `json:"requested_runtime"`
 	TargetMin            string   `json:"php_target_min"`
 	TargetMax            string   `json:"php_target_max"`

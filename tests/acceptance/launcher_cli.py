@@ -18,6 +18,7 @@ from tests.support.phpcs import (
     check_phpcs_settings,
 )
 from tests.support.phpstan import (
+    check_phpstan_dependency_mismatch,
     check_phpstan_fixtures,
     check_phpstan_project_config,
     check_phpstan_settings,
@@ -204,6 +205,11 @@ class LauncherCLITest(unittest.TestCase):
 
     def test_phpstan_project_config(self):
         check_phpstan_project_config(
+            self, lambda scenario: self.configure(scenario.root, scenario.base), self.run_check
+        )
+
+    def test_phpstan_dependency_mismatch(self):
+        check_phpstan_dependency_mismatch(
             self, lambda scenario: self.configure(scenario.root, scenario.base), self.run_check
         )
 
@@ -426,8 +432,13 @@ class LauncherCLITest(unittest.TestCase):
             installed["packages"][0]["version"] = "11.2.6"
             installed_file.write_text(json.dumps(installed))
             result = self.run_cli(scenario.root, ["check"], scenario.env)
-            self.assertEqual(result["exit_code"], 2)
-            self.assertIn("installed", result["diagnostics"][0]["message"])
+            self.assertEqual(result["exit_code"], 1, result)
+            self.assertEqual(
+                result["environment"]["discovery_warnings"],
+                ["installed drupal/core 11.2.6 conflicts with composer.lock version 11.2.5"],
+            )
+            shown = self.run_cli(scenario.root, ["config", "show"], scenario.env)["effective"]
+            self.assertEqual(shown["project"]["installed"]["status"], "invalid")
             installed["packages"][0]["version"] = "11.2.5"
             installed_file.write_text(json.dumps(installed))
             composer["require"]["php"] = ">=8.5"

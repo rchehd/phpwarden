@@ -19,8 +19,8 @@ import (
 var exactVersion = regexp.MustCompile(`^v?([0-9]+\.[0-9]+\.[0-9]+)$`)
 
 func Discover(root string) (profile.Facts, error) {
-	facts := profile.Facts{SourceRoots: []string{}, Exclusions: []string{}, Inputs: map[string]string{}}
-	reader := reader{root: root, inputs: facts.Inputs}
+	facts := profile.Facts{SourceRoots: []string{}, Exclusions: []string{}, Inputs: map[string]string{}, Warnings: []string{}}
+	reader := reader{root: root, inputs: facts.Inputs, warnings: &facts.Warnings}
 	composer, err := reader.object("composer.json")
 	if err != nil {
 		return facts, err
