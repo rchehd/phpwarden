@@ -162,7 +162,7 @@ func compileEntry(release string, item entry) (candidate, error) {
 	}
 	if item.Development && (release != "development" || item.Framework != nil || item.Toolset != DevelopmentID ||
 		item.PHP.Version != DevelopmentPHPVersion || item.PHP.Runtime != "8.4" || item.PHP.Targets.Min != "8.4" || item.PHP.Targets.Max != "8.4" ||
-		!slices.Equal(item.Capabilities, []string{"debug", "drupal-config", "phpcs", "phpstan", "syntax", "twig-cs-fixer", "whitespace", "yaml"})) {
+		!slices.Equal(item.Capabilities, []string{"composer-audit", "composer-validate", "debug", "drupal-config", "phpcs", "phpstan", "syntax", "twig-cs-fixer", "whitespace", "yaml"})) {
 		return result, fmt.Errorf("only the bundled framework-independent static development toolset is supported")
 	}
 	platforms := make(map[string]bool)

@@ -1,0 +1,9 @@
+--- a/composer.json
++++ b/composer.json
+@@ -2,6 +2,5 @@
+     "name": "phpwarden/fixture",
+     "type": "project",
+     "description": "PHPWarden Composer fixture",
+-    "license": "GPL-2.0-or-later",
+     "require": {}
+ }

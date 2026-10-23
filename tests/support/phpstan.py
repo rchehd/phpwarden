@@ -5,6 +5,8 @@ from tests.support.scenarios import materialize
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "phpstan"
 TOOLS = (
+    "composer-audit",
+    "composer-validate",
     "debug",
     "drupal-config",
     "phpcs",

@@ -366,3 +366,37 @@ func copyTree(t *testing.T, source, destination string) {
 		t.Fatal(err)
 	}
 }
+
+func TestProjectFilesOutsideSourceRoots(t *testing.T) {
+	root := baseline(t)
+	write(t, root, "composer.json", "{}\n")
+	write(t, root, "composer.lock", "{}\n")
+	git(t, root, "add", "--all")
+	git(t, root, "-c", "core.hooksPath="+os.DevNull, "commit", "--quiet", "-m", "composer")
+	base := git(t, root, "rev-parse", "HEAD")
+	project := func(mode string, paths ...string) []string {
+		t.Helper()
+		values := options(root, mode)
+		values.Base, values.Paths, values.ProjectFiles = base, paths, []string{"composer.json", "composer.lock"}
+		if mode != "diff" {
+			values.Base = ""
+		}
+		return build(t, values).ProjectFiles
+	}
+	if files := project("diff"); len(files) != 0 {
+		t.Fatalf("unchanged Composer files selected: %v", files)
+	}
+	write(t, root, "composer.lock", "{\"changed\": true}\n")
+	if files := project("diff"); !reflect.DeepEqual(files, []string{"composer.lock"}) {
+		t.Fatalf("changed lock not selected: %v", files)
+	}
+	if files := project("full"); !reflect.DeepEqual(files, []string{"composer.json", "composer.lock"}) {
+		t.Fatalf("full mode skipped Composer files: %v", files)
+	}
+	if files := project("paths", "composer.json"); !reflect.DeepEqual(files, []string{"composer.json"}) {
+		t.Fatalf("explicit Composer file not selected: %v", files)
+	}
+	if files := project("paths", "src/demo.php"); len(files) != 0 {
+		t.Fatalf("unrequested Composer files selected: %v", files)
+	}
+}

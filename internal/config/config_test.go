@@ -72,6 +72,11 @@ func TestDefaultsAndProvenance(t *testing.T) {
 		result.Provenance["tools.twig-cs-fixer.enabled"] != "profile_default" || result.Provenance["tools.twig-cs-fixer.config"] != "core_default" {
 		t.Fatalf("unexpected Twig CS Fixer defaults: %+v", twig)
 	}
+	validate, audit := result.Config.Tools.ComposerValidate, result.Config.Tools.ComposerAudit
+	if !validate.Enabled || !validate.Required || validate.Strict || !audit.Enabled || audit.Required || audit.FailOn != "error" || audit.Abandoned != "report" ||
+		audit.Offline || audit.MaxAgeHours != 24 || audit.MaxStaleHours != 168 || audit.Ignore == nil || result.Provenance["tools.composer-audit.required"] != "core_default" {
+		t.Fatalf("unexpected Composer defaults: %+v %+v", validate, audit)
+	}
 	if result.Provenance["php.runtime"] != "project_config" ||
 		result.Provenance["tools.debug.functions"] != "profile_default" ||
 		result.Provenance["scope.mode"] != "core_default" {
@@ -239,6 +244,13 @@ func TestInvalidConfigurations(t *testing.T) {
 		"twig extra input":      minimal + "tools: {twig-cs-fixer: {extra_inputs: [/outside]}}\n",
 		"twig extension":        minimal + "tools: {twig-cs-fixer: {extra_extensions: [tpl]}}\n",
 		"twig exclude":          minimal + "tools: {twig-cs-fixer: {exclude: ['[']}}\n",
+		"validate unknown":      minimal + "tools: {composer-validate: {check_publish: true}}\n",
+		"validate include":      minimal + "tools: {composer-validate: {include: [../outside]}}\n",
+		"audit abandoned":       minimal + "tools: {composer-audit: {abandoned: fail}}\n",
+		"audit stale":           minimal + "tools: {composer-audit: {max_age_hours: 48, max_stale_hours: 24}}\n",
+		"audit ignore reason":   minimal + "tools: {composer-audit: {ignore: [{id: CVE-2026-1}]}}\n",
+		"audit ignore id":       minimal + "tools: {composer-audit: {ignore: [{id: '../x', reason: test}]}}\n",
+		"audit ignore date":     minimal + "tools: {composer-audit: {ignore: [{id: CVE-2026-1, reason: test, until: 2026-02-30}]}}\n",
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {

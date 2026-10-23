@@ -11,6 +11,18 @@ scope:
   mode: diff
   base: origin/main
 tools:
+  composer-validate:
+    enabled: true
+    required: true
+    fail_on: error
+    strict: false
+  composer-audit:
+    enabled: true
+    required: false
+    fail_on: error
+    max_age_hours: 24
+    max_stale_hours: 168
+    ignore: []
   phpstan:
     enabled: true
     required: true

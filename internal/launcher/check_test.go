@@ -73,7 +73,7 @@ func dockerDouble(t *testing.T, location config.Location, calls *[]runner.Comman
 		case "context":
 			return runner.Result{Stdout: []byte(`"unix:///var/run/docker.sock"`)}
 		case "image":
-			return runner.Result{Stdout: []byte(`[{"Id":"` + testImage + `","Os":"linux","Architecture":"amd64","Config":{"Labels":{"io.phpwarden.protocol":"2","io.phpwarden.toolset":"` + toolset.DevelopmentID + `","io.phpwarden.checkers":"debug,drupal-config,phpcs,phpstan,syntax,twig-cs-fixer,whitespace,yaml","io.phpwarden.php-version":"8.4.26","io.phpwarden.symfony-yaml-version":"7.4.21","io.phpwarden.phpcs-version":"4.0.4","io.phpwarden.coder-version":"9.0.1","io.phpwarden.phpcompatibility-version":"10.0.0-alpha2","io.phpwarden.phpstan-version":"2.3.1","io.phpwarden.phpstan-drupal-version":"2.2.2","io.phpwarden.phpstan-deprecations-version":"2.0.5","io.phpwarden.twig-cs-fixer-version":"4.1.1","io.phpwarden.twig-version":"3.30.0"}}}]`)}
+			return runner.Result{Stdout: []byte(`[{"Id":"` + testImage + `","Os":"linux","Architecture":"amd64","Config":{"Labels":{"io.phpwarden.protocol":"2","io.phpwarden.toolset":"` + toolset.DevelopmentID + `","io.phpwarden.checkers":"composer-audit,composer-validate,debug,drupal-config,phpcs,phpstan,syntax,twig-cs-fixer,whitespace,yaml","io.phpwarden.php-version":"8.4.26","io.phpwarden.symfony-yaml-version":"7.4.21","io.phpwarden.phpcs-version":"4.0.4","io.phpwarden.coder-version":"9.0.1","io.phpwarden.phpcompatibility-version":"10.0.0-alpha2","io.phpwarden.phpstan-version":"2.3.1","io.phpwarden.phpstan-drupal-version":"2.2.2","io.phpwarden.phpstan-deprecations-version":"2.0.5","io.phpwarden.twig-cs-fixer-version":"4.1.1","io.phpwarden.twig-version":"3.30.0","io.phpwarden.composer-version":"2.10.3"}}}]`)}
 		case "run":
 			for _, argument := range []string{"--read-only", "--network=none", "--cap-drop=ALL", "--security-opt=no-new-privileges:true", "--pull=never", testImage} {
 				if !slices.Contains(command.Args, argument) {
@@ -143,7 +143,7 @@ func TestNativeCheckerTransportAndPolicyValidation(t *testing.T) {
 				process := processFunc(func(ctx context.Context, command runner.Command) runner.Result {
 					result := base(ctx, command)
 					if mutation == "old capabilities" && command.Args[0] == "image" {
-						result.Stdout = bytesReplace(result.Stdout, "debug,drupal-config,phpcs,phpstan,syntax,twig-cs-fixer,whitespace,yaml", "debug,syntax,yaml")
+						result.Stdout = bytesReplace(result.Stdout, "composer-audit,composer-validate,debug,drupal-config,phpcs,phpstan,syntax,twig-cs-fixer,whitespace,yaml", "debug,syntax,yaml")
 					}
 					if command.Args[0] == "run" {
 						if mutation == "wrong kind" {

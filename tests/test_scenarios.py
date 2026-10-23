@@ -19,6 +19,7 @@ class ScenarioFixturesTest(unittest.TestCase):
                 FIXTURES.parent / "phpcs",
                 FIXTURES.parent / "phpstan",
                 FIXTURES.parent / "twig-cs-fixer",
+                FIXTURES.parent / "composer-validate",
             )
             for path in group.iterdir()
             if path.is_dir()
@@ -53,7 +54,9 @@ class ScenarioFixturesTest(unittest.TestCase):
                     path = (scenario.root / finding["path"]).resolve()
                     self.assertTrue(path.is_relative_to(scenario.root))
                     if finding.get("global"):
-                        self.assertIn(finding["checker"], ("yaml", "twig-cs-fixer"))
+                        self.assertIn(
+                            finding["checker"], ("yaml", "twig-cs-fixer", "composer-validate")
+                        )
                         self.assertIsNone(finding["line"])
                         self.assertTrue(path.is_file())
                         continue

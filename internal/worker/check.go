@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/rchehd/phpwarden/internal/checker"
+	"github.com/rchehd/phpwarden/internal/checker/composeraudit"
+	"github.com/rchehd/phpwarden/internal/checker/composervalidate"
 	"github.com/rchehd/phpwarden/internal/checker/debug"
 	"github.com/rchehd/phpwarden/internal/checker/drupalconfig"
 	"github.com/rchehd/phpwarden/internal/checker/phpcs"
@@ -60,7 +62,11 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 	if err := discovery.Unchanged(location, effective); err != nil {
 		return failure("stale", err)
 	}
-	result = analyze(ctx, location, cfg, effective.Project, selection, only, process)
+	audit := func(ctx context.Context, settings config.ComposerAudit) checker.Outcome {
+		cacheDir, _ := composeraudit.CacheDir()
+		return composeraudit.Run(ctx, location.Root, settings, composeraudit.NativeFetcher(composeraudit.Bundle(), process), cacheDir, time.Now())
+	}
+	result = analyze(ctx, location, cfg, effective.Project, selection, only, audit, process)
 	validateRuntime(&result, effective)
 	after, err := runrequest.Snapshot(location, selection, only)
 	if err != nil {
@@ -89,7 +95,10 @@ func newReport(cfg config.Config, selection scope.Selection) report.Report {
 	return result
 }
 
-func analyze(ctx context.Context, location config.Location, cfg config.Config, project *profile.Facts, selection scope.Selection, only []string, process runner.Process) report.Report {
+// Auditor runs composer-audit; a network-less worker delegates it to the launcher.
+type Auditor func(context.Context, config.ComposerAudit) checker.Outcome
+
+func analyze(ctx context.Context, location config.Location, cfg config.Config, project *profile.Facts, selection scope.Selection, only []string, audit Auditor, process runner.Process) report.Report {
 	result := newReport(cfg, selection)
 	defaults, ok := profile.Lookup(cfg.Profile)
 	if !ok {
@@ -108,6 +117,14 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 				dependencies = *project.Installed.Error
 			}
 			outcome = phpstan.Run(ctx, location.Root, phpstan.Select(selection, settings, cfg.Profile), settings, cfg.PHP.Target, dependencies, process)
+		} else if id == "composer-audit" {
+			settings := cfg.Tools.ComposerAudit
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			outcome = audit(ctx, settings)
+		} else if id == "composer-validate" {
+			settings := cfg.Tools.ComposerValidate
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			outcome = composervalidate.Run(ctx, location.Root, composervalidate.Select(selection, settings), settings, process)
 		} else if id == "twig-cs-fixer" {
 			settings := cfg.Tools.TwigCSFixer
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
@@ -155,6 +172,9 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 		result.Checks = append(result.Checks, outcome.Check)
 		result.Findings = append(result.Findings, outcome.Findings...)
 		result.Diagnostics = append(result.Diagnostics, outcome.Diagnostics...)
+		if outcome.Advisories != nil {
+			result.Environment.Advisories = outcome.Advisories
+		}
 		if outcome.Runtime != nil {
 			if *outcome.Runtime != cfg.PHP.Runtime || result.Environment.PHPRuntime != nil && *outcome.Runtime != *result.Environment.PHPRuntime ||
 				result.Environment.PHPVersion != nil && outcome.PHPVersion != nil && *result.Environment.PHPVersion != *outcome.PHPVersion {

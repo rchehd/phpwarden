@@ -11,6 +11,11 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from tests.support.composer import (
+    check_composer_audit,
+    check_composer_validate_fixtures,
+    check_composer_validate_settings,
+)
 from tests.support.drupal_config import (
     check_drupal_config_custom_layout,
     check_drupal_config_fixtures,
@@ -69,6 +74,8 @@ class DockerWorkerTest(unittest.TestCase):
             "php": {"runtime": runtime, "target": {"min": runtime, "max": runtime}},
             "scope": {"include": ["web/modules/custom"], "base": scenario.base},
             "tools": {
+                "composer-audit": {"enabled": False},
+                "composer-validate": {"enabled": False},
                 "phpcs": {"enabled": False},
                 "phpstan": {"enabled": False},
                 "twig-cs-fixer": {"enabled": False},
@@ -158,7 +165,7 @@ class DockerWorkerTest(unittest.TestCase):
         self.assertEqual(self.metadata["Config"]["User"], "10001:10001")
         self.assertEqual(
             self.metadata["Config"]["Labels"]["io.phpwarden.checkers"],
-            "debug,drupal-config,phpcs,phpstan,syntax,twig-cs-fixer,whitespace,yaml",
+            "composer-audit,composer-validate,debug,drupal-config,phpcs,phpstan,syntax,twig-cs-fixer,whitespace,yaml",
         )
         with materialize(FIXTURES / "clean-debug") as scenario:
             self.configure(scenario)
@@ -262,6 +269,15 @@ class DockerWorkerTest(unittest.TestCase):
     def test_twig_cs_fixer_project_config(self):
         check_twig_cs_fixer_project_config(self, self.configure, self.run_check)
 
+    def test_composer_validate_fixtures(self):
+        check_composer_validate_fixtures(self, self.configure, self.run_check)
+
+    def test_composer_validate_settings(self):
+        check_composer_validate_settings(self, self.configure, self.run_check)
+
+    def test_composer_audit(self):
+        check_composer_audit(self, self.configure, self.run_check, network=False)
+
     def test_no_host_php_or_go_and_no_runtime_build_tools(self):
         with materialize(FIXTURES / "added-debug") as scenario:
             self.configure(scenario)
@@ -320,6 +336,8 @@ class DockerWorkerTest(unittest.TestCase):
                 "php": {"runtime": "8.4", "target": {"min": "8.4", "max": "8.4"}},
                 "scope": {"mode": "full", "include": ["."]},
                 "tools": {
+                    "composer-audit": {"enabled": False},
+                    "composer-validate": {"enabled": False},
                     "phpcs": {"enabled": False},
                     "phpstan": {"enabled": False},
                     "twig-cs-fixer": {"enabled": False},

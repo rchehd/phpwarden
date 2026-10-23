@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/rchehd/phpwarden/internal/checker"
+	"github.com/rchehd/phpwarden/internal/checker/composeraudit"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/launcher"
+	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/runner"
 	"github.com/rchehd/phpwarden/internal/runrequest"
@@ -38,7 +41,7 @@ Scope options:
   --mode diff|full     Override configured mode
   --base REF           Diff base ref
   --whole-files        Include all lines of selected diff files
-  --only ID[,ID...]    Select debug, drupal-config, phpcs, phpstan, syntax, twig-cs-fixer, whitespace, yaml; enable selected checkers
+  --only ID[,ID...]    Select composer-audit, composer-validate, debug, drupal-config, phpcs, phpstan, syntax, twig-cs-fixer, whitespace, yaml; enable selected checkers
 
 Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
 Check uses the local development Docker image (Linux amd64, PHP runtime/target 8.4).
@@ -81,6 +84,9 @@ func Run(arguments []string, cwd string, stdout, stderr io.Writer) int {
 }
 
 func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(arguments) >= 2 && arguments[0] == "worker" && arguments[1] == "audit" {
+		return workerAudit(ctx, arguments[2:], cwd, stdout, stderr)
+	}
 	args, err := parse(arguments)
 	if err != nil {
 		return fail(stdout, stderr, args, "usage", err)
@@ -281,6 +287,30 @@ func showScope(args options, cwd string, location config.Location, cfg config.Co
 	return writeScope(args, location, selection, stdout, stderr)
 }
 
+// workerAudit prints Composer's audit report for the composer.json and composer.lock in cwd; the launcher runs it in a networked container.
+func workerAudit(ctx context.Context, arguments []string, cwd string, stdout, stderr io.Writer) int {
+	if len(arguments) > 1 || len(arguments) == 1 && arguments[0] != "--no-dev" {
+		fmt.Fprintln(stderr, "worker audit accepts only --no-dev")
+		return 2
+	}
+	files := [2][]byte{}
+	for i, name := range []string{"composer.json", "composer.lock"} {
+		data, err := os.ReadFile(filepath.Join(cwd, name))
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 2
+		}
+		files[i] = data
+	}
+	output, err := composeraudit.NativeFetcher(composeraudit.Bundle(), runner.Exec{})(ctx, files[0], files[1], len(arguments) == 1)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 3
+	}
+	fmt.Fprintln(stdout, string(output))
+	return 0
+}
+
 func scopeOptions(args options, cwd string, location config.Location, cfg config.Config) (scope.Options, error) {
 	mode := cfg.Scope.Mode
 	if args.mode != "" {
@@ -296,6 +326,7 @@ func scopeOptions(args options, cwd string, location config.Location, cfg config
 	if mode != "diff" && (args.base != "" || args.wholeFiles) {
 		return scope.Options{}, fmt.Errorf("base and whole-files apply only to diff")
 	}
+	defaults, _ := profile.Lookup(cfg.Profile)
 	base, wholeFiles := "", false
 	if mode == "diff" {
 		base, wholeFiles = cfg.Scope.Base, cfg.Scope.WholeFiles
@@ -306,7 +337,7 @@ func scopeOptions(args options, cwd string, location config.Location, cfg config
 	}
 	return scope.Options{
 		Root: location.Root, CWD: cwd, Mode: mode, Base: base, WholeFiles: wholeFiles,
-		Include: cfg.Scope.Include, Exclude: cfg.Scope.Exclude, Paths: paths,
+		Include: cfg.Scope.Include, Exclude: cfg.Scope.Exclude, Paths: paths, ProjectFiles: defaults.ProjectFiles,
 	}, nil
 }
 

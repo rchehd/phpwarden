@@ -23,17 +23,24 @@ type Report struct {
 }
 
 type Environment struct {
-	FrameworkVersion     *string  `json:"framework_version,omitempty"`
-	PHPRuntime           *string  `json:"php_runtime"`
-	PHPVersion           *string  `json:"php_version,omitempty"`
-	CompatibilityPending []string `json:"compatibility_pending,omitempty"`
-	DiscoveryWarnings    []string `json:"discovery_warnings,omitempty"`
-	RequestedRuntime     string   `json:"requested_runtime"`
-	TargetMin            string   `json:"php_target_min"`
-	TargetMax            string   `json:"php_target_max"`
-	Image                *string  `json:"image"`
-	Toolset              *string  `json:"toolset"`
-	Protocol             int      `json:"protocol"`
+	FrameworkVersion     *string     `json:"framework_version,omitempty"`
+	PHPRuntime           *string     `json:"php_runtime"`
+	PHPVersion           *string     `json:"php_version,omitempty"`
+	CompatibilityPending []string    `json:"compatibility_pending,omitempty"`
+	DiscoveryWarnings    []string    `json:"discovery_warnings,omitempty"`
+	Advisories           *Advisories `json:"advisories,omitempty"`
+	RequestedRuntime     string      `json:"requested_runtime"`
+	TargetMin            string      `json:"php_target_min"`
+	TargetMax            string      `json:"php_target_max"`
+	Image                *string     `json:"image"`
+	Toolset              *string     `json:"toolset"`
+	Protocol             int         `json:"protocol"`
+}
+
+// Advisories records where composer-audit took its security advisories from and when they were fetched.
+type Advisories struct {
+	Source    string `json:"source"`
+	FetchedAt string `json:"fetched_at"`
 }
 
 type Check struct {

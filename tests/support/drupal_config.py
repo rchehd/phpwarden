@@ -38,6 +38,8 @@ def check_drupal_config_fixtures(test, configure, run):
                 test.assertEqual(
                     [row["id"] for row in result["checks"]],
                     [
+                        "composer-audit",
+                        "composer-validate",
                         "debug",
                         "drupal-config",
                         "phpcs",
@@ -65,6 +67,8 @@ def check_drupal_config_settings(test, configure, run):
         config["tools"] = {
             name: {"enabled": False}
             for name in (
+                "composer-audit",
+                "composer-validate",
                 "debug",
                 "drupal-config",
                 "phpcs",

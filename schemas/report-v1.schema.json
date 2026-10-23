@@ -16,13 +16,14 @@
       "anyOf": [{"type": "null"}, {
         "type": "object",
         "additionalProperties": false,
-        "required": ["mode", "base_ref", "merge_base", "whole_files", "files", "line_map"],
+        "required": ["mode", "base_ref", "merge_base", "whole_files", "files", "line_map", "project_files"],
         "properties": {
           "mode": {"enum": ["diff", "full", "paths"]},
           "base_ref": {"type": ["string", "null"]},
           "merge_base": {"type": ["string", "null"]},
           "whole_files": {"type": "boolean"},
           "files": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "project_files": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
           "line_map": {
             "type": "object",
             "additionalProperties": {
@@ -48,6 +49,10 @@
           "php_version": {"type": "string", "minLength": 1},
           "compatibility_pending": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
           "discovery_warnings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "advisories": {
+            "type": "object", "additionalProperties": false, "required": ["source", "fetched_at"],
+            "properties": {"source": {"enum": ["network", "cache"]}, "fetched_at": {"type": "string", "format": "date-time"}}
+          },
           "requested_runtime": {"type": "string"},
           "php_target_min": {"type": "string"}, "php_target_max": {"type": "string"},
           "image": {"type": ["string", "null"]}, "toolset": {"type": ["string", "null"]},

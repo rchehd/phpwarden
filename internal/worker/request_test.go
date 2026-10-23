@@ -346,3 +346,28 @@ func TestComposerChangesDuringWorkerExecutionAreStale(t *testing.T) {
 		}
 	}
 }
+
+func TestRequestWorkerDelegatesComposerAudit(t *testing.T) {
+	location, effective, options := fixture(t)
+	for name, data := range map[string]string{"composer.json": "{}\n", "composer.lock": "{\"packages\": []}\n"} {
+		if err := os.WriteFile(filepath.Join(location.Root, name), []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	selection, err := scope.Build(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := runrequest.Build(location, effective, selection, []string{"composer-audit"}, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	process := processFunc(func(context.Context, runner.Command) runner.Result {
+		t.Fatal("the network-less worker must not run Composer audit")
+		return runner.Result{}
+	})
+	result := Execute(context.Background(), location.Root, request, process)
+	if result.ExitCode != 0 || len(result.Checks) != 1 || result.Checks[0].Status != "skipped" || *result.Checks[0].Reason != "delegated" {
+		t.Fatalf("Composer audit was not delegated: %+v", result)
+	}
+}

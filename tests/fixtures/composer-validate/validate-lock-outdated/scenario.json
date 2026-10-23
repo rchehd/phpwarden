@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "id": "validate-lock-outdated",
+  "state": "unstaged",
+  "changed_files": [
+    "composer.json"
+  ],
+  "settings": {},
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "composer-validate",
+      "path": "composer.json",
+      "line": null,
+      "global": true,
+      "rule": "composer.lock.error",
+      "contains": "The lock file is not up to date with the latest changes in composer.json",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

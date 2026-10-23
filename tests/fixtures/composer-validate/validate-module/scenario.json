@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "id": "validate-module",
+  "state": "untracked",
+  "changed_files": [
+    "web/modules/custom/demo/composer.json"
+  ],
+  "settings": {},
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "composer-validate",
+      "path": "web/modules/custom/demo/composer.json",
+      "line": null,
+      "global": true,
+      "rule": "composer.validate.error",
+      "contains": "is invalid, it should have a vendor name",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    },
+    {
+      "checker": "composer-validate",
+      "path": "web/modules/custom/demo/composer.json",
+      "line": null,
+      "global": true,
+      "rule": "composer.validate.error",
+      "contains": "Does not match the regex pattern",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

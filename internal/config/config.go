@@ -8,6 +8,7 @@ import (
 	"math"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/projectpath"
@@ -52,14 +53,16 @@ type Runner struct {
 }
 
 type Tools struct {
-	PHPStan      PHPStan      `json:"phpstan"`
-	TwigCSFixer  TwigCSFixer  `json:"twig-cs-fixer"`
-	PHPCS        PHPCS        `json:"phpcs"`
-	DrupalConfig DrupalConfig `json:"drupal-config"`
-	Debug        Debug        `json:"debug"`
-	Syntax       Syntax       `json:"syntax"`
-	YAML         YAML         `json:"yaml"`
-	Whitespace   Whitespace   `json:"whitespace"`
+	PHPStan          PHPStan          `json:"phpstan"`
+	TwigCSFixer      TwigCSFixer      `json:"twig-cs-fixer"`
+	ComposerValidate ComposerValidate `json:"composer-validate"`
+	ComposerAudit    ComposerAudit    `json:"composer-audit"`
+	PHPCS            PHPCS            `json:"phpcs"`
+	DrupalConfig     DrupalConfig     `json:"drupal-config"`
+	Debug            Debug            `json:"debug"`
+	Syntax           Syntax           `json:"syntax"`
+	YAML             YAML             `json:"yaml"`
+	Whitespace       Whitespace       `json:"whitespace"`
 }
 
 type PHPStan struct {
@@ -82,6 +85,35 @@ type PHPStan struct {
 	Deprecations    bool     `json:"deprecations"`
 	MemoryLimitMB   int      `json:"memory_limit_mb"`
 	ExtraExtensions []string `json:"extra_extensions"`
+}
+
+type ComposerValidate struct {
+	Enabled        bool     `json:"enabled"`
+	Required       bool     `json:"required"`
+	FailOn         string   `json:"fail_on"`
+	TimeoutSeconds int      `json:"timeout_seconds"`
+	Include        []string `json:"include,omitempty"`
+	Exclude        []string `json:"exclude"`
+	Strict         bool     `json:"strict"`
+}
+
+type ComposerAudit struct {
+	Enabled        bool                  `json:"enabled"`
+	Required       bool                  `json:"required"`
+	FailOn         string                `json:"fail_on"`
+	TimeoutSeconds int                   `json:"timeout_seconds"`
+	NoDev          bool                  `json:"no_dev"`
+	Abandoned      string                `json:"abandoned"`
+	Offline        bool                  `json:"offline"`
+	MaxAgeHours    int                   `json:"max_age_hours"`
+	MaxStaleHours  int                   `json:"max_stale_hours"`
+	Ignore         []ComposerAuditIgnore `json:"ignore"`
+}
+
+type ComposerAuditIgnore struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+	Until  string `json:"until,omitempty"`
 }
 
 type TwigCSFixer struct {
@@ -230,6 +262,9 @@ func Parse(data []byte) (Effective, error) {
 			Tools: Tools{PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
 				Includes: []string{}, BootstrapFiles: []string{}, ScanDirectories: []string{}, StubFiles: []string{}, Autoload: "auto",
 				Drupal: defaults.PHPStanDrupal, Deprecations: true, MemoryLimitMB: 512, ExtraExtensions: []string{}},
+				ComposerValidate: ComposerValidate{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}},
+				ComposerAudit: ComposerAudit{Enabled: true, Required: false, FailOn: "error", TimeoutSeconds: 120, Abandoned: "report",
+					MaxAgeHours: 24, MaxStaleHours: 168, Ignore: []ComposerAuditIgnore{}},
 				TwigCSFixer: TwigCSFixer{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
 					ExtraExtensions: []string{}, ExtraInputs: []string{}},
 				PHPCS: PHPCS{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
@@ -282,6 +317,12 @@ func Parse(data []byte) (Effective, error) {
 		result.Provenance["tools.twig-cs-fixer."+field] = "core_default"
 	}
 	result.Provenance["tools.twig-cs-fixer.enabled"] = "profile_default"
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "strict"} {
+		result.Provenance["tools.composer-validate."+field] = "core_default"
+	}
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "no_dev", "abandoned", "offline", "max_age_hours", "max_stale_hours", "ignore"} {
+		result.Provenance["tools.composer-audit."+field] = "core_default"
+	}
 	encoded, err := json.Marshal(input)
 	if err != nil {
 		return Effective{}, err
@@ -382,7 +423,7 @@ func validateValues(cfg Config) error {
 		cfg.Tools.DrupalConfig.Include, cfg.Tools.DrupalConfig.Directories, cfg.Tools.DrupalConfig.ModuleRoots,
 		cfg.Tools.PHPCS.Include, cfg.Tools.PHPCS.StandardPaths, cfg.Tools.PHPCS.ExtraInputs,
 		cfg.Tools.PHPStan.Include, cfg.Tools.PHPStan.Includes, cfg.Tools.PHPStan.BootstrapFiles, cfg.Tools.PHPStan.ScanDirectories, cfg.Tools.PHPStan.StubFiles,
-		cfg.Tools.TwigCSFixer.Include, cfg.Tools.TwigCSFixer.ExtraInputs} {
+		cfg.Tools.TwigCSFixer.Include, cfg.Tools.TwigCSFixer.ExtraInputs, cfg.Tools.ComposerValidate.Include} {
 		for _, value := range values {
 			if err := projectpath.Validate(value); err != nil {
 				return err
@@ -422,13 +463,23 @@ func validateValues(cfg Config) error {
 			}
 		}
 	}
+	if cfg.Tools.ComposerAudit.MaxStaleHours < cfg.Tools.ComposerAudit.MaxAgeHours {
+		return fmt.Errorf("tools.composer-audit.max_stale_hours must not be lower than max_age_hours")
+	}
+	for _, ignore := range cfg.Tools.ComposerAudit.Ignore {
+		if ignore.Until != "" {
+			if _, err := time.Parse(time.DateOnly, ignore.Until); err != nil {
+				return fmt.Errorf("tools.composer-audit.ignore %q: until must be a YYYY-MM-DD date", ignore.ID)
+			}
+		}
+	}
 	for _, directory := range cfg.Tools.DrupalConfig.Directories {
 		if path.Clean(directory) == "." {
 			return fmt.Errorf("tools.drupal-config.directories must name subdirectories of a module")
 		}
 	}
 	for _, values := range [][]string{cfg.Scope.Exclude, cfg.Tools.Debug.Exclude, cfg.Tools.Syntax.Exclude, cfg.Tools.YAML.Exclude,
-		cfg.Tools.Whitespace.Exclude, cfg.Tools.Whitespace.TrailingWhitespaceExclude, cfg.Tools.Whitespace.ConflictMarkersExclude, cfg.Tools.DrupalConfig.Exclude, cfg.Tools.PHPCS.Exclude, cfg.Tools.PHPStan.Exclude, cfg.Tools.TwigCSFixer.Exclude} {
+		cfg.Tools.Whitespace.Exclude, cfg.Tools.Whitespace.TrailingWhitespaceExclude, cfg.Tools.Whitespace.ConflictMarkersExclude, cfg.Tools.DrupalConfig.Exclude, cfg.Tools.PHPCS.Exclude, cfg.Tools.PHPStan.Exclude, cfg.Tools.TwigCSFixer.Exclude, cfg.Tools.ComposerValidate.Exclude} {
 		if err := validatePatterns(values); err != nil {
 			return err
 		}

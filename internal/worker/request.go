@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/rchehd/phpwarden/internal/checker"
+	"github.com/rchehd/phpwarden/internal/checker/composeraudit"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/report"
@@ -57,7 +59,10 @@ func Execute(ctx context.Context, root string, request runrequest.Request, proce
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(effective.Config.Runner.TimeoutSeconds)*time.Second)
 	defer cancel()
-	result := analyze(ctx, location, effective.Config, effective.Project, request.Selection, request.Only, process)
+	delegate := func(_ context.Context, settings config.ComposerAudit) checker.Outcome {
+		return composeraudit.Delegated(location.Root, settings)
+	}
+	result := analyze(ctx, location, effective.Config, effective.Project, request.Selection, request.Only, delegate, process)
 	validateRuntime(&result, effective)
 	result.RunID = request.RunID
 	result.Environment.Image, result.Environment.Toolset = &request.Image, &request.Toolset

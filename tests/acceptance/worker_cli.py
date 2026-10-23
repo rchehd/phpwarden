@@ -5,6 +5,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.support.composer import (
+    check_composer_audit,
+    check_composer_validate_fixtures,
+    check_composer_validate_settings,
+)
 from tests.support.drupal_config import (
     check_drupal_config_custom_layout,
     check_drupal_config_fixtures,
@@ -48,6 +53,9 @@ class WorkerCLITest(unittest.TestCase):
         tools.symlink_to(ROOT / "tools" / "yaml", target_is_directory=True)
         (tools.parent / "phpcs").symlink_to(ROOT / "tools" / "phpcs", target_is_directory=True)
         (tools.parent / "phpstan").symlink_to(ROOT / "tools" / "phpstan", target_is_directory=True)
+        (tools.parent / "composer").symlink_to(
+            ROOT / "tools" / "composer", target_is_directory=True
+        )
         (tools.parent / "twig-cs-fixer").symlink_to(
             ROOT / "tools" / "twig-cs-fixer", target_is_directory=True
         )
@@ -77,6 +85,8 @@ class WorkerCLITest(unittest.TestCase):
             "scope": {"include": ["web/modules/custom"], "base": scenario.base},
             "tools": {
                 "debug": debug,
+                "composer-audit": {"enabled": False},
+                "composer-validate": {"enabled": False},
                 "phpcs": {"enabled": False},
                 "phpstan": {"enabled": False},
                 "twig-cs-fixer": {"enabled": False},
@@ -187,6 +197,15 @@ class WorkerCLITest(unittest.TestCase):
     def test_twig_cs_fixer_project_config(self):
         check_twig_cs_fixer_project_config(self, self.configure, self.run_worker)
 
+    def test_composer_validate_fixtures(self):
+        check_composer_validate_fixtures(self, self.configure, self.run_worker)
+
+    def test_composer_validate_settings(self):
+        check_composer_validate_settings(self, self.configure, self.run_worker)
+
+    def test_composer_audit(self):
+        check_composer_audit(self, self.configure, self.run_worker, network=True)
+
     def test_missing_yaml_bundle_never_loads_project_autoload(self):
         with materialize(YAML_FIXTURES / "yaml-duplicate-key") as scenario:
             self.configure(scenario)
@@ -243,7 +262,10 @@ class WorkerCLITest(unittest.TestCase):
                     report = self.run_worker(scenario, env=env)
                     self.assertEqual(report["exit_code"], code, report)
                     self.assertFalse(report["complete"])
-                    self.assertEqual(report["checks"][0]["status"], status)
+                    self.assertEqual(
+                        next(row for row in report["checks"] if row["id"] == "debug")["status"],
+                        status,
+                    )
                     self.assertTrue(report["diagnostics"])
 
     def test_explicit_selection_overrides_disabled_checker(self):
@@ -251,7 +273,9 @@ class WorkerCLITest(unittest.TestCase):
             self.configure(scenario, enabled=False)
             report = self.run_worker(scenario)
             self.assertEqual(report["exit_code"], 0)
-            self.assertEqual(report["checks"][0]["reason"], "disabled")
+            self.assertEqual(
+                next(row for row in report["checks"] if row["id"] == "debug")["reason"], "disabled"
+            )
             report = self.run_worker(scenario, ["--only", "debug"])
             self.assertEqual(report["exit_code"], 1)
             report = self.run_worker(scenario, ["--only", "phpstna"])
@@ -281,7 +305,9 @@ class WorkerCLITest(unittest.TestCase):
             self.configure(scenario, exclude=["**/*.module"])
             report = self.run_worker(scenario)
             self.assertEqual(report["exit_code"], 0)
-            self.assertEqual(report["checks"][0]["reason"], "no_files")
+            self.assertEqual(
+                next(row for row in report["checks"] if row["id"] == "debug")["reason"], "no_files"
+            )
 
 
 if __name__ == "__main__":

@@ -32,6 +32,11 @@ COPY tools/twig-cs-fixer/composer.json tools/twig-cs-fixer/composer.lock ./
 RUN php /usr/local/bin/composer install --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction --classmap-authoritative \
     && php -r 'require "vendor/autoload.php"; if (Composer\InstalledVersions::getPrettyVersion("vincentlanglet/twig-cs-fixer") !== "4.1.1") { exit(1); }'
 
+WORKDIR /opt/phpwarden/tools/composer
+COPY tools/composer/composer.json tools/composer/composer.lock ./
+RUN php /usr/local/bin/composer install --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction --classmap-authoritative \
+    && php -r 'require "vendor/autoload.php"; if (Composer\Composer::getVersion() !== "2.10.3") { exit(1); }'
+
 FROM php:8.4.26-cli-alpine3.23@sha256:da7a7a945a493ac9c015f327231afd820bbe57fc6ae22f4f520a79fbd635ba39 AS worker
 
 RUN apk add --no-cache git ca-certificates \
@@ -45,11 +50,12 @@ COPY --from=tools /opt/phpwarden/tools/yaml /usr/local/lib/phpwarden/yaml
 COPY --from=tools /opt/phpwarden/tools/phpcs /usr/local/lib/phpwarden/phpcs
 COPY --from=tools /opt/phpwarden/tools/phpstan /usr/local/lib/phpwarden/phpstan
 COPY --from=tools /opt/phpwarden/tools/twig-cs-fixer /usr/local/lib/phpwarden/twig-cs-fixer
+COPY --from=tools /opt/phpwarden/tools/composer /usr/local/lib/phpwarden/composer
 LABEL org.opencontainers.image.title="PHPWarden static worker" \
     io.phpwarden.protocol="2" \
-    io.phpwarden.toolset="static-dev-v7-php8.4" \
+    io.phpwarden.toolset="static-dev-v8-php8.4" \
     io.phpwarden.php-version="8.4.26" \
-    io.phpwarden.checkers="debug,drupal-config,phpcs,phpstan,syntax,twig-cs-fixer,whitespace,yaml" \
+    io.phpwarden.checkers="composer-audit,composer-validate,debug,drupal-config,phpcs,phpstan,syntax,twig-cs-fixer,whitespace,yaml" \
     io.phpwarden.symfony-yaml-version="7.4.21" \
     io.phpwarden.phpcs-version="4.0.4" \
     io.phpwarden.coder-version="9.0.1" \
@@ -58,7 +64,8 @@ LABEL org.opencontainers.image.title="PHPWarden static worker" \
     io.phpwarden.phpstan-drupal-version="2.2.2" \
     io.phpwarden.phpstan-deprecations-version="2.0.5" \
     io.phpwarden.twig-cs-fixer-version="4.1.1" \
-    io.phpwarden.twig-version="3.30.0"
+    io.phpwarden.twig-version="3.30.0" \
+    io.phpwarden.composer-version="2.10.3"
 
 WORKDIR /workspace
 USER 10001:10001

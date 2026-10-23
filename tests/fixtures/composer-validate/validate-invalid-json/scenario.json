@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "validate-invalid-json",
+  "state": "untracked",
+  "changed_files": [
+    "web/modules/custom/demo/composer.json"
+  ],
+  "settings": {},
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "composer-validate",
+      "path": "web/modules/custom/demo/composer.json",
+      "line": null,
+      "global": true,
+      "rule": "composer.validate.error",
+      "contains": "does not contain valid JSON",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

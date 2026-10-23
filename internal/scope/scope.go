@@ -21,15 +21,18 @@ type Options struct {
 	Exclude    []string
 	Paths      []string
 	WholeFiles bool
+	// Project-level files outside the source roots, such as composer.json, reported when changed or requested.
+	ProjectFiles []string
 }
 
 type Selection struct {
-	Mode       string             `json:"mode"`
-	BaseRef    *string            `json:"base_ref"`
-	MergeBase  *string            `json:"merge_base"`
-	WholeFiles bool               `json:"whole_files"`
-	Files      []string           `json:"files"`
-	LineMap    map[string][]Range `json:"line_map"`
+	Mode         string             `json:"mode"`
+	BaseRef      *string            `json:"base_ref"`
+	MergeBase    *string            `json:"merge_base"`
+	WholeFiles   bool               `json:"whole_files"`
+	Files        []string           `json:"files"`
+	LineMap      map[string][]Range `json:"line_map"`
+	ProjectFiles []string           `json:"project_files"`
 }
 
 func (selection Selection) Contains(filename string, line int) bool {
@@ -66,7 +69,7 @@ func (selection Selection) Filter(includes, excludes []string, applicable func(s
 }
 
 func Build(ctx context.Context, options Options) (Selection, error) {
-	result := Selection{Mode: options.Mode, WholeFiles: options.WholeFiles, Files: []string{}, LineMap: map[string][]Range{}}
+	result := Selection{Mode: options.Mode, WholeFiles: options.WholeFiles, Files: []string{}, LineMap: map[string][]Range{}, ProjectFiles: []string{}}
 	if result.Mode == "" {
 		result.Mode = "diff"
 	}
@@ -202,12 +205,31 @@ func Build(ctx context.Context, options Options) (Selection, error) {
 			}
 		}
 	}
+	for _, filename := range options.ProjectFiles {
+		if _, exists := files[filename]; !exists || len(requested) > 0 && !inRoots(filename, requested) {
+			continue
+		}
+		if _, exists := changed[filename]; result.Mode == "diff" && !exists {
+			continue
+		}
+		info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(filename)))
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		result.ProjectFiles = append(result.ProjectFiles, filename)
+		for _, request := range requested {
+			if inRoots(filename, []string{request}) {
+				selectedCounts[request]++
+			}
+		}
+	}
 	for _, request := range requested {
 		if selectedCounts[request] == 0 {
 			return result, fmt.Errorf("path %q selects no eligible files (check roots, excludes, and Git ignores)", request)
 		}
 	}
 	sort.Strings(result.Files)
+	sort.Strings(result.ProjectFiles)
 	return result, nil
 }
 

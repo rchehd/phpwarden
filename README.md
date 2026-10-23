@@ -70,10 +70,12 @@ The project is mounted read-only and nothing is changed: PHPWarden does not fix 
 
 ## Checkers
 
-All checkers are enabled by default.
+All checkers are enabled by default. `composer-audit` is the only one that uses the network, and it is optional by default.
 
 | ID | Checks |
 |---|---|
+| `composer-validate` | `composer.json` and `composer.lock` validity, like `composer validate` |
+| `composer-audit` | Known vulnerabilities and abandoned packages in `composer.lock`, like `composer audit` |
 | `debug` | Debug calls: `var_dump`, `print_r`, `dpm`, `dsm`, `kint` |
 | `syntax` | PHP syntax (`php -l`) in `.php`, `.module`, `.inc`, `.install`, `.theme`, `.profile`, `.engine`, `.test` |
 | `yaml` | YAML syntax |
@@ -105,6 +107,37 @@ PHPStan uses `phpstan.neon`, `phpstan.neon.dist`, or `phpstan.dist.neon` from th
 Twig CS Fixer checks `.twig` templates. It uses `.twig-cs-fixer.php` or `.twig-cs-fixer.dist.php` from the project root. Without one it uses the default `TwigCsFixer` standard without `IncludeFunctionRule` and `CompactHashRule`, because Drupal templates use the `include` tag and long-form hashes. Other useful settings are `config`, `discover_config`, `extra_extensions`, and `extra_inputs` for files the project config loads.
 
 Twig CS Fixer checks style, not whether a template compiles. A template it cannot read at all is reported as `File.Invalid` even outside the changed lines.
+
+### Composer validate
+
+`composer-validate` checks the root `composer.json`, including whether `composer.lock` is up to date, when either file changed. In `--mode full` it always checks them. It also checks `composer.json` files of selected modules. Errors and an outdated lock are errors; other Composer warnings, such as exact version constraints, are warnings. Set `strict: true` to treat warnings as errors.
+
+A root `composer.json` that is not valid JSON stops the check with exit code `2` before any checker runs, because PHPWarden reads the project layout from it.
+
+### Composer audit
+
+`composer-audit` checks the whole `composer.lock` on every run, whatever changed, because new advisories appear without code changes. Advisories come from the repositories in `composer.json`, such as Packagist and packages.drupal.org. Each advisory is a warning, so it does not fail the check; set `fail_on: warning` to block on them, for example in CI. Abandoned packages are reported as info; set `abandoned: ignore` to hide them.
+
+Composer needs the network to fetch advisories. PHPWarden runs it in a separate container that sees only copies of `composer.json` and `composer.lock`; the other checkers stay offline. Results are cached in `~/.cache/phpwarden/advisories`:
+
+- A cached result younger than `max_age_hours` (24) is used without the network.
+- If fetching fails, a cached result younger than `max_stale_hours` (168) is used, and the report says so.
+- Otherwise the check is unavailable, never clean. `offline: true` uses only the cache.
+
+`environment.advisories` in the JSON report shows whether advisories came from the network or the cache, and when they were fetched. The check is optional by default, so working offline gives `PARTIAL` instead of a failure; set `required: true` in CI.
+
+To accept a known advisory, list it with a reason and an optional end date:
+
+```yaml
+tools:
+  composer-audit:
+    ignore:
+      - id: SA-CORE-2026-016
+        reason: Patched in patches/core-xss.patch
+        until: "2026-12-31"
+```
+
+`id` matches the advisory ID or its CVE. After `until`, the advisory is reported again.
 
 ## Results
 

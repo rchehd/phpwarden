@@ -3,7 +3,7 @@ package checker
 import "testing"
 
 func TestExplicitCheckerSelection(t *testing.T) {
-	for _, value := range []string{"debug", "phpstan", "twig-cs-fixer", "syntax", "syntax,debug", ""} {
+	for _, value := range []string{"debug", "phpstan", "twig-cs-fixer", "composer-audit,composer-validate", "syntax", "syntax,debug", ""} {
 		ids, err := ParseOnly(value)
 		if err != nil {
 			t.Fatal(err)

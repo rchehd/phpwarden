@@ -22,4 +22,7 @@
 !tools/twig-cs-fixer/
 !tools/twig-cs-fixer/composer.json
 !tools/twig-cs-fixer/composer.lock
+!tools/composer/
+!tools/composer/composer.json
+!tools/composer/composer.lock
 **/*_test.go

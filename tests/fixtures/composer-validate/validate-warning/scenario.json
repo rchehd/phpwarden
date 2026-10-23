@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "id": "validate-warning",
+  "state": "unstaged",
+  "changed_files": [
+    "composer.json"
+  ],
+  "settings": {
+    "strict": true
+  },
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "composer-validate",
+      "path": "composer.json",
+      "line": null,
+      "global": true,
+      "rule": "composer.validate.warning",
+      "contains": "No license specified",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

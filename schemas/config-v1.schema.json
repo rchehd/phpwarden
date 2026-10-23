@@ -143,6 +143,43 @@
             }
           }
         },
+        "composer-validate": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean", "default": true},
+            "required": {"type": "boolean", "default": true},
+            "fail_on": {"type": "string", "enum": ["error", "warning", "never"], "default": "error"},
+            "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 2147483647, "default": 120},
+            "include": {"$ref": "#/$defs/include"},
+            "exclude": {"$ref": "#/$defs/exclude"},
+            "strict": {"type": "boolean", "default": false}
+          }
+        },
+        "composer-audit": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean", "default": true},
+            "required": {"type": "boolean", "default": false},
+            "fail_on": {"type": "string", "enum": ["error", "warning", "never"], "default": "error"},
+            "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 2147483647, "default": 120},
+            "no_dev": {"type": "boolean", "default": false},
+            "abandoned": {"type": "string", "enum": ["report", "ignore"], "default": "report"},
+            "offline": {"type": "boolean", "default": false},
+            "max_age_hours": {"type": "integer", "minimum": 0, "maximum": 8760, "default": 24},
+            "max_stale_hours": {"type": "integer", "minimum": 0, "maximum": 8760, "default": 168},
+            "ignore": {
+              "type": "array",
+              "items": {
+                "type": "object", "additionalProperties": false, "required": ["id", "reason"],
+                "properties": {
+                  "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+                  "reason": {"type": "string", "minLength": 1},
+                  "until": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+                }
+              }
+            }
+          }
+        },
         "twig-cs-fixer": {
           "type": "object", "additionalProperties": false,
           "properties": {

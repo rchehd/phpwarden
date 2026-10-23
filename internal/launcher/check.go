@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/rchehd/phpwarden/internal/checker"
+	"github.com/rchehd/phpwarden/internal/checker/composeraudit"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/report"
@@ -50,7 +52,8 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 		}
 		return report.InputError("scope", err)
 	}
-	if len(selection.Files) == 0 || !checker.AnyEnabled(effective.Config, only) {
+	audits := composeraudit.Delegated(location.Root, auditSettings(effective.Config, only))
+	if len(selection.Files) == 0 && len(selection.ProjectFiles) == 0 && *audits.Check.Reason != "delegated" || !checker.AnyEnabled(effective.Config, only) {
 		return worker.Check(ctx, location, effective, options, only, process)
 	}
 	if err := discovery.Unchanged(location, effective); err != nil {
@@ -98,6 +101,17 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 	if err != nil {
 		return failure("worker_report_invalid", err)
 	}
+	for i, check := range result.Checks {
+		if check.ID == "composer-audit" && check.Reason != nil && *check.Reason == "delegated" {
+			cacheDir, _ := composeraudit.CacheDir()
+			outcome := composeraudit.Run(ctx, location.Root, auditSettings(request.Config, only), dockerFetcher(image, process), cacheDir, time.Now())
+			result.Checks[i] = outcome.Check
+			result.Findings = append(result.Findings, outcome.Findings...)
+			result.Diagnostics = append(result.Diagnostics, outcome.Diagnostics...)
+			result.Environment.Advisories = outcome.Advisories
+			result.Finalize()
+		}
+	}
 	refreshed, err := scope.Build(ctx, options)
 	if err == nil && !reflect.DeepEqual(selection, refreshed) {
 		err = fmt.Errorf("Git scope changed during the check")
@@ -116,6 +130,57 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 		return failure("launcher_cancelled", ctx.Err())
 	}
 	return result
+}
+
+func auditSettings(cfg config.Config, only []string) config.ComposerAudit {
+	settings := cfg.Tools.ComposerAudit
+	settings.Enabled = checker.Enabled("composer-audit", settings.Enabled, only)
+	return settings
+}
+
+// dockerFetcher runs Composer audit in a separate container that has network access but sees only copies of the Composer files.
+func dockerFetcher(image string, process runner.Process) composeraudit.Fetcher {
+	return func(ctx context.Context, composerJSON, composerLock []byte, noDev bool) ([]byte, error) {
+		directory, err := os.MkdirTemp("", "phpwarden-audit-")
+		if err != nil {
+			return nil, err
+		}
+		defer os.RemoveAll(directory)
+		for name, data := range map[string][]byte{"composer.json": composerJSON, "composer.lock": composerLock} {
+			if err := os.WriteFile(filepath.Join(directory, name), data, 0o600); err != nil {
+				return nil, err
+			}
+		}
+		name := "phpwarden-audit-" + strings.ToLower(rand.Text())
+		defer func() {
+			cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			process.Run(cleanup, runner.Command{Name: "docker", Args: []string{"rm", "--force", name}})
+		}()
+		var mount bytes.Buffer
+		writer := csv.NewWriter(&mount)
+		if err := writer.Write([]string{"type=bind", "source=" + directory, "target=/audit", "readonly"}); err != nil {
+			return nil, err
+		}
+		writer.Flush()
+		args := []string{"run", "--rm", "--pull=never", "--name", name,
+			"--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges:true",
+			"--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777",
+			"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
+			"--mount", strings.TrimSuffix(mount.String(), "\n"), "--workdir", "/audit",
+			"--entrypoint", "/usr/local/bin/phpwarden", image, "worker", "audit"}
+		if noDev {
+			args = append(args, "--no-dev")
+		}
+		execution := process.Run(ctx, runner.Command{Name: "docker", Args: args})
+		if execution.Unavailable || execution.TimedOut || ctx.Err() != nil {
+			return nil, fmt.Errorf("Composer audit container did not complete")
+		}
+		if execution.Err != nil || execution.ExitCode != 0 {
+			return nil, fmt.Errorf("Composer audit container exited %d: %s", execution.ExitCode, strings.TrimSpace(string(execution.Stderr)))
+		}
+		return bytes.TrimSpace(execution.Stdout), nil
+	}
 }
 
 func localEndpoint(ctx context.Context, process runner.Process) error {
@@ -170,7 +235,7 @@ func inspect(ctx context.Context, selection toolset.Selection, process runner.Pr
 	if version, ok := selection.Tools["symfony-yaml"]; ok && image.Config.Labels["io.phpwarden.symfony-yaml-version"] != version {
 		return "", fmt.Errorf("local image Symfony YAML version label does not match the selected toolset")
 	}
-	for tool, label := range map[string]string{"squizlabs-php_codesniffer": "phpcs", "drupal-coder": "coder", "phpcompatibility-php-compatibility": "phpcompatibility", "phpstan-phpstan": "phpstan", "mglaman-phpstan-drupal": "phpstan-drupal", "phpstan-phpstan-deprecation-rules": "phpstan-deprecations", "vincentlanglet-twig-cs-fixer": "twig-cs-fixer", "twig-twig": "twig"} {
+	for tool, label := range map[string]string{"squizlabs-php_codesniffer": "phpcs", "drupal-coder": "coder", "phpcompatibility-php-compatibility": "phpcompatibility", "phpstan-phpstan": "phpstan", "mglaman-phpstan-drupal": "phpstan-drupal", "phpstan-phpstan-deprecation-rules": "phpstan-deprecations", "vincentlanglet-twig-cs-fixer": "twig-cs-fixer", "twig-twig": "twig", "composer-composer": "composer"} {
 		if version, ok := selection.Tools[tool]; ok && image.Config.Labels["io.phpwarden."+label+"-version"] != version {
 			return "", fmt.Errorf("local image %s version label does not match the selected toolset", label)
 		}
@@ -231,6 +296,10 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 				required, failOn = request.Config.Tools.PHPStan.Required, request.Config.Tools.PHPStan.FailOn
 			} else if check.ID == "twig-cs-fixer" {
 				required, failOn = request.Config.Tools.TwigCSFixer.Required, request.Config.Tools.TwigCSFixer.FailOn
+			} else if check.ID == "composer-validate" {
+				required, failOn = request.Config.Tools.ComposerValidate.Required, request.Config.Tools.ComposerValidate.FailOn
+			} else if check.ID == "composer-audit" {
+				required, failOn = request.Config.Tools.ComposerAudit.Required, request.Config.Tools.ComposerAudit.FailOn
 			}
 			if !slices.Contains(checker.Requested(request.Only), check.ID) || seen[check.ID] || check.Required != required || check.FailOn != failOn {
 				return result, fmt.Errorf("worker checker selection or policy does not match the request")
@@ -250,10 +319,14 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 		if !slices.Contains(checker.Requested(request.Only), finding.Checker) {
 			return result, fmt.Errorf("worker finding is outside the requested scope")
 		}
-		if (finding.Checker == "yaml" || finding.Checker == "twig-cs-fixer") && finding.Kind == "global" {
-			prefix := map[string]string{"yaml": "YAML file %q: ", "twig-cs-fixer": "Twig template %q: "}[finding.Checker]
+		if (finding.Checker == "yaml" || finding.Checker == "twig-cs-fixer" || finding.Checker == "composer-validate") && finding.Kind == "global" {
+			prefix := map[string]string{"yaml": "YAML file %q: ", "twig-cs-fixer": "Twig template %q: ", "composer-validate": "Composer file %q: "}[finding.Checker]
+			filenames := request.Selection.Files
+			if finding.Checker == "composer-validate" && len(request.Selection.ProjectFiles) > 0 {
+				filenames = append(slices.Clone(filenames), "composer.json")
+			}
 			matched := false
-			for _, filename := range request.Selection.Files {
+			for _, filename := range filenames {
 				if strings.HasPrefix(finding.Message, fmt.Sprintf(prefix, filename)) {
 					matched = true
 					break

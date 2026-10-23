@@ -54,6 +54,8 @@ jobs:
         run: composer install --working-dir tools/phpstan --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
       - name: Install locked Twig CS Fixer tool dependencies for native worker tests
         run: composer install --working-dir tools/twig-cs-fixer --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
+      - name: Install locked Composer tool dependencies for native worker tests
+        run: composer install --working-dir tools/composer --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
       - name: Check formatting
         run: |
           files=$(gofmt -l cmd internal schemas)
@@ -74,6 +76,7 @@ jobs:
           php -l internal/checker/phpcs/helper.php
           php -l internal/checker/phpstan/helper.php
           php -l internal/checker/twigcsfixer/helper.php
+          php -l internal/checker/composervalidate/helper.php
       - name: Worker fixture acceptance tests
         run: python -m unittest tests.acceptance.worker_cli -v
 

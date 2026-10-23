@@ -33,6 +33,8 @@ def check_syntax_fixtures(test, configure, run):
                 test.assertEqual(
                     [row["id"] for row in result["checks"]],
                     [
+                        "composer-audit",
+                        "composer-validate",
                         "debug",
                         "drupal-config",
                         "phpcs",
@@ -55,6 +57,8 @@ def check_syntax_settings(test, configure, run):
         filename = scenario.root / ".phpwarden.yaml"
         config = json.loads(filename.read_text())
         config["tools"] = {
+            "composer-audit": {"enabled": False},
+            "composer-validate": {"enabled": False},
             "debug": {"enabled": False},
             "phpcs": {"enabled": False},
             "phpstan": {"enabled": False},

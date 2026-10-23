@@ -1,0 +1,4 @@
+<?php
+function demo_value(): int {
+  return 1;
+}

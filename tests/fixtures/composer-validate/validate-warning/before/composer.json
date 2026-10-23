@@ -1,0 +1,7 @@
+{
+    "name": "phpwarden/fixture",
+    "type": "project",
+    "description": "PHPWarden Composer fixture",
+    "license": "GPL-2.0-or-later",
+    "require": {}
+}
