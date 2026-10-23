@@ -16,4 +16,7 @@
 !tools/phpcs/
 !tools/phpcs/composer.json
 !tools/phpcs/composer.lock
+!tools/phpstan/
+!tools/phpstan/composer.json
+!tools/phpstan/composer.lock
 **/*_test.go

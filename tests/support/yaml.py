@@ -32,7 +32,7 @@ def check_yaml_fixtures(test, configure, run):
                 test.assertEqual(result["diagnostics"], [])
                 test.assertEqual(
                     [row["id"] for row in result["checks"]],
-                    ["debug", "drupal-config", "phpcs", "syntax", "whitespace", "yaml"],
+                    ["debug", "drupal-config", "phpcs", "phpstan", "syntax", "whitespace", "yaml"],
                 )
                 for row in result["findings"]:
                     test.assertEqual(row["kind"], "global" if row["line"] is None else "syntax")
@@ -51,6 +51,7 @@ def check_yaml_settings(test, configure, run):
         config["tools"] = {
             "debug": {"enabled": False},
             "phpcs": {"enabled": False},
+            "phpstan": {"enabled": False},
             "drupal-config": {"enabled": False},
             "syntax": {"enabled": False},
             "yaml": {"enabled": False},

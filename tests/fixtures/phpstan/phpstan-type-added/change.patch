@@ -1,0 +1,8 @@
+--- a/web/modules/custom/demo/demo.module
++++ b/web/modules/custom/demo/demo.module
+@@ -1,4 +1,4 @@
+ <?php
+ function demo_value(): int {
+-  return 1;
++  return 'wrong';
+ }

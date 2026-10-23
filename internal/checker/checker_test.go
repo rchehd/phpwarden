@@ -3,7 +3,7 @@ package checker
 import "testing"
 
 func TestExplicitCheckerSelection(t *testing.T) {
-	for _, value := range []string{"debug", "syntax", "syntax,debug", ""} {
+	for _, value := range []string{"debug", "phpstan", "syntax", "syntax,debug", ""} {
 		ids, err := ParseOnly(value)
 		if err != nil {
 			t.Fatal(err)
@@ -15,7 +15,7 @@ func TestExplicitCheckerSelection(t *testing.T) {
 			t.Fatal("selection did not override defaults")
 		}
 	}
-	for _, value := range []string{"phpstan", "syntax,", ",debug", "debug,debug", "debug, syntax"} {
+	for _, value := range []string{"phpmd", "syntax,", ",debug", "debug,debug", "debug, syntax"} {
 		if _, err := ParseOnly(value); err == nil {
 			t.Fatalf("invalid selection accepted: %q", value)
 		}

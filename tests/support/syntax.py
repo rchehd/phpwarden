@@ -32,7 +32,7 @@ def check_syntax_fixtures(test, configure, run):
                 test.assertTrue(all(row["kind"] == "syntax" for row in result["findings"]))
                 test.assertEqual(
                     [row["id"] for row in result["checks"]],
-                    ["debug", "drupal-config", "phpcs", "syntax", "whitespace", "yaml"],
+                    ["debug", "drupal-config", "phpcs", "phpstan", "syntax", "whitespace", "yaml"],
                 )
                 if mode == "diff" and directory.name == "deletion-syntax-error":
                     test.assertEqual(
@@ -48,6 +48,7 @@ def check_syntax_settings(test, configure, run):
         config["tools"] = {
             "debug": {"enabled": False},
             "phpcs": {"enabled": False},
+            "phpstan": {"enabled": False},
             "drupal-config": {"enabled": False},
             "syntax": {"enabled": False},
             "yaml": {"enabled": False},

@@ -52,12 +52,35 @@ type Runner struct {
 }
 
 type Tools struct {
+	PHPStan      PHPStan      `json:"phpstan"`
 	PHPCS        PHPCS        `json:"phpcs"`
 	DrupalConfig DrupalConfig `json:"drupal-config"`
 	Debug        Debug        `json:"debug"`
 	Syntax       Syntax       `json:"syntax"`
 	YAML         YAML         `json:"yaml"`
 	Whitespace   Whitespace   `json:"whitespace"`
+}
+
+type PHPStan struct {
+	Enabled         bool     `json:"enabled"`
+	Required        bool     `json:"required"`
+	FailOn          string   `json:"fail_on"`
+	TimeoutSeconds  int      `json:"timeout_seconds"`
+	Include         []string `json:"include,omitempty"`
+	Exclude         []string `json:"exclude"`
+	Config          string   `json:"config"`
+	DiscoverConfig  bool     `json:"discover_config"`
+	Level           *int     `json:"level,omitempty"`
+	Includes        []string `json:"includes"`
+	Baseline        string   `json:"baseline"`
+	BootstrapFiles  []string `json:"bootstrap_files"`
+	ScanDirectories []string `json:"scan_directories"`
+	StubFiles       []string `json:"stub_files"`
+	Autoload        string   `json:"autoload"`
+	Drupal          bool     `json:"drupal"`
+	Deprecations    bool     `json:"deprecations"`
+	MemoryLimitMB   int      `json:"memory_limit_mb"`
+	ExtraExtensions []string `json:"extra_extensions"`
 }
 
 type PHPCS struct {
@@ -190,8 +213,11 @@ func Parse(data []byte) (Effective, error) {
 			Framework: Framework{Version: "auto"},
 			Scope:     Scope{Mode: "diff", Exclude: []string{}},
 			Runner:    Runner{TimeoutSeconds: 300},
-			Tools: Tools{PHPCS: PHPCS{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
-				Standards: defaults.PHPCSStandards, Sniffs: []string{}, ExcludeSniffs: []string{}, StandardPaths: []string{}, ExtraInputs: []string{}, ExtraExtensions: []string{}, ErrorSeverity: 5, WarningSeverity: 5},
+			Tools: Tools{PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
+				Includes: []string{}, BootstrapFiles: []string{}, ScanDirectories: []string{}, StubFiles: []string{}, Autoload: "auto",
+				Drupal: defaults.PHPStanDrupal, Deprecations: true, MemoryLimitMB: 512, ExtraExtensions: []string{}},
+				PHPCS: PHPCS{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
+					Standards: defaults.PHPCSStandards, Sniffs: []string{}, ExcludeSniffs: []string{}, StandardPaths: []string{}, ExtraInputs: []string{}, ExtraExtensions: []string{}, ErrorSeverity: 5, WarningSeverity: 5},
 				DrupalConfig: DrupalConfig{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{},
 					Directories: defaults.ModuleConfigDirectories, ForbiddenKeys: defaults.ModuleConfigForbiddenKeys, ModuleRoots: []string{}},
 				Whitespace: Whitespace{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{},
@@ -232,6 +258,10 @@ func Parse(data []byte) (Effective, error) {
 		result.Provenance["tools.phpcs."+field] = "core_default"
 	}
 	result.Provenance["tools.phpcs.enabled"], result.Provenance["tools.phpcs.standards"] = "profile_default", "profile_default"
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "includes", "baseline", "bootstrap_files", "scan_directories", "stub_files", "autoload", "drupal", "deprecations", "memory_limit_mb", "extra_extensions"} {
+		result.Provenance["tools.phpstan."+field] = "core_default"
+	}
+	result.Provenance["tools.phpstan.enabled"], result.Provenance["tools.phpstan.drupal"] = "profile_default", "profile_default"
 	encoded, err := json.Marshal(input)
 	if err != nil {
 		return Effective{}, err
@@ -330,9 +360,17 @@ func markProvenance(values map[string]any, prefix string, sources map[string]str
 func validateValues(cfg Config) error {
 	for _, values := range [][]string{cfg.Scope.Include, cfg.Tools.Debug.Include, cfg.Tools.Syntax.Include, cfg.Tools.YAML.Include, cfg.Tools.Whitespace.Include,
 		cfg.Tools.DrupalConfig.Include, cfg.Tools.DrupalConfig.Directories, cfg.Tools.DrupalConfig.ModuleRoots,
-		cfg.Tools.PHPCS.Include, cfg.Tools.PHPCS.StandardPaths, cfg.Tools.PHPCS.ExtraInputs} {
+		cfg.Tools.PHPCS.Include, cfg.Tools.PHPCS.StandardPaths, cfg.Tools.PHPCS.ExtraInputs,
+		cfg.Tools.PHPStan.Include, cfg.Tools.PHPStan.Includes, cfg.Tools.PHPStan.BootstrapFiles, cfg.Tools.PHPStan.ScanDirectories, cfg.Tools.PHPStan.StubFiles} {
 		for _, value := range values {
 			if err := projectpath.Validate(value); err != nil {
+				return err
+			}
+		}
+	}
+	for _, name := range []string{cfg.Tools.PHPStan.Config, cfg.Tools.PHPStan.Baseline, cfg.Tools.PHPStan.Autoload} {
+		if name != "" && name != "auto" {
+			if err := projectpath.Validate(name); err != nil {
 				return err
 			}
 		}
@@ -369,7 +407,7 @@ func validateValues(cfg Config) error {
 		}
 	}
 	for _, values := range [][]string{cfg.Scope.Exclude, cfg.Tools.Debug.Exclude, cfg.Tools.Syntax.Exclude, cfg.Tools.YAML.Exclude,
-		cfg.Tools.Whitespace.Exclude, cfg.Tools.Whitespace.TrailingWhitespaceExclude, cfg.Tools.Whitespace.ConflictMarkersExclude, cfg.Tools.DrupalConfig.Exclude, cfg.Tools.PHPCS.Exclude} {
+		cfg.Tools.Whitespace.Exclude, cfg.Tools.Whitespace.TrailingWhitespaceExclude, cfg.Tools.Whitespace.ConflictMarkersExclude, cfg.Tools.DrupalConfig.Exclude, cfg.Tools.PHPCS.Exclude, cfg.Tools.PHPStan.Exclude} {
 		if err := validatePatterns(values); err != nil {
 			return err
 		}

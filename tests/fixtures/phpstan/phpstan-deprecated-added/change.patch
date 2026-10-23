@@ -1,0 +1,7 @@
+--- a/web/modules/custom/demo/demo.module
++++ b/web/modules/custom/demo/demo.module
+@@ -6,3 +6,4 @@
+  */
+ function demo_old(): void {
+ }
++demo_old();

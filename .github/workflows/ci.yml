@@ -50,6 +50,8 @@ jobs:
         run: composer install --working-dir tools/yaml --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
       - name: Install locked PHPCS tool dependencies for native worker tests
         run: composer install --working-dir tools/phpcs --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
+      - name: Install locked PHPStan tool dependencies for native worker tests
+        run: composer install --working-dir tools/phpstan --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
       - name: Check formatting
         run: |
           files=$(gofmt -l cmd internal schemas)
@@ -68,6 +70,7 @@ jobs:
           php -l internal/checker/debug/helper.php
           php -l internal/checker/yaml/helper.php
           php -l internal/checker/phpcs/helper.php
+          php -l internal/checker/phpstan/helper.php
       - name: Worker fixture acceptance tests
         run: python -m unittest tests.acceptance.worker_cli -v
 

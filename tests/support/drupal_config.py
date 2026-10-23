@@ -37,7 +37,7 @@ def check_drupal_config_fixtures(test, configure, run):
                 test.assertEqual(result["diagnostics"], [])
                 test.assertEqual(
                     [row["id"] for row in result["checks"]],
-                    ["debug", "drupal-config", "phpcs", "syntax", "whitespace", "yaml"],
+                    ["debug", "drupal-config", "phpcs", "phpstan", "syntax", "whitespace", "yaml"],
                 )
                 for row in result["findings"]:
                     test.assertEqual(row["kind"], "code")
@@ -55,7 +55,15 @@ def check_drupal_config_settings(test, configure, run):
         config = json.loads(filename.read_text())
         config["tools"] = {
             name: {"enabled": False}
-            for name in ("debug", "drupal-config", "phpcs", "syntax", "whitespace", "yaml")
+            for name in (
+                "debug",
+                "drupal-config",
+                "phpcs",
+                "phpstan",
+                "syntax",
+                "whitespace",
+                "yaml",
+            )
         }
         filename.write_text(json.dumps(config))
         test.assertEqual(run(scenario, [])["exit_code"], 0)

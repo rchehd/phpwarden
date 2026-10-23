@@ -14,7 +14,7 @@ PHPWarden is being designed as a standalone CLI with Docker-based tools and adap
 
 ## Development status
 
-The project is in early development. The Go CLI validates configuration, discovers Drupal layout and locked versions, inspects Git scope, selects a development toolset, and runs PHPCS/Drupal Coder, PHP debug, PHP syntax, YAML syntax, Drupal module config, whitespace, and conflict marker checks through Docker. A local development image contains PHP 8.4, Git, and isolated Symfony YAML dependencies. Published images, automatic pulls, and agent integrations are not available yet.
+The project is in early development. The Go CLI validates configuration, discovers Drupal layout and locked versions, inspects Git scope, selects a development toolset, and runs PHPStan/phpstan-drupal, PHPCS/Drupal Coder, PHP debug, PHP syntax, YAML syntax, Drupal module config, whitespace, and conflict marker checks through Docker. A local development image contains PHP 8.4, Git, and isolated Symfony YAML dependencies. Published images, automatic pulls, and agent integrations are not available yet.
 
 ## Build and try the CLI
 
@@ -28,7 +28,7 @@ bin/phpwarden config show --config examples/drupal.phpwarden.yaml --format json
 
 For a project, save its configuration as `.phpwarden.yaml` in the project root. The CLI finds the nearest configuration from the current directory up to the Git worktree root, or accepts an explicit `--project` or `--config` path. Explicit paths also allow configuration validation outside Git. Relative command-line paths are resolved from the caller's directory.
 
-Validation checks YAML structure, the [v1 schema](schemas/config-v1.schema.json), PHP target ranges, and path boundaries. It rejects unknown fields and checker IDs, duplicate keys, aliases, and numeric PHP versions. The implemented checkers are `debug`, `drupal-config`, `phpcs`, `syntax`, `whitespace`, and `yaml`, all enabled by default for the Drupal profile. PHPCompatibility is an opt-in PHPCS setting.
+Validation checks YAML structure, the [v1 schema](schemas/config-v1.schema.json), PHP target ranges, and path boundaries. It rejects unknown fields and checker IDs, duplicate keys, aliases, and numeric PHP versions. The implemented checkers are `debug`, `drupal-config`, `phpcs`, `phpstan`, `syntax`, `whitespace`, and `yaml`, all enabled by default for the Drupal profile. PHPCompatibility is an opt-in PHPCS setting.
 
 `config show` includes discovered project facts, core and Drupal defaults, explicit project overrides, and their provenance. Its `pending` list identifies unresolved values. `config validate` checks configuration syntax/schema and path boundaries without inspecting Composer metadata. Discovery validates Composer PHP requirements and compares installed Drupal version metadata when available. Full dependency integrity and release image compatibility remain future work. The development launcher currently requires PHP runtime and target `"8.4"`.
 
@@ -179,6 +179,25 @@ PHPCS context fingerprints cover discovered ruleset candidates, including absent
 
 Dependencies and all transitive versions are locked in [tools/phpcs/composer.lock](tools/phpcs/composer.lock), installed with Composer scripts/plugins disabled, and registered at runtime without modifying PHPCS configuration. The helper checks pinned PHPCS/Coder/PHPCompatibility versions. Native worker development needs its bundle at `../lib/phpwarden/phpcs` beside the binary plus PHP tokenizer, mbstring, SimpleXML, and XMLWriter extensions. Public `check` requires none of these on the host. Fixing through PHPCBF is not implemented in this step.
 
+## Check PHPStan and Drupal deprecations
+
+`phpstan` uses PHPStan 2.3.1, phpstan-drupal 2.2.2, and phpstan-deprecation-rules 2.0.5 from an isolated tool bundle. Files are analyzed in full, then findings are filtered through the shared added-line map; full/paths/whole-files expose existing issues too. Each finding keeps the PHPStan error identifier, such as `return.type`, as its rule. Non-ignorable errors, global errors, stderr output, malformed reports, and missing identifiers are execution errors, including outside a diff hunk.
+
+```sh
+phpwarden check --only phpstan
+phpwarden check --only phpstan --mode full
+```
+
+Use `tools.phpstan.config` for an explicit project-relative NEON file. Otherwise `discover_config: true` chooses the first of `phpstan.neon`, `phpstan.neon.dist`, or `phpstan.dist.neon` in the project root. PHPWarden writes a temporary configuration that includes the project file, `includes`, and `baseline`; analysed paths always come from the PHPWarden scope. Without a project config, includes, or an explicit `level`, level 3 is used. `level` (0-10) overrides the project level.
+
+Settings include the shared `enabled`, `required`, `fail_on`, `timeout_seconds`, `include`, and `exclude`, plus `level`, `includes`, `baseline`, `bootstrap_files`, `scan_directories`, `stub_files`, `autoload`, `drupal`, `deprecations`, `memory_limit_mb` (default 512), and `extra_extensions`. All paths are project-relative and must be regular files or directories inside the project. The shared PHP target range sets PHPStan `phpVersion`. Diff runs disable `reportUnmatchedIgnoredErrors`, so baselines for unchanged code do not fail.
+
+`drupal: true`, the Drupal profile default, loads phpstan-drupal and requires the project's installed Composer dependencies; without them the check is `unavailable` with `project_dependencies_missing`. `autoload: auto` uses `vendor/autoload.php`, honouring `config.vendor-dir` in `composer.json`; an explicit path replaces it. Unlike PHPCS, PHPStan loads the project autoloader and `bootstrap_files`, so they execute; analysed sources are not executed. `deprecations: false` drops the deprecation rules.
+
+The PHPStan context fingerprint covers every entry under the project root except `.git`: path, type, size, nanosecond modification time, and symlink target, without reading file contents or following symlinks. Any added, removed, resized, retouched, or retargeted entry during the run invalidates the result. An edit that preserves both size and modification time, or a change outside the project behind a symlink, is not detected. PHPStan runs without agent-detection variables such as `CLAUDECODE`, which would otherwise add agent instructions to stderr. The result cache lives in the private temporary directory and is discarded after each run.
+
+Dependencies and all transitive versions are locked in [tools/phpstan/composer.lock](tools/phpstan/composer.lock) and installed with Composer scripts/plugins disabled. The helper checks pinned PHPStan/phpstan-drupal/deprecation-rules versions. Native worker development needs its bundle at `../lib/phpwarden/phpstan` beside the binary. Public `check` requires no host PHP or Composer.
+
 ## Check through Docker
 
 After building the Go CLI and development image, run these commands in your configured Git project:
@@ -203,7 +222,7 @@ The launcher requires host Git and a local Docker Unix socket, with no host PHP,
 
 The development image must already exist under `phpwarden:static-php8.4-dev`; a missing image returns an error with build instructions. There is no registry fallback or pull for this unpublished tag. Remote Docker contexts and other platforms are currently rejected. The worker protocol is now v2, carrying a checker selection list instead of the previous debug-only flag. Rebuild the CLI and image together; old debug images cannot satisfy the new toolset/protocol/capability checks. The report format remains v1, with `environment.protocol: 2`.
 
-The current toolset is `static-dev-v5-php8.4`, with `debug,drupal-config,phpcs,syntax,whitespace,yaml` capabilities and preset `drupal-static` 1.4.0. Rebuild the existing development tag after adding PHPCS; earlier images are rejected. The static development entry does not bootstrap Drupal or advertise a tested framework version matrix.
+The current toolset is `static-dev-v6-php8.4`, with `debug,drupal-config,phpcs,phpstan,syntax,whitespace,yaml` capabilities and preset `drupal-static` 1.5.0. Rebuild the existing development tag after adding PHPStan; earlier images are rejected. The static development entry does not bootstrap Drupal or advertise a tested framework version matrix.
 
 ## Run the development Docker image
 
@@ -218,7 +237,7 @@ From the Git project you want to check, with an existing `.phpwarden.yaml`, run:
 ```sh
 docker run --rm --pull=never --network=none --read-only \
   --cap-drop=ALL --security-opt=no-new-privileges:true \
-  --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777 \
+  --tmpfs /tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777 \
   --user "$(id -u):$(id -g)" \
   --mount "type=bind,source=$PWD,target=/workspace,readonly" \
   phpwarden:static-php8.4-dev worker check --only debug --format json
@@ -226,7 +245,7 @@ docker run --rm --pull=never --network=none --read-only \
 
 Set PHP runtime/target to `"8.4"` and configure an available diff base. Source roots can be discovered or supplied through `scope.include`. Append `--mode full` for a full scan or `--base origin/main` to override the diff base. The command returns the worker's exit code and JSON report.
 
-This image contains PHPCS/Drupal Coder/PHPCompatibility, debug, Drupal config, syntax, whitespace, and YAML checkers, PHP 8.4.26, Git, and the locked Symfony YAML tool bundle. It requires no host PHP, Composer, or Go, and no project `vendor` directory. The image defaults to UID/GID 10001; the command above uses your UID/GID to read private project directories. Check mode mounts the project read-only and uses a private temporary filesystem. Git trusts only the known `/workspace` mount through the image's system configuration.
+This image contains PHPStan/phpstan-drupal/deprecation rules, PHPCS/Drupal Coder/PHPCompatibility, debug, Drupal config, syntax, whitespace, and YAML checkers, PHP 8.4.26, Git, and the locked Symfony YAML tool bundle. It requires no host PHP, Composer, or Go, and no project `vendor` directory. The image defaults to UID/GID 10001; the command above uses your UID/GID to read private project directories. Check mode mounts the project read-only and uses a private temporary filesystem. Git trusts only the known `/workspace` mount through the image's system configuration.
 
 Use a local Docker daemon with access to the source directory. Mount the entire Git repository for monorepos and pass `--project /workspace/path/to/project`. Linked worktrees or separate Git directories whose metadata lives outside the mount need additional path mapping; the launcher will handle those separately. Container paths in findings remain relative to the configured project.
 
@@ -240,6 +259,7 @@ Native repository tests require Go 1.26.5, PHP 8.4 with tokenizer, mbstring, Sim
 python3 -m venv .venv
 composer install --working-dir tools/yaml --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
 composer install --working-dir tools/phpcs --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
+composer install --working-dir tools/phpstan --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
 .venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python -m ruff check tests
 .venv/bin/python -m ruff format --check tests
@@ -249,6 +269,7 @@ go test -race ./...
 php -l internal/checker/debug/helper.php
 php -l internal/checker/yaml/helper.php
 php -l internal/checker/phpcs/helper.php
+php -l internal/checker/phpstan/helper.php
 .venv/bin/python -m unittest tests.acceptance.worker_cli -v
 ```
 
@@ -274,7 +295,9 @@ Six whitespace fixtures add 24 combinations per suite: added spaces/tabs, old vi
 
 Eight Drupal config fixtures add 32 combinations per suite: new keys, old keys outside hunks, deletion-only changes, quoted/flow YAML, inherited keys, clean nested schema keys, files outside module config directories, and an explicit custom module root. Shared settings tests cover only/disabled, custom keys and directories, include/exclude, nonblocking findings, malformed YAML required/optional policies, custom/standalone module roots, site-export exclusion, and autoload isolation. Go tests also cover escaped keys, BOM/CRLF, merge precedence/positions, invalid aliases, nesting limits, cancellation, and partial read failures.
 
-Eight PHPCS fixtures add 32 combinations per suite: Drupal style issues, old issues outside diff, deletion-only changes, untracked newline/spaced paths, clean source that must not execute, PHPCompatibility target checks, project ruleset priority, and nearest ruleset grouping. Shared settings tests exercise disabled/only, severity/exclusions, warning policy, optional configuration failures, compatibility overrides, and a real project custom sniff without loading the project Composer autoloader. Request tests reject changed/new/transitive rulesets and changed/new custom standard files. Older checker fixture configurations explicitly disable PHPCS to keep their expected findings focused on their own rules.
+Eight PHPCS fixtures add 32 combinations per suite: Drupal style issues, old issues outside diff, deletion-only changes, untracked newline/spaced paths, clean source that must not execute, PHPCompatibility target checks, project ruleset priority, and nearest ruleset grouping. Shared settings tests exercise disabled/only, severity/exclusions, warning policy, optional configuration failures, compatibility overrides, and a real project custom sniff without loading the project Composer autoloader. Request tests reject changed/new/transitive rulesets and changed/new custom standard files. Older checker fixture configurations explicitly disable PHPCS and PHPStan to keep their expected findings focused on their own rules.
+
+Seven PHPStan fixtures add 28 combinations per suite: added type errors, old errors outside diff, deletion-only changes, untracked newline/spaced paths, added deprecated calls, clean source that must not execute, and project config priority. Shared settings tests exercise disabled/only, level, exclusions, fail policy, required/optional configuration failures, missing Drupal dependencies, baselines, and the deprecation switch. Project config tests cover discovery order, `discover_config: false`, explicit levels, invalid NEON, and `vendor-dir` autoload discovery. Request tests reject changed/new/transitive configs and changed/new dependency files. Go tests also reject malformed, inconsistent, or crashing PHPStan output and verify that agent variables do not reach PHPStan.
 
 Drupal discovery acceptance covers root/web/docroot/custom web roots, multisite custom directories, automatic source roots, explicit broad roots with profile exclusions, locked version reporting, malformed metadata, and version conflicts. These are small synthetic Git projects; they do not establish compatibility with a full installed Drupal application.
 

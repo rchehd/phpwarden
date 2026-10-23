@@ -1,0 +1,7 @@
+<?php
+function demo_value(): int {
+  return 'wrong';
+}
+$value_1 = TRUE;
+$value_2 = TRUE;
+$value_3 = TRUE;

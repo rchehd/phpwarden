@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "id": "phpstan-type-added",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/demo.module"
+  ],
+  "settings": {
+    "drupal": false
+  },
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "phpstan",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 3,
+      "contains": "return 'wrong'",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

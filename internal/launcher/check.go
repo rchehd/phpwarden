@@ -86,7 +86,7 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 	writer.Flush()
 	args := []string{"run", "--rm", "--interactive", "--pull=never", "--name", name,
 		"--network=none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges:true",
-		"--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777",
+		"--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777",
 		"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
 		"--mount", strings.TrimSuffix(mount.String(), "\n"),
 		"--entrypoint", "/usr/local/bin/phpwarden", image, "worker", "execute"}
@@ -170,7 +170,7 @@ func inspect(ctx context.Context, selection toolset.Selection, process runner.Pr
 	if version, ok := selection.Tools["symfony-yaml"]; ok && image.Config.Labels["io.phpwarden.symfony-yaml-version"] != version {
 		return "", fmt.Errorf("local image Symfony YAML version label does not match the selected toolset")
 	}
-	for tool, label := range map[string]string{"squizlabs-php_codesniffer": "phpcs", "drupal-coder": "coder", "phpcompatibility-php-compatibility": "phpcompatibility"} {
+	for tool, label := range map[string]string{"squizlabs-php_codesniffer": "phpcs", "drupal-coder": "coder", "phpcompatibility-php-compatibility": "phpcompatibility", "phpstan-phpstan": "phpstan", "mglaman-phpstan-drupal": "phpstan-drupal", "phpstan-phpstan-deprecation-rules": "phpstan-deprecations"} {
 		if version, ok := selection.Tools[tool]; ok && image.Config.Labels["io.phpwarden."+label+"-version"] != version {
 			return "", fmt.Errorf("local image %s version label does not match the selected toolset", label)
 		}
@@ -227,6 +227,8 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 				required, failOn = request.Config.Tools.DrupalConfig.Required, request.Config.Tools.DrupalConfig.FailOn
 			} else if check.ID == "phpcs" {
 				required, failOn = request.Config.Tools.PHPCS.Required, request.Config.Tools.PHPCS.FailOn
+			} else if check.ID == "phpstan" {
+				required, failOn = request.Config.Tools.PHPStan.Required, request.Config.Tools.PHPStan.FailOn
 			}
 			if !slices.Contains(checker.Requested(request.Only), check.ID) || seen[check.ID] || check.Required != required || check.FailOn != failOn {
 				return result, fmt.Errorf("worker checker selection or policy does not match the request")
@@ -263,7 +265,7 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 			return result, fmt.Errorf("worker finding is outside the requested scope")
 		}
 		if _, exists := request.Selection.LineMap[*finding.Path]; !exists ||
-			(finding.Checker == "debug" || finding.Checker == "whitespace" || finding.Checker == "phpcs") && (finding.Kind != "code" || !request.Selection.Contains(*finding.Path, *finding.Line)) ||
+			(finding.Checker == "debug" || finding.Checker == "whitespace" || finding.Checker == "phpcs" || finding.Checker == "phpstan") && (finding.Kind != "code" || !request.Selection.Contains(*finding.Path, *finding.Line)) ||
 			finding.Checker == "drupal-config" && finding.Kind != "code" ||
 			(finding.Checker == "syntax" || finding.Checker == "yaml") && finding.Kind != "syntax" {
 			return result, fmt.Errorf("worker finding is outside the requested scope")

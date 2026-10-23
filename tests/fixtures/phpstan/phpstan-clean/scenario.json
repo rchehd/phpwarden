@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "id": "phpstan-clean",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/demo.module"
+  ],
+  "settings": {
+    "drupal": false
+  },
+  "verdicts": {
+    "diff": "pass",
+    "full": "pass"
+  },
+  "findings": [],
+  "patch": "change.patch"
+}

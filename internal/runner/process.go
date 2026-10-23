@@ -12,6 +12,8 @@ type Command struct {
 	Args      []string
 	Directory string
 	Input     []byte
+	// Nil inherits the worker environment.
+	Env []string
 }
 
 type Result struct {
@@ -32,6 +34,7 @@ type Exec struct{}
 func (Exec) Run(ctx context.Context, spec Command) Result {
 	command := exec.CommandContext(ctx, spec.Name, spec.Args...)
 	command.Dir = spec.Directory
+	command.Env = spec.Env
 	command.Stdin = bytes.NewReader(spec.Input)
 	var stdout, stderr bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, &stderr

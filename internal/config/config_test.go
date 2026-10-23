@@ -61,6 +61,12 @@ func TestDefaultsAndProvenance(t *testing.T) {
 		!slices.Equal(phpcs.Standards, []string{"Drupal", "DrupalPractice"}) || phpcs.ErrorSeverity != 5 || phpcs.Sniffs == nil || result.Provenance["tools.phpcs.standards"] != "profile_default" {
 		t.Fatalf("unexpected PHPCS defaults: %+v", phpcs)
 	}
+	phpstan := result.Config.Tools.PHPStan
+	if !phpstan.Enabled || !phpstan.Required || phpstan.FailOn != "error" || !phpstan.DiscoverConfig || phpstan.Level != nil || phpstan.Autoload != "auto" ||
+		!phpstan.Drupal || !phpstan.Deprecations || phpstan.MemoryLimitMB != 512 || phpstan.Includes == nil || phpstan.Exclude == nil ||
+		result.Provenance["tools.phpstan.drupal"] != "profile_default" || result.Provenance["tools.phpstan.level"] != "" {
+		t.Fatalf("unexpected PHPStan defaults: %+v", phpstan)
+	}
 	if result.Provenance["php.runtime"] != "project_config" ||
 		result.Provenance["tools.debug.functions"] != "profile_default" ||
 		result.Provenance["scope.mode"] != "core_default" {
@@ -119,7 +125,7 @@ func TestInvalidConfigurations(t *testing.T) {
 		"unknown field":         minimal + "profiel: drupal\n",
 		"nested unknown field":  minimal + "runner: {timeot: 1}\n",
 		"unknown checker":       minimal + "tools: {phpstna: {}}\n",
-		"unimplemented checker": minimal + "tools: {phpstan: {}}\n",
+		"unimplemented checker": minimal + "tools: {phpmd: {}}\n",
 		"unsupported profile":   strings.Replace(minimal, "profile: drupal", "profile: laravel", 1),
 		"missing profile":       strings.Replace(minimal, "profile: drupal\n", "", 1),
 		"unknown version":       strings.Replace(minimal, "version: 1", "version: 2", 1),
@@ -207,6 +213,20 @@ func TestInvalidConfigurations(t *testing.T) {
 		"phpcs sniff":           minimal + "tools: {phpcs: {sniffs: ['../file.php']}}\n",
 		"phpcs target":          minimal + "tools: {phpcs: {compatibility: {test_version: '8.4-8.3'}}}\n",
 		"phpcs target format":   minimal + "tools: {phpcs: {compatibility: {test_version: '8.4-'}}}\n",
+		"phpstan unknown":       minimal + "tools: {phpstan: {paths: []}}\n",
+		"phpstan timeout":       minimal + "tools: {phpstan: {timeout_seconds: 0}}\n",
+		"phpstan level":         minimal + "tools: {phpstan: {level: 11}}\n",
+		"phpstan level null":    minimal + "tools: {phpstan: {level: null}}\n",
+		"phpstan memory":        minimal + "tools: {phpstan: {memory_limit_mb: 32}}\n",
+		"phpstan config path":   minimal + "tools: {phpstan: {config: ../phpstan.neon}}\n",
+		"phpstan baseline path": minimal + "tools: {phpstan: {baseline: /baseline.neon}}\n",
+		"phpstan autoload":      minimal + "tools: {phpstan: {autoload: ''}}\n",
+		"phpstan autoload path": minimal + "tools: {phpstan: {autoload: ../vendor/autoload.php}}\n",
+		"phpstan include path":  minimal + "tools: {phpstan: {includes: [../outside.neon]}}\n",
+		"phpstan bootstrap":     minimal + "tools: {phpstan: {bootstrap_files: [/bootstrap.php]}}\n",
+		"phpstan scan":          minimal + "tools: {phpstan: {scan_directories: [../outside]}}\n",
+		"phpstan stub":          minimal + "tools: {phpstan: {stub_files: [../stub.php]}}\n",
+		"phpstan extension":     minimal + "tools: {phpstan: {extra_extensions: [inc]}}\n",
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {

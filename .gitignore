@@ -4,3 +4,4 @@ __pycache__/
 /bin/
 /tools/yaml/vendor/
 /tools/phpcs/vendor/
+/tools/phpstan/vendor/

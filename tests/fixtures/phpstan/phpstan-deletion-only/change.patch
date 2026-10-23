@@ -1,0 +1,7 @@
+--- a/web/modules/custom/demo/demo.module
++++ b/web/modules/custom/demo/demo.module
+@@ -4,4 +4,3 @@
+ }
+ $value_1 = TRUE;
+ $value_2 = TRUE;
+-$value_3 = TRUE;

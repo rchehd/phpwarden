@@ -13,6 +13,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/checker/debug"
 	"github.com/rchehd/phpwarden/internal/checker/drupalconfig"
 	"github.com/rchehd/phpwarden/internal/checker/phpcs"
+	"github.com/rchehd/phpwarden/internal/checker/phpstan"
 	"github.com/rchehd/phpwarden/internal/checker/syntax"
 	"github.com/rchehd/phpwarden/internal/checker/whitespace"
 	yamlcheck "github.com/rchehd/phpwarden/internal/checker/yaml"
@@ -98,7 +99,11 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, s
 	}
 	for _, id := range checker.Requested(only) {
 		var outcome checker.Outcome
-		if id == "phpcs" {
+		if id == "phpstan" {
+			settings := cfg.Tools.PHPStan
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			outcome = phpstan.Run(ctx, location.Root, phpstan.Select(selection, settings, cfg.Profile), settings, cfg.PHP.Target, process)
+		} else if id == "phpcs" {
 			settings := cfg.Tools.PHPCS
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
 			outcome = phpcs.Run(ctx, location.Root, phpcs.Select(selection, settings, cfg.Profile), settings, cfg.PHP.Target, process)

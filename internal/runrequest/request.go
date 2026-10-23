@@ -15,6 +15,7 @@ import (
 
 	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/checker/phpcs"
+	"github.com/rchehd/phpwarden/internal/checker/phpstan"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/phpconstraint"
 	"github.com/rchehd/phpwarden/internal/profile"
@@ -78,6 +79,9 @@ func (request Request) Validate() error {
 	keys := append([]string{"config"}, fileKeys(request.Selection.Files)...)
 	if phpcs.InputRequired(request.Config, request.Selection, request.Only) {
 		keys = append(keys, "phpcs")
+	}
+	if phpstan.InputRequired(request.Config, request.Selection, request.Only) {
+		keys = append(keys, "phpstan")
 	}
 	if len(request.Fingerprint) != len(keys) {
 		return fmt.Errorf("fingerprint does not match selected inputs")
@@ -170,6 +174,9 @@ func Snapshot(location config.Location, selection scope.Selection, only []string
 	}
 	if phpcs.InputRequired(effective.Config, selection, only) {
 		result["phpcs"] = phpcs.ContextHash(location.Root, selection, effective.Config)
+	}
+	if phpstan.InputRequired(effective.Config, selection, only) {
+		result["phpstan"] = phpstan.ContextHash(location.Root)
 	}
 	return result, nil
 }

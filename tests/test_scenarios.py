@@ -17,6 +17,7 @@ class ScenarioFixturesTest(unittest.TestCase):
                 FIXTURES.parent / "whitespace",
                 FIXTURES.parent / "drupal-config",
                 FIXTURES.parent / "phpcs",
+                FIXTURES.parent / "phpstan",
             )
             for path in group.iterdir()
             if path.is_dir()

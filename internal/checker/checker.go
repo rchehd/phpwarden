@@ -18,7 +18,7 @@ type Outcome struct {
 }
 
 func IDs() []string {
-	return []string{"debug", "drupal-config", "phpcs", "syntax", "whitespace", "yaml"}
+	return []string{"debug", "drupal-config", "phpcs", "phpstan", "syntax", "whitespace", "yaml"}
 }
 
 func ParseOnly(value string) ([]string, error) {
@@ -59,5 +59,5 @@ func Enabled(id string, configured bool, only []string) bool {
 }
 
 func AnyEnabled(cfg config.Config, only []string) bool {
-	return Enabled("debug", cfg.Tools.Debug.Enabled, only) || Enabled("drupal-config", cfg.Tools.DrupalConfig.Enabled, only) || Enabled("phpcs", cfg.Tools.PHPCS.Enabled, only) || Enabled("syntax", cfg.Tools.Syntax.Enabled, only) || Enabled("yaml", cfg.Tools.YAML.Enabled, only) || Enabled("whitespace", cfg.Tools.Whitespace.Enabled, only)
+	return Enabled("debug", cfg.Tools.Debug.Enabled, only) || Enabled("drupal-config", cfg.Tools.DrupalConfig.Enabled, only) || Enabled("phpcs", cfg.Tools.PHPCS.Enabled, only) || Enabled("phpstan", cfg.Tools.PHPStan.Enabled, only) || Enabled("syntax", cfg.Tools.Syntax.Enabled, only) || Enabled("yaml", cfg.Tools.YAML.Enabled, only) || Enabled("whitespace", cfg.Tools.Whitespace.Enabled, only)
 }

@@ -86,6 +86,67 @@ func TestPHPCSRequestRejectsChangedRulesetsAndStandards(t *testing.T) {
 	}
 }
 
+func TestPHPStanRequestRejectsChangedAnalysisContext(t *testing.T) {
+	for _, mutation := range []string{"new config", "config", "transitive", "dependency", "new dependency", "missing fingerprint"} {
+		t.Run(mutation, func(t *testing.T) {
+			location, effective, options := fixture(t)
+			write := func(name, data string) {
+				t.Helper()
+				filename := filepath.Join(location.Root, name)
+				if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filename, []byte(data), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			write("quality/base.neon", "parameters:\n    level: 0\n")
+			write("vendor/example/dependency.php", "<?php\n")
+			if mutation != "new config" {
+				write("phpstan.neon", "includes:\n    - quality/base.neon\n")
+			}
+			selection, err := scope.Build(context.Background(), options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request, err := runrequest.Build(location, effective, selection, []string{"phpstan"}, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if request.Fingerprint["phpstan"] == "" {
+				t.Fatal("analysis context fingerprint missing")
+			}
+			if err := request.Matches(location); err != nil {
+				t.Fatal(err)
+			}
+			switch mutation {
+			case "new config", "config":
+				write("phpstan.neon", "parameters:\n    level: 9\n")
+			case "transitive":
+				write("quality/base.neon", "parameters:\n    level: 9\n")
+			case "dependency":
+				write("vendor/example/dependency.php", "<?php\n$changed = true;\n")
+			case "new dependency":
+				write("vendor/example/added.php", "<?php\n")
+			case "missing fingerprint":
+				delete(request.Fingerprint, "phpstan")
+			}
+			process := processFunc(func(context.Context, runner.Command) runner.Result {
+				t.Fatal("changed analysis context must fail before PHP runs")
+				return runner.Result{}
+			})
+			result := Execute(context.Background(), location.Root, request, process)
+			want := "stale"
+			if mutation == "missing fingerprint" {
+				want = "request_invalid"
+			}
+			if result.ExitCode != 3 || result.Complete || result.Diagnostics[0].Code != want {
+				t.Fatalf("changed PHPStan context accepted: %+v", result)
+			}
+		})
+	}
+}
+
 func TestRequestWorkerDoesNotNeedGitAndRejectsChangedInputs(t *testing.T) {
 	for _, which := range []string{"no git", "wire roundtrip", "file", "config", "traversal", "symlink", "missing range", "bad range", "protocol", "toolset", "effective config", "unknown checker", "duplicate checker"} {
 		t.Run(which, func(t *testing.T) {

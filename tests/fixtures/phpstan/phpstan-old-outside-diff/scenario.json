@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "phpstan-old-outside-diff",
+  "state": "committed",
+  "changed_files": [
+    "web/modules/custom/demo/demo.module"
+  ],
+  "settings": {
+    "drupal": false
+  },
+  "verdicts": {
+    "diff": "pass",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "phpstan",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 3,
+      "contains": "return 'wrong'",
+      "modes": [
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

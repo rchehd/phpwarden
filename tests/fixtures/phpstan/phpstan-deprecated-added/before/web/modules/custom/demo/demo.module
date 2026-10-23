@@ -1,0 +1,8 @@
+<?php
+/**
+ * Old API.
+ *
+ * @deprecated
+ */
+function demo_old(): void {
+}

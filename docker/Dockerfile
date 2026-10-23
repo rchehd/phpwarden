@@ -22,6 +22,11 @@ COPY tools/phpcs/composer.json tools/phpcs/composer.lock ./
 RUN php /usr/local/bin/composer install --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction --classmap-authoritative \
     && php -r 'require "vendor/autoload.php"; if (Composer\InstalledVersions::getPrettyVersion("squizlabs/php_codesniffer") !== "4.0.4" || !extension_loaded("mbstring")) { exit(1); }'
 
+WORKDIR /opt/phpwarden/tools/phpstan
+COPY tools/phpstan/composer.json tools/phpstan/composer.lock ./
+RUN php /usr/local/bin/composer install --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction --classmap-authoritative \
+    && php -r 'require "vendor/autoload.php"; if (Composer\InstalledVersions::getPrettyVersion("phpstan/phpstan") !== "2.3.1") { exit(1); }'
+
 FROM php:8.4.26-cli-alpine3.23@sha256:da7a7a945a493ac9c015f327231afd820bbe57fc6ae22f4f520a79fbd635ba39 AS worker
 
 RUN apk add --no-cache git ca-certificates \
@@ -33,15 +38,19 @@ RUN apk add --no-cache git ca-certificates \
 COPY --from=build /out/phpwarden /usr/local/bin/phpwarden
 COPY --from=tools /opt/phpwarden/tools/yaml /usr/local/lib/phpwarden/yaml
 COPY --from=tools /opt/phpwarden/tools/phpcs /usr/local/lib/phpwarden/phpcs
+COPY --from=tools /opt/phpwarden/tools/phpstan /usr/local/lib/phpwarden/phpstan
 LABEL org.opencontainers.image.title="PHPWarden static worker" \
     io.phpwarden.protocol="2" \
-    io.phpwarden.toolset="static-dev-v5-php8.4" \
+    io.phpwarden.toolset="static-dev-v6-php8.4" \
     io.phpwarden.php-version="8.4.26" \
-    io.phpwarden.checkers="debug,drupal-config,phpcs,syntax,whitespace,yaml" \
+    io.phpwarden.checkers="debug,drupal-config,phpcs,phpstan,syntax,whitespace,yaml" \
     io.phpwarden.symfony-yaml-version="7.4.21" \
     io.phpwarden.phpcs-version="4.0.4" \
     io.phpwarden.coder-version="9.0.1" \
-    io.phpwarden.phpcompatibility-version="10.0.0-alpha2"
+    io.phpwarden.phpcompatibility-version="10.0.0-alpha2" \
+    io.phpwarden.phpstan-version="2.3.1" \
+    io.phpwarden.phpstan-drupal-version="2.2.2" \
+    io.phpwarden.phpstan-deprecations-version="2.0.5"
 
 WORKDIR /workspace
 USER 10001:10001
