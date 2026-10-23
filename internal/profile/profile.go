@@ -35,6 +35,8 @@ type Defaults struct {
 	ModuleConfigForbiddenKeys []string
 	PHPCSStandards            []string
 	PHPStanDrupal             bool
+	TwigExtensions            []string
+	TwigCSFixerRemovedRules   []string
 }
 
 func Lookup(id string) (Defaults, bool) {
@@ -48,5 +50,8 @@ func Lookup(id string) (Defaults, bool) {
 		ModuleConfigForbiddenKeys: []string{"uuid", "_core"},
 		PHPCSStandards:            []string{"Drupal", "DrupalPractice"},
 		PHPStanDrupal:             true,
+		TwigExtensions:            []string{".twig"},
+		// Drupal and SDC templates use the include tag and long-form hashes.
+		TwigCSFixerRemovedRules: []string{"TwigCsFixer\\Rules\\Function\\IncludeFunctionRule", "TwigCsFixer\\Rules\\Literal\\CompactHashRule"},
 	}, true
 }

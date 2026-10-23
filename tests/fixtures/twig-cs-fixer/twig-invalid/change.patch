@@ -1,0 +1,6 @@
+--- a/web/modules/custom/demo/templates/demo.html.twig
++++ b/web/modules/custom/demo/templates/demo.html.twig
+@@ -1,2 +1,2 @@
+-<p>{{ title }}</p>
++<p>{{ title </p>
+ <p>{{ body }}</p>

@@ -29,6 +29,11 @@ from tests.support.phpstan import (
 )
 from tests.support.scenarios import materialize
 from tests.support.syntax import check_syntax_fixtures
+from tests.support.twig_cs_fixer import (
+    check_twig_cs_fixer_fixtures,
+    check_twig_cs_fixer_project_config,
+    check_twig_cs_fixer_settings,
+)
 from tests.support.whitespace import check_whitespace_fixtures, check_whitespace_settings
 from tests.support.yaml import check_yaml_fixtures
 
@@ -63,7 +68,11 @@ class DockerWorkerTest(unittest.TestCase):
             "profile": "drupal",
             "php": {"runtime": runtime, "target": {"min": runtime, "max": runtime}},
             "scope": {"include": ["web/modules/custom"], "base": scenario.base},
-            "tools": {"phpcs": {"enabled": False}, "phpstan": {"enabled": False}},
+            "tools": {
+                "phpcs": {"enabled": False},
+                "phpstan": {"enabled": False},
+                "twig-cs-fixer": {"enabled": False},
+            },
         }
         (scenario.root / ".phpwarden.yaml").write_text(json.dumps(config))
 
@@ -149,7 +158,7 @@ class DockerWorkerTest(unittest.TestCase):
         self.assertEqual(self.metadata["Config"]["User"], "10001:10001")
         self.assertEqual(
             self.metadata["Config"]["Labels"]["io.phpwarden.checkers"],
-            "debug,drupal-config,phpcs,phpstan,syntax,whitespace,yaml",
+            "debug,drupal-config,phpcs,phpstan,syntax,twig-cs-fixer,whitespace,yaml",
         )
         with materialize(FIXTURES / "clean-debug") as scenario:
             self.configure(scenario)
@@ -244,6 +253,15 @@ class DockerWorkerTest(unittest.TestCase):
     def test_phpstan_dependency_mismatch(self):
         check_phpstan_dependency_mismatch(self, self.configure, self.run_check)
 
+    def test_twig_cs_fixer_fixtures(self):
+        check_twig_cs_fixer_fixtures(self, self.configure, self.run_check)
+
+    def test_twig_cs_fixer_settings(self):
+        check_twig_cs_fixer_settings(self, self.configure, self.run_check)
+
+    def test_twig_cs_fixer_project_config(self):
+        check_twig_cs_fixer_project_config(self, self.configure, self.run_check)
+
     def test_no_host_php_or_go_and_no_runtime_build_tools(self):
         with materialize(FIXTURES / "added-debug") as scenario:
             self.configure(scenario)
@@ -301,7 +319,11 @@ class DockerWorkerTest(unittest.TestCase):
                 "profile": "drupal",
                 "php": {"runtime": "8.4", "target": {"min": "8.4", "max": "8.4"}},
                 "scope": {"mode": "full", "include": ["."]},
-                "tools": {"phpcs": {"enabled": False}, "phpstan": {"enabled": False}},
+                "tools": {
+                    "phpcs": {"enabled": False},
+                    "phpstan": {"enabled": False},
+                    "twig-cs-fixer": {"enabled": False},
+                },
             }
             (project / ".phpwarden.yaml").write_text(json.dumps(config))
             result = self.report(

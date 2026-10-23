@@ -4,7 +4,16 @@ from pathlib import Path
 from tests.support.scenarios import materialize
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "phpstan"
-TOOLS = ("debug", "drupal-config", "phpcs", "phpstan", "syntax", "whitespace", "yaml")
+TOOLS = (
+    "debug",
+    "drupal-config",
+    "phpcs",
+    "phpstan",
+    "syntax",
+    "twig-cs-fixer",
+    "whitespace",
+    "yaml",
+)
 
 
 def check_phpstan_fixtures(test, configure, run):

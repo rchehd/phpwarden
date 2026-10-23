@@ -147,6 +147,76 @@ func TestPHPStanRequestRejectsChangedAnalysisContext(t *testing.T) {
 	}
 }
 
+func TestTwigCSFixerRequestRejectsChangedConfigAndInputs(t *testing.T) {
+	for _, mutation := range []string{"new config", "config", "dist config", "extra input", "new extra input", "missing fingerprint"} {
+		t.Run(mutation, func(t *testing.T) {
+			location, _, options := fixture(t)
+			write := func(name, data string) {
+				t.Helper()
+				filename := filepath.Join(location.Root, name)
+				if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filename, []byte(data), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			write("src/demo.html.twig", "<p>{{ title }}</p>\n")
+			write("quality/rules.php", "<?php\nreturn [];\n")
+			if mutation != "new config" {
+				write(".twig-cs-fixer.php", "<?php\nreturn require __DIR__ . '/quality/rules.php';\n")
+			}
+			data, err := os.ReadFile(location.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			write(config.Filename, strings.Replace(string(data), `"twig-cs-fixer":{"enabled":false}`, `"twig-cs-fixer":{"enabled":false,"extra_inputs":["quality"]}`, 1))
+			effective, err := config.Load(location)
+			if err != nil {
+				t.Fatal(err)
+			}
+			selection, err := scope.Build(context.Background(), options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request, err := runrequest.Build(location, effective, selection, []string{"twig-cs-fixer"}, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if request.Fingerprint["twig-cs-fixer"] == "" {
+				t.Fatal("Twig CS Fixer context fingerprint missing")
+			}
+			if err := request.Matches(location); err != nil {
+				t.Fatal(err)
+			}
+			switch mutation {
+			case "new config", "config":
+				write(".twig-cs-fixer.php", "<?php\nreturn new TwigCsFixer\\Config\\Config();\n")
+			case "dist config":
+				write(".twig-cs-fixer.dist.php", "<?php\n")
+			case "extra input":
+				write("quality/rules.php", "<?php\nreturn ['changed'];\n")
+			case "new extra input":
+				write("quality/added.php", "<?php\n")
+			case "missing fingerprint":
+				delete(request.Fingerprint, "twig-cs-fixer")
+			}
+			process := processFunc(func(context.Context, runner.Command) runner.Result {
+				t.Fatal("changed Twig CS Fixer inputs must fail before PHP runs")
+				return runner.Result{}
+			})
+			result := Execute(context.Background(), location.Root, request, process)
+			want := "stale"
+			if mutation == "missing fingerprint" {
+				want = "request_invalid"
+			}
+			if result.ExitCode != 3 || result.Complete || result.Diagnostics[0].Code != want {
+				t.Fatalf("changed Twig CS Fixer context accepted: %+v", result)
+			}
+		})
+	}
+}
+
 func TestRequestWorkerDoesNotNeedGitAndRejectsChangedInputs(t *testing.T) {
 	for _, which := range []string{"no git", "wire roundtrip", "file", "config", "traversal", "symlink", "missing range", "bad range", "protocol", "toolset", "effective config", "unknown checker", "duplicate checker"} {
 		t.Run(which, func(t *testing.T) {

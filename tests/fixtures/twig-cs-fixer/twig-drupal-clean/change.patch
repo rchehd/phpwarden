@@ -1,0 +1,12 @@
+--- a/web/modules/custom/demo/templates/demo.html.twig
++++ b/web/modules/custom/demo/templates/demo.html.twig
+@@ -1,2 +1,9 @@
+ <p>{{ title }}</p>
+ <p>{{ body }}</p>
++{% trans %}
++  Hello {{ name }}.
++{% plural count %}
++  Hello {{ name }}, {{ count }} items.
++{% endtrans %}
++{% include '@demo/card.html.twig' with {title: title} %}
++<p>{{ 'Read more'|t }}</p>

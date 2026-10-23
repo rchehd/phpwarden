@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "id": "twig-project-config",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/templates/demo.html.twig"
+  ],
+  "settings": {},
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "twig-cs-fixer",
+      "path": "web/modules/custom/demo/templates/demo.html.twig",
+      "line": 3,
+      "contains": "{% include",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

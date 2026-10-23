@@ -25,6 +25,11 @@ from tests.support.phpstan import (
 )
 from tests.support.scenarios import materialize
 from tests.support.syntax import check_syntax_fixtures, check_syntax_settings
+from tests.support.twig_cs_fixer import (
+    check_twig_cs_fixer_fixtures,
+    check_twig_cs_fixer_project_config,
+    check_twig_cs_fixer_settings,
+)
 from tests.support.whitespace import check_whitespace_fixtures, check_whitespace_settings
 from tests.support.yaml import FIXTURES as YAML_FIXTURES
 from tests.support.yaml import check_yaml_fixtures, check_yaml_settings
@@ -64,7 +69,12 @@ class LauncherCLITest(unittest.TestCase):
             "profile": "drupal",
             "php": {"runtime": "8.4", "target": {"min": "8.4", "max": "8.4"}},
             "scope": {"include": include or ["web/modules/custom"], "base": base},
-            "tools": {"debug": debug, "phpcs": {"enabled": False}, "phpstan": {"enabled": False}},
+            "tools": {
+                "debug": debug,
+                "phpcs": {"enabled": False},
+                "phpstan": {"enabled": False},
+                "twig-cs-fixer": {"enabled": False},
+            },
         }
         (root / ".phpwarden.yaml").write_text(json.dumps(config))
 
@@ -213,6 +223,21 @@ class LauncherCLITest(unittest.TestCase):
             self, lambda scenario: self.configure(scenario.root, scenario.base), self.run_check
         )
 
+    def test_twig_cs_fixer_fixtures(self):
+        check_twig_cs_fixer_fixtures(
+            self, lambda scenario: self.configure(scenario.root, scenario.base), self.run_check
+        )
+
+    def test_twig_cs_fixer_settings(self):
+        check_twig_cs_fixer_settings(
+            self, lambda scenario: self.configure(scenario.root, scenario.base), self.run_check
+        )
+
+    def test_twig_cs_fixer_project_config(self):
+        check_twig_cs_fixer_project_config(
+            self, lambda scenario: self.configure(scenario.root, scenario.base), self.run_check
+        )
+
     def test_public_check_matches_all_fixture_modes_without_host_php_or_go(self):
         for directory in sorted(FIXTURES.iterdir()):
             for mode in ("diff", "full", "whole-files", "paths"):
@@ -233,7 +258,7 @@ class LauncherCLITest(unittest.TestCase):
                         self.assertEqual(result["exit_code"], 1 if verdict == "fail" else 0)
                         self.assertTrue(result["complete"])
                         self.assertTrue(result["environment"]["image"].startswith("sha256:"))
-                        self.assertEqual(result["environment"]["toolset"], "static-dev-v6-php8.4")
+                        self.assertEqual(result["environment"]["toolset"], "static-dev-v7-php8.4")
                         expected = sorted(
                             (row["checker"], row["path"], row["line"])
                             for row in scenario.spec["findings"]

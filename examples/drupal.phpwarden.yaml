@@ -19,6 +19,11 @@ tools:
     autoload: auto
     drupal: true
     deprecations: true
+  twig-cs-fixer:
+    enabled: true
+    required: true
+    fail_on: error
+    discover_config: true
   phpcs:
     enabled: true
     required: true

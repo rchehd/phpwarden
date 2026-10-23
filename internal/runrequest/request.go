@@ -16,6 +16,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/checker/phpcs"
 	"github.com/rchehd/phpwarden/internal/checker/phpstan"
+	"github.com/rchehd/phpwarden/internal/checker/twigcsfixer"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/phpconstraint"
 	"github.com/rchehd/phpwarden/internal/profile"
@@ -82,6 +83,9 @@ func (request Request) Validate() error {
 	}
 	if phpstan.InputRequired(request.Config, request.Selection, request.Only) {
 		keys = append(keys, "phpstan")
+	}
+	if twigcsfixer.InputRequired(request.Config, request.Selection, request.Only) {
+		keys = append(keys, "twig-cs-fixer")
 	}
 	if len(request.Fingerprint) != len(keys) {
 		return fmt.Errorf("fingerprint does not match selected inputs")
@@ -177,6 +181,9 @@ func Snapshot(location config.Location, selection scope.Selection, only []string
 	}
 	if phpstan.InputRequired(effective.Config, selection, only) {
 		result["phpstan"] = phpstan.ContextHash(location.Root)
+	}
+	if twigcsfixer.InputRequired(effective.Config, selection, only) {
+		result["twig-cs-fixer"] = twigcsfixer.ContextHash(location.Root, effective.Config.Tools.TwigCSFixer)
 	}
 	return result, nil
 }

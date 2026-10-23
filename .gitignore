@@ -5,3 +5,4 @@ __pycache__/
 /tools/yaml/vendor/
 /tools/phpcs/vendor/
 /tools/phpstan/vendor/
+/tools/twig-cs-fixer/vendor/

@@ -81,6 +81,7 @@ All checkers are enabled by default.
 | `drupal-config` | Top-level `uuid` and `_core` keys in module `config/install`, `config/optional`, `config/schema` |
 | `phpcs` | PHP_CodeSniffer with Drupal Coder (`Drupal`, `DrupalPractice`); PHPCompatibility on request |
 | `phpstan` | PHPStan with phpstan-drupal and deprecation rules |
+| `twig-cs-fixer` | Twig template style with Twig CS Fixer |
 
 Every checker accepts these settings under `tools.<id>`:
 
@@ -99,6 +100,12 @@ PHPStan loads the project's Composer autoloader, so run `composer install` first
 
 PHPStan uses `phpstan.neon`, `phpstan.neon.dist`, or `phpstan.dist.neon` from the project root. Without one it analyses at level 3. Other useful settings are `level`, `baseline`, `includes`, `bootstrap_files`, `deprecations`, and `memory_limit_mb`.
 
+### Twig CS Fixer
+
+Twig CS Fixer checks `.twig` templates. It uses `.twig-cs-fixer.php` or `.twig-cs-fixer.dist.php` from the project root. Without one it uses the default `TwigCsFixer` standard without `IncludeFunctionRule` and `CompactHashRule`, because Drupal templates use the `include` tag and long-form hashes. Other useful settings are `config`, `discover_config`, `extra_extensions`, and `extra_inputs` for files the project config loads.
+
+Twig CS Fixer checks style, not whether a template compiles. A template it cannot read at all is reported as `File.Invalid` even outside the changed lines.
+
 ## Results
 
 Text output lists findings and checker problems. `--format json` prints one report that follows [schemas/report-v1.schema.json](schemas/report-v1.schema.json).
@@ -112,7 +119,3 @@ Text output lists findings and checker problems. `--format json` prints one repo
 | `130` | Interrupted |
 
 `PARTIAL` in text output (`complete: false` in JSON) means an optional checker could not run. `Discovery warning` lines report problems in project metadata that did not stop the check, such as duplicate keys in `composer.json` or a `vendor` that does not match `composer.lock`.
-
-## Development
-
-[docs/TESTING.md](docs/TESTING.md) describes the test suites and how to run them.

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "id": "twig-drupal-clean",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/templates/demo.html.twig"
+  ],
+  "settings": {},
+  "verdicts": {
+    "diff": "pass",
+    "full": "pass"
+  },
+  "findings": [],
+  "patch": "change.patch"
+}

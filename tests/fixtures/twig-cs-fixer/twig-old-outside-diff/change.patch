@@ -1,0 +1,7 @@
+--- a/web/modules/custom/demo/templates/demo.html.twig
++++ b/web/modules/custom/demo/templates/demo.html.twig
+@@ -2,3 +2,4 @@
+ <p>{{ body }}</p>
+ <p>{{ footer }}</p>
+ <p>{{ extra }}</p>
++<p>{{ more }}</p>

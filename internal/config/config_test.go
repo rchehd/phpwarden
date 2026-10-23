@@ -67,6 +67,11 @@ func TestDefaultsAndProvenance(t *testing.T) {
 		result.Provenance["tools.phpstan.drupal"] != "profile_default" || result.Provenance["tools.phpstan.level"] != "" {
 		t.Fatalf("unexpected PHPStan defaults: %+v", phpstan)
 	}
+	twig := result.Config.Tools.TwigCSFixer
+	if !twig.Enabled || !twig.Required || twig.FailOn != "error" || !twig.DiscoverConfig || twig.Config != "" || twig.ExtraExtensions == nil || twig.ExtraInputs == nil ||
+		result.Provenance["tools.twig-cs-fixer.enabled"] != "profile_default" || result.Provenance["tools.twig-cs-fixer.config"] != "core_default" {
+		t.Fatalf("unexpected Twig CS Fixer defaults: %+v", twig)
+	}
 	if result.Provenance["php.runtime"] != "project_config" ||
 		result.Provenance["tools.debug.functions"] != "profile_default" ||
 		result.Provenance["scope.mode"] != "core_default" {
@@ -227,6 +232,13 @@ func TestInvalidConfigurations(t *testing.T) {
 		"phpstan scan":          minimal + "tools: {phpstan: {scan_directories: [../outside]}}\n",
 		"phpstan stub":          minimal + "tools: {phpstan: {stub_files: [../stub.php]}}\n",
 		"phpstan extension":     minimal + "tools: {phpstan: {extra_extensions: [inc]}}\n",
+		"twig unknown":          minimal + "tools: {twig-cs-fixer: {rules: []}}\n",
+		"twig timeout":          minimal + "tools: {twig-cs-fixer: {timeout_seconds: 0}}\n",
+		"twig config path":      minimal + "tools: {twig-cs-fixer: {config: ../.twig-cs-fixer.php}}\n",
+		"twig empty config":     minimal + "tools: {twig-cs-fixer: {config: ''}}\n",
+		"twig extra input":      minimal + "tools: {twig-cs-fixer: {extra_inputs: [/outside]}}\n",
+		"twig extension":        minimal + "tools: {twig-cs-fixer: {extra_extensions: [tpl]}}\n",
+		"twig exclude":          minimal + "tools: {twig-cs-fixer: {exclude: ['[']}}\n",
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {

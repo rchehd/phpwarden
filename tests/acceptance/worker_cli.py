@@ -23,6 +23,11 @@ from tests.support.phpstan import (
 )
 from tests.support.scenarios import materialize
 from tests.support.syntax import check_syntax_fixtures, check_syntax_settings
+from tests.support.twig_cs_fixer import (
+    check_twig_cs_fixer_fixtures,
+    check_twig_cs_fixer_project_config,
+    check_twig_cs_fixer_settings,
+)
 from tests.support.whitespace import check_whitespace_fixtures, check_whitespace_settings
 from tests.support.yaml import FIXTURES as YAML_FIXTURES
 from tests.support.yaml import check_yaml_fixtures, check_yaml_settings
@@ -43,6 +48,9 @@ class WorkerCLITest(unittest.TestCase):
         tools.symlink_to(ROOT / "tools" / "yaml", target_is_directory=True)
         (tools.parent / "phpcs").symlink_to(ROOT / "tools" / "phpcs", target_is_directory=True)
         (tools.parent / "phpstan").symlink_to(ROOT / "tools" / "phpstan", target_is_directory=True)
+        (tools.parent / "twig-cs-fixer").symlink_to(
+            ROOT / "tools" / "twig-cs-fixer", target_is_directory=True
+        )
         subprocess.run(
             ["go", "build", "-o", str(cls.binary), "./cmd/phpwarden"],
             cwd=ROOT,
@@ -67,7 +75,12 @@ class WorkerCLITest(unittest.TestCase):
                 "target": {"min": self.runtime, "max": self.runtime},
             },
             "scope": {"include": ["web/modules/custom"], "base": scenario.base},
-            "tools": {"debug": debug, "phpcs": {"enabled": False}, "phpstan": {"enabled": False}},
+            "tools": {
+                "debug": debug,
+                "phpcs": {"enabled": False},
+                "phpstan": {"enabled": False},
+                "twig-cs-fixer": {"enabled": False},
+            },
         }
         (scenario.root / ".phpwarden.yaml").write_text(json.dumps(config))
 
@@ -164,6 +177,15 @@ class WorkerCLITest(unittest.TestCase):
 
     def test_phpstan_dependency_mismatch(self):
         check_phpstan_dependency_mismatch(self, self.configure, self.run_worker)
+
+    def test_twig_cs_fixer_fixtures(self):
+        check_twig_cs_fixer_fixtures(self, self.configure, self.run_worker)
+
+    def test_twig_cs_fixer_settings(self):
+        check_twig_cs_fixer_settings(self, self.configure, self.run_worker)
+
+    def test_twig_cs_fixer_project_config(self):
+        check_twig_cs_fixer_project_config(self, self.configure, self.run_worker)
 
     def test_missing_yaml_bundle_never_loads_project_autoload(self):
         with materialize(YAML_FIXTURES / "yaml-duplicate-key") as scenario:

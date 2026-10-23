@@ -170,7 +170,7 @@ func inspect(ctx context.Context, selection toolset.Selection, process runner.Pr
 	if version, ok := selection.Tools["symfony-yaml"]; ok && image.Config.Labels["io.phpwarden.symfony-yaml-version"] != version {
 		return "", fmt.Errorf("local image Symfony YAML version label does not match the selected toolset")
 	}
-	for tool, label := range map[string]string{"squizlabs-php_codesniffer": "phpcs", "drupal-coder": "coder", "phpcompatibility-php-compatibility": "phpcompatibility", "phpstan-phpstan": "phpstan", "mglaman-phpstan-drupal": "phpstan-drupal", "phpstan-phpstan-deprecation-rules": "phpstan-deprecations"} {
+	for tool, label := range map[string]string{"squizlabs-php_codesniffer": "phpcs", "drupal-coder": "coder", "phpcompatibility-php-compatibility": "phpcompatibility", "phpstan-phpstan": "phpstan", "mglaman-phpstan-drupal": "phpstan-drupal", "phpstan-phpstan-deprecation-rules": "phpstan-deprecations", "vincentlanglet-twig-cs-fixer": "twig-cs-fixer", "twig-twig": "twig"} {
 		if version, ok := selection.Tools[tool]; ok && image.Config.Labels["io.phpwarden."+label+"-version"] != version {
 			return "", fmt.Errorf("local image %s version label does not match the selected toolset", label)
 		}
@@ -229,6 +229,8 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 				required, failOn = request.Config.Tools.PHPCS.Required, request.Config.Tools.PHPCS.FailOn
 			} else if check.ID == "phpstan" {
 				required, failOn = request.Config.Tools.PHPStan.Required, request.Config.Tools.PHPStan.FailOn
+			} else if check.ID == "twig-cs-fixer" {
+				required, failOn = request.Config.Tools.TwigCSFixer.Required, request.Config.Tools.TwigCSFixer.FailOn
 			}
 			if !slices.Contains(checker.Requested(request.Only), check.ID) || seen[check.ID] || check.Required != required || check.FailOn != failOn {
 				return result, fmt.Errorf("worker checker selection or policy does not match the request")
@@ -248,16 +250,17 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 		if !slices.Contains(checker.Requested(request.Only), finding.Checker) {
 			return result, fmt.Errorf("worker finding is outside the requested scope")
 		}
-		if finding.Checker == "yaml" && finding.Kind == "global" {
+		if (finding.Checker == "yaml" || finding.Checker == "twig-cs-fixer") && finding.Kind == "global" {
+			prefix := map[string]string{"yaml": "YAML file %q: ", "twig-cs-fixer": "Twig template %q: "}[finding.Checker]
 			matched := false
 			for _, filename := range request.Selection.Files {
-				if strings.HasPrefix(finding.Message, fmt.Sprintf("YAML file %q: ", filename)) {
+				if strings.HasPrefix(finding.Message, fmt.Sprintf(prefix, filename)) {
 					matched = true
 					break
 				}
 			}
 			if !matched {
-				return result, fmt.Errorf("global YAML finding does not match a selected file")
+				return result, fmt.Errorf("global %s finding does not match a selected file", finding.Checker)
 			}
 			continue
 		}
@@ -265,7 +268,7 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 			return result, fmt.Errorf("worker finding is outside the requested scope")
 		}
 		if _, exists := request.Selection.LineMap[*finding.Path]; !exists ||
-			(finding.Checker == "debug" || finding.Checker == "whitespace" || finding.Checker == "phpcs" || finding.Checker == "phpstan") && (finding.Kind != "code" || !request.Selection.Contains(*finding.Path, *finding.Line)) ||
+			(finding.Checker == "debug" || finding.Checker == "whitespace" || finding.Checker == "phpcs" || finding.Checker == "phpstan" || finding.Checker == "twig-cs-fixer") && (finding.Kind != "code" || !request.Selection.Contains(*finding.Path, *finding.Line)) ||
 			finding.Checker == "drupal-config" && finding.Kind != "code" ||
 			(finding.Checker == "syntax" || finding.Checker == "yaml") && finding.Kind != "syntax" {
 			return result, fmt.Errorf("worker finding is outside the requested scope")

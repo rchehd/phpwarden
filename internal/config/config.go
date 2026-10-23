@@ -53,6 +53,7 @@ type Runner struct {
 
 type Tools struct {
 	PHPStan      PHPStan      `json:"phpstan"`
+	TwigCSFixer  TwigCSFixer  `json:"twig-cs-fixer"`
 	PHPCS        PHPCS        `json:"phpcs"`
 	DrupalConfig DrupalConfig `json:"drupal-config"`
 	Debug        Debug        `json:"debug"`
@@ -81,6 +82,19 @@ type PHPStan struct {
 	Deprecations    bool     `json:"deprecations"`
 	MemoryLimitMB   int      `json:"memory_limit_mb"`
 	ExtraExtensions []string `json:"extra_extensions"`
+}
+
+type TwigCSFixer struct {
+	Enabled         bool     `json:"enabled"`
+	Required        bool     `json:"required"`
+	FailOn          string   `json:"fail_on"`
+	TimeoutSeconds  int      `json:"timeout_seconds"`
+	Include         []string `json:"include,omitempty"`
+	Exclude         []string `json:"exclude"`
+	Config          string   `json:"config"`
+	DiscoverConfig  bool     `json:"discover_config"`
+	ExtraExtensions []string `json:"extra_extensions"`
+	ExtraInputs     []string `json:"extra_inputs"`
 }
 
 type PHPCS struct {
@@ -216,6 +230,8 @@ func Parse(data []byte) (Effective, error) {
 			Tools: Tools{PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
 				Includes: []string{}, BootstrapFiles: []string{}, ScanDirectories: []string{}, StubFiles: []string{}, Autoload: "auto",
 				Drupal: defaults.PHPStanDrupal, Deprecations: true, MemoryLimitMB: 512, ExtraExtensions: []string{}},
+				TwigCSFixer: TwigCSFixer{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
+					ExtraExtensions: []string{}, ExtraInputs: []string{}},
 				PHPCS: PHPCS{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
 					Standards: defaults.PHPCSStandards, Sniffs: []string{}, ExcludeSniffs: []string{}, StandardPaths: []string{}, ExtraInputs: []string{}, ExtraExtensions: []string{}, ErrorSeverity: 5, WarningSeverity: 5},
 				DrupalConfig: DrupalConfig{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{},
@@ -262,6 +278,10 @@ func Parse(data []byte) (Effective, error) {
 		result.Provenance["tools.phpstan."+field] = "core_default"
 	}
 	result.Provenance["tools.phpstan.enabled"], result.Provenance["tools.phpstan.drupal"] = "profile_default", "profile_default"
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "extra_extensions", "extra_inputs"} {
+		result.Provenance["tools.twig-cs-fixer."+field] = "core_default"
+	}
+	result.Provenance["tools.twig-cs-fixer.enabled"] = "profile_default"
 	encoded, err := json.Marshal(input)
 	if err != nil {
 		return Effective{}, err
@@ -361,14 +381,15 @@ func validateValues(cfg Config) error {
 	for _, values := range [][]string{cfg.Scope.Include, cfg.Tools.Debug.Include, cfg.Tools.Syntax.Include, cfg.Tools.YAML.Include, cfg.Tools.Whitespace.Include,
 		cfg.Tools.DrupalConfig.Include, cfg.Tools.DrupalConfig.Directories, cfg.Tools.DrupalConfig.ModuleRoots,
 		cfg.Tools.PHPCS.Include, cfg.Tools.PHPCS.StandardPaths, cfg.Tools.PHPCS.ExtraInputs,
-		cfg.Tools.PHPStan.Include, cfg.Tools.PHPStan.Includes, cfg.Tools.PHPStan.BootstrapFiles, cfg.Tools.PHPStan.ScanDirectories, cfg.Tools.PHPStan.StubFiles} {
+		cfg.Tools.PHPStan.Include, cfg.Tools.PHPStan.Includes, cfg.Tools.PHPStan.BootstrapFiles, cfg.Tools.PHPStan.ScanDirectories, cfg.Tools.PHPStan.StubFiles,
+		cfg.Tools.TwigCSFixer.Include, cfg.Tools.TwigCSFixer.ExtraInputs} {
 		for _, value := range values {
 			if err := projectpath.Validate(value); err != nil {
 				return err
 			}
 		}
 	}
-	for _, name := range []string{cfg.Tools.PHPStan.Config, cfg.Tools.PHPStan.Baseline, cfg.Tools.PHPStan.Autoload} {
+	for _, name := range []string{cfg.Tools.PHPStan.Config, cfg.Tools.PHPStan.Baseline, cfg.Tools.PHPStan.Autoload, cfg.Tools.TwigCSFixer.Config} {
 		if name != "" && name != "auto" {
 			if err := projectpath.Validate(name); err != nil {
 				return err
@@ -407,7 +428,7 @@ func validateValues(cfg Config) error {
 		}
 	}
 	for _, values := range [][]string{cfg.Scope.Exclude, cfg.Tools.Debug.Exclude, cfg.Tools.Syntax.Exclude, cfg.Tools.YAML.Exclude,
-		cfg.Tools.Whitespace.Exclude, cfg.Tools.Whitespace.TrailingWhitespaceExclude, cfg.Tools.Whitespace.ConflictMarkersExclude, cfg.Tools.DrupalConfig.Exclude, cfg.Tools.PHPCS.Exclude, cfg.Tools.PHPStan.Exclude} {
+		cfg.Tools.Whitespace.Exclude, cfg.Tools.Whitespace.TrailingWhitespaceExclude, cfg.Tools.Whitespace.ConflictMarkersExclude, cfg.Tools.DrupalConfig.Exclude, cfg.Tools.PHPCS.Exclude, cfg.Tools.PHPStan.Exclude, cfg.Tools.TwigCSFixer.Exclude} {
 		if err := validatePatterns(values); err != nil {
 			return err
 		}

@@ -42,7 +42,16 @@ def check_phpcs_fixtures(test, configure, run):
                 test.assertEqual(result["diagnostics"], [])
                 test.assertEqual(
                     [row["id"] for row in result["checks"]],
-                    ["debug", "drupal-config", "phpcs", "phpstan", "syntax", "whitespace", "yaml"],
+                    [
+                        "debug",
+                        "drupal-config",
+                        "phpcs",
+                        "phpstan",
+                        "syntax",
+                        "twig-cs-fixer",
+                        "whitespace",
+                        "yaml",
+                    ],
                 )
                 for row in result["findings"]:
                     test.assertEqual(row["kind"], "code")
@@ -64,6 +73,7 @@ def check_phpcs_settings(test, configure, run):
                 "phpcs",
                 "phpstan",
                 "syntax",
+                "twig-cs-fixer",
                 "whitespace",
                 "yaml",
             )

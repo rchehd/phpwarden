@@ -15,6 +15,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/checker/phpcs"
 	"github.com/rchehd/phpwarden/internal/checker/phpstan"
 	"github.com/rchehd/phpwarden/internal/checker/syntax"
+	"github.com/rchehd/phpwarden/internal/checker/twigcsfixer"
 	"github.com/rchehd/phpwarden/internal/checker/whitespace"
 	yamlcheck "github.com/rchehd/phpwarden/internal/checker/yaml"
 	"github.com/rchehd/phpwarden/internal/compatibility"
@@ -107,6 +108,10 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 				dependencies = *project.Installed.Error
 			}
 			outcome = phpstan.Run(ctx, location.Root, phpstan.Select(selection, settings, cfg.Profile), settings, cfg.PHP.Target, dependencies, process)
+		} else if id == "twig-cs-fixer" {
+			settings := cfg.Tools.TwigCSFixer
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			outcome = twigcsfixer.Run(ctx, location.Root, twigcsfixer.Select(selection, settings, cfg.Profile), settings, cfg.Profile, process)
 		} else if id == "phpcs" {
 			settings := cfg.Tools.PHPCS
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)

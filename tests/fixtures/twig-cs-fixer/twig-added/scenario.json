@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "id": "twig-added",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/templates/demo.html.twig"
+  ],
+  "settings": {},
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "twig-cs-fixer",
+      "path": "web/modules/custom/demo/templates/demo.html.twig",
+      "line": 1,
+      "contains": "{{title}}",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    },
+    {
+      "checker": "twig-cs-fixer",
+      "path": "web/modules/custom/demo/templates/demo.html.twig",
+      "line": 1,
+      "contains": "{{title}}",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

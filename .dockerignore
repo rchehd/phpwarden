@@ -19,4 +19,7 @@
 !tools/phpstan/
 !tools/phpstan/composer.json
 !tools/phpstan/composer.lock
+!tools/twig-cs-fixer/
+!tools/twig-cs-fixer/composer.json
+!tools/twig-cs-fixer/composer.lock
 **/*_test.go

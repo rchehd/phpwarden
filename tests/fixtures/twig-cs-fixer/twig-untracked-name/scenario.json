@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "id": "twig-untracked-name",
+  "state": "untracked",
+  "untracked_renames": {
+    "web/modules/custom/demo/templates/new-file.html.twig": "web/modules/custom/demo/templates/new \nfile.html.twig"
+  },
+  "changed_files": [
+    "web/modules/custom/demo/templates/new \nfile.html.twig"
+  ],
+  "settings": {},
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "twig-cs-fixer",
+      "path": "web/modules/custom/demo/templates/new \nfile.html.twig",
+      "line": 1,
+      "contains": "{{title}}",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    },
+    {
+      "checker": "twig-cs-fixer",
+      "path": "web/modules/custom/demo/templates/new \nfile.html.twig",
+      "line": 1,
+      "contains": "{{title}}",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}
