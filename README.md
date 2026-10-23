@@ -55,6 +55,7 @@ phpwarden check --whole-files                  # all lines of changed files
 phpwarden check --mode full                    # all custom code
 phpwarden check web/modules/custom/my_module   # specific paths
 phpwarden check --only phpstan,phpcs           # selected checkers
+phpwarden check --format compact               # one path:line:col line per finding
 phpwarden check --format json                  # JSON report
 ```
 
@@ -141,7 +142,26 @@ tools:
 
 ## Results
 
-Text output lists findings and checker problems. `--format json` prints one report that follows [schemas/report-v1.schema.json](schemas/report-v1.schema.json).
+The default text output groups findings by checker and file, then lists checks that could not run with a suggested fix, a table of all checks, and a result line that explains the exit code:
+
+```text
+PHPWarden · changes against origin/main · 3 files · Drupal 11.3.16 · PHP 8.4.26
+
+twig-cs-fixer — 2 errors
+  web/themes/custom/demo/templates/card.html.twig
+     71:5  error  Expecting 1 whitespace after "{{"; found 0.  DelimiterSpacing.After
+    71:35  error  Expecting 1 whitespace before "}}"; found 0.  DelimiterSpacing.Before
+
+Checks
+  ✗ twig-cs-fixer                  failed       2 errors
+  ✓ debug, phpcs, phpstan, syntax  passed
+
+Result: FAIL · 2 errors · exit 1 (blocking findings)
+```
+
+`--format compact` prints each finding on one `path:line:col` line, which editors and terminals can open directly; the summary stays the same. If the check stops before any checker runs, the output says so instead of reporting zero findings. Colors are used only in a terminal; `--color always|never` overrides that, and `NO_COLOR` disables it.
+
+`--format json` prints one report that follows [schemas/report-v1.schema.json](schemas/report-v1.schema.json). Its content and the exit codes do not depend on the text format.
 
 | Exit code | Meaning |
 |---|---|

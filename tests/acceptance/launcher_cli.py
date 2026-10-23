@@ -150,19 +150,25 @@ class LauncherCLITest(unittest.TestCase):
     def test_yaml_global_error_is_visible_in_text(self):
         with materialize(YAML_FIXTURES / "yaml-invalid-utf8") as scenario:
             self.configure(scenario.root, scenario.base)
-            completed = subprocess.run(
-                [str(self.binary), "check", "--only", "yaml"],
-                cwd=scenario.root,
-                env=scenario.env,
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            self.assertEqual(completed.returncode, 1, completed.stdout)
-            self.assertEqual(completed.stderr, "")
-            self.assertIn("YAML file", completed.stdout)
-            self.assertIn("encoding.yaml", completed.stdout)
-            self.assertIn("UTF-8", completed.stdout)
+            outputs = {}
+            for output in ("text", "compact"):
+                completed = subprocess.run(
+                    [str(self.binary), "check", "--only", "yaml", "--format", output],
+                    cwd=scenario.root,
+                    env=scenario.env,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                self.assertEqual(completed.returncode, 1, completed.stdout)
+                self.assertEqual(completed.stderr, "")
+                self.assertNotIn("\x1b[", completed.stdout)
+                self.assertIn("UTF-8", completed.stdout)
+                self.assertIn("Result: FAIL", completed.stdout)
+                outputs[output] = completed.stdout
+            self.assertIn("yaml — 1 error", outputs["text"])
+            self.assertRegex(outputs["text"], r"\n  \S*encoding\.yaml\n")
+            self.assertRegex(outputs["compact"], r"\n\S*encoding\.yaml  error  .*\[yaml: ")
 
     def run_check(self, scenario, arguments):
         before = snapshot(scenario.root)

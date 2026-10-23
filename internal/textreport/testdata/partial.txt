@@ -1,0 +1,12 @@
+PHPWarden · changes against origin/main · 1 file · Drupal 11.3.16 · PHP 8.4.26
+
+Problems
+  ✗ composer-audit  unavailable (optional)
+      Composer advisories are unavailable and no cached result is recent enough: offline mode is enabled
+      Fix: Connect to the network, or raise tools.composer-audit.max_stale_hours to accept an older cache.
+
+Checks
+  ✗ composer-audit  unavailable  advisories unavailable
+  - debug           skipped      no files
+
+Result: PARTIAL · no findings · exit 0 (an optional check could not run)

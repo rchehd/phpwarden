@@ -1,0 +1,12 @@
+PHPWarden · changes against origin/main · 1 file · Drupal 11.3.16 · PHP 8.4.26
+
+Problems
+  ✗ phpstan  error (required)
+      PHPStan did not complete within its execution context
+      Fix: Raise the checker's timeout_seconds or runner.timeout_seconds.
+
+Checks
+  ✗ phpstan  error        checker timeout
+  ✓ debug    passed
+
+Result: ERROR · no findings · exit 3 (a required check could not run)

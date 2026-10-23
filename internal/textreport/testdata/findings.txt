@@ -1,0 +1,44 @@
+PHPWarden · changes against origin/main · 3 files · Drupal 11.3.16 · PHP 8.4.26
+
+Project warnings
+  ! composer.json: duplicate JSON key "extra.patches"; the last value is used, as in Composer
+
+debug — 2 errors
+  "web/modules/custom/demo/new \nfile.module"
+      3:1  error  Debug function var_dump() is called  debug.function
+  web/modules/custom/demo/demo.module
+    108:5  error  Debug function dpm() is called  debug.function
+
+phpstan — 2 errors
+  web/modules/custom/demo/demo.module
+     4  error  Call to deprecated function demo_old().  function.deprecated
+    12  error  Function demo() should return int but returns string.  return.type
+
+twig-cs-fixer — 1 error
+  web/themes/custom/demo/card.html.twig
+      error  Unable to tokenize file: The template is invalid.  File.Invalid
+
+composer-audit — 1 warning, 1 info · advisories from network, 2026-10-23 10:01:45 UTC
+  composer.lock
+      warn   drupal/core 11.3.16: Drupal core - Cross-site scripting (CVE-2026-108514)  SA-CORE-2026-016
+             https://www.drupal.org/sa-core-2026-016
+      info   acme/old is abandoned; use acme/new instead  composer.abandoned
+
+composer-validate — 1 warning
+  composer.json
+      warn   "composer.json" does not contain valid JSON  composer.validate.warning
+             Parse error on line 1:
+             {"name":
+
+Notes
+  ! composer-audit: Using Composer advisories cached at 2026-10-20T09:00:00Z: network down
+
+Checks
+  ✗ debug              failed       2 errors
+  ✗ phpstan            failed       2 errors
+  ✗ twig-cs-fixer      failed       1 error
+  ✓ composer-audit     passed       1 warning, 1 info
+  ✓ composer-validate  passed       1 warning
+  ✓ yaml               passed
+
+Result: FAIL · 5 errors, 2 warnings, 1 info · exit 1 (blocking findings)

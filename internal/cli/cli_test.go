@@ -52,7 +52,8 @@ func TestUsageErrorsNeverReturnSuccess(t *testing.T) {
 		{"config", "show", "--project"}, {"config", "show", "--config="},
 		{"config", "show", "--config", "--help"}, {"config", "show", "--only", "phpstna"},
 		{"config", "show", "--format", "xml"}, {"config", "show", "--format", "json", "--format", "text"},
-		{"--version", "config", "show"},
+		{"--version", "config", "show"}, {"check", "--color", "purple"}, {"config", "show", "--format", "compact"},
+		{"scope", "--format", "compact"},
 	}
 	for _, args := range cases {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
@@ -149,7 +150,7 @@ func TestGlobalYAMLFailureIsVisibleInText(t *testing.T) {
 	result.Findings = []report.Finding{{Checker: "yaml", Rule: "yaml.syntax", Kind: "global", Severity: "error", Message: `YAML file "config.yml": invalid UTF-8`}}
 	result.Finalize()
 	var stdout, stderr bytes.Buffer
-	if code := writeReport(&stdout, &stderr, "text", result); code != 1 || !strings.Contains(stdout.String(), result.Findings[0].Message) || stderr.Len() != 0 {
+	if code := writeReport(&stdout, &stderr, "text", "never", result); code != 1 || !strings.Contains(stdout.String(), "  config.yml\n") || !strings.Contains(stdout.String(), "invalid UTF-8") || stderr.Len() != 0 {
 		t.Fatalf("global finding is not visible: exit=%d %s %s", code, &stdout, &stderr)
 	}
 }

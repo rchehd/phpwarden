@@ -1,0 +1,10 @@
+PHPWarden · changes against origin/main · 1 file · Drupal 11.3.16 · PHP 8.4.26
+
+Problems
+  ✗ launcher: Git scope changed during the check
+    Fix: Run the check again once the files stop changing.
+
+Checks
+  ✓ debug  passed
+
+Result: ERROR · no findings · exit 3 (the project changed during the check)

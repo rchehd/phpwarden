@@ -1,0 +1,6 @@
+PHPWarden did not run any checks.
+
+  ✗ compatibility: no compatible entry in manifest "development" for profile=drupal framework=11.3.16 PHP runtime=8.3
+    Fix: Check php.runtime and php.target in .phpwarden.yaml; the development image supports PHP 8.4.
+
+Result: NOT RUN · exit 2 (configuration, arguments, or project metadata)

@@ -19,6 +19,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/runner"
 	"github.com/rchehd/phpwarden/internal/runrequest"
 	"github.com/rchehd/phpwarden/internal/scope"
+	"github.com/rchehd/phpwarden/internal/textreport"
 	"github.com/rchehd/phpwarden/internal/toolset"
 	"github.com/rchehd/phpwarden/internal/worker"
 	"github.com/rchehd/phpwarden/schemas"
@@ -33,7 +34,8 @@ const usage = `Usage: phpwarden config <validate|show> [options]
 Options:
   --project PATH       Project root
   --config PATH        Configuration file, relative to caller directory
-  --format text|json   Output format (default text)
+  --format FORMAT      text (grouped, default), compact (one path:line:col per finding; check only), or json
+  --color MODE         auto (default; terminals without NO_COLOR), always, or never
   --help               Show help
   --version            Show version
 
@@ -52,6 +54,7 @@ type options struct {
 	project    string
 	config     string
 	format     string
+	color      string
 	help       bool
 	version    bool
 	command    []string
@@ -101,19 +104,19 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	}
 	if len(args.command) == 2 && args.command[0] == "worker" && args.command[1] == "execute" {
 		if len(arguments) != 2 {
-			return writeReport(stdout, stderr, "json", report.InputError("request", fmt.Errorf("worker execute accepts only its stdin request")))
+			return writeReport(stdout, stderr, "json", "never", report.InputError("request", fmt.Errorf("worker execute accepts only its stdin request")))
 		}
 		decoder := json.NewDecoder(io.LimitReader(stdin, 32<<20))
 		decoder.DisallowUnknownFields()
 		var request runrequest.Request
 		if err := decoder.Decode(&request); err != nil {
-			return writeReport(stdout, stderr, "json", report.InputError("request", err))
+			return writeReport(stdout, stderr, "json", "never", report.InputError("request", err))
 		}
 		var extra any
 		if err := decoder.Decode(&extra); err != io.EOF {
-			return writeReport(stdout, stderr, "json", report.InputError("request", fmt.Errorf("expected one run request")))
+			return writeReport(stdout, stderr, "json", "never", report.InputError("request", fmt.Errorf("expected one run request")))
 		}
-		return writeReport(stdout, stderr, "json", worker.Execute(ctx, cwd, request, runner.Exec{}))
+		return writeReport(stdout, stderr, "json", "never", worker.Execute(ctx, cwd, request, runner.Exec{}))
 	}
 	isScope := len(args.command) > 0 && args.command[0] == "scope"
 	isWorker := workerCommand(args)
@@ -121,6 +124,9 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	isResolve := len(args.command) == 1 && args.command[0] == "resolve"
 	isConfig := len(args.command) == 2 && args.command[0] == "config" &&
 		(args.command[1] == "validate" || args.command[1] == "show")
+	if args.format == "compact" && !isWorker && !isCheck {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("--format compact applies only to check and worker check"))
+	}
 	if !isScope && !isConfig && !isWorker && !isCheck && !isResolve {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("expected config validate/show, resolve, scope, check, or worker check; use --help"))
 	}
@@ -166,7 +172,7 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		} else {
 			result = worker.Check(ctx, location, effective, options, only, runner.Exec{})
 		}
-		return writeReport(stdout, stderr, args.format, result)
+		return writeReport(stdout, stderr, args.format, args.color, result)
 	}
 	result := response{
 		Version: 1, Command: strings.Join(args.command, " "), Valid: true,
@@ -207,7 +213,7 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 }
 
 func parse(arguments []string) (options, error) {
-	result := options{format: "text"}
+	result := options{format: "text", color: "auto"}
 	seen := map[string]bool{}
 	for i := 0; i < len(arguments); i++ {
 		argument := arguments[i]
@@ -231,7 +237,7 @@ func parse(arguments []string) (options, error) {
 			continue
 		}
 		name, value, inline := strings.Cut(argument, "=")
-		if name != "--project" && name != "--config" && name != "--format" && name != "--mode" && name != "--base" && name != "--only" {
+		if name != "--project" && name != "--config" && name != "--format" && name != "--mode" && name != "--base" && name != "--only" && name != "--color" {
 			return result, fmt.Errorf("unknown option %q", name)
 		}
 		if seen[name] {
@@ -263,10 +269,15 @@ func parse(arguments []string) (options, error) {
 		case "--config":
 			result.config = value
 		case "--format":
-			if value != "text" && value != "json" {
+			if value != "text" && value != "json" && value != "compact" {
 				return result, fmt.Errorf("unsupported format %q", value)
 			}
 			result.format = value
+		case "--color":
+			if value != "auto" && value != "always" && value != "never" {
+				return result, fmt.Errorf("unsupported color mode %q", value)
+			}
+			result.color = value
 		}
 	}
 	if result.version && (len(result.command) != 0 || len(seen) != 0 || result.help || result.wholeFiles) {
@@ -364,7 +375,7 @@ func writeScope(args options, location config.Location, selection scope.Selectio
 
 func fail(stdout, stderr io.Writer, args options, stage string, err error) int {
 	if workerCommand(args) || len(args.command) > 0 && args.command[0] == "check" {
-		return writeReport(stdout, stderr, args.format, report.InputError(stage, err))
+		return writeReport(stdout, stderr, args.format, args.color, report.InputError(stage, err))
 	}
 	if args.format == "json" {
 		result := response{
@@ -385,7 +396,7 @@ func workerCommand(args options) bool {
 	return len(args.command) >= 2 && args.command[0] == "worker" && args.command[1] == "check"
 }
 
-func writeReport(stdout, stderr io.Writer, format string, result report.Report) int {
+func writeReport(stdout, stderr io.Writer, format, color string, result report.Report) int {
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -405,37 +416,23 @@ func writeReport(stdout, stderr io.Writer, format string, result report.Report) 
 			fmt.Fprintln(stderr, err)
 			return 3
 		}
-	} else {
-		label := strings.ToUpper(result.Verdict)
-		if !result.Complete && result.ExitCode == 0 {
-			label = "PARTIAL"
-		}
-		fmt.Fprintf(stdout, "%s (%d findings)\n", label, len(result.Findings))
-		if result.Environment != nil && len(result.Environment.CompatibilityPending) > 0 {
-			fmt.Fprintf(stdout, "Compatibility pending: %s\n", strings.Join(result.Environment.CompatibilityPending, ", "))
-		}
-		if result.Environment != nil {
-			for _, warning := range result.Environment.DiscoveryWarnings {
-				fmt.Fprintf(stdout, "Discovery warning: %s\n", warning)
-			}
-		}
-		for _, finding := range result.Findings {
-			if finding.Path != nil && finding.Line != nil {
-				fmt.Fprintf(stdout, "%q:%d: %s\n", *finding.Path, *finding.Line, finding.Message)
-			} else {
-				fmt.Fprintln(stdout, finding.Message)
-			}
-		}
-		for _, check := range result.Checks {
-			if check.Reason != nil {
-				fmt.Fprintf(stdout, "%s: %s (%s)\n", check.ID, check.Status, *check.Reason)
-			}
-		}
-		for _, diagnostic := range result.Diagnostics {
-			fmt.Fprintf(stdout, "%s: %s\n", diagnostic.Code, diagnostic.Message)
-		}
+	} else if err := textreport.Write(stdout, result, textreport.Options{Compact: format == "compact", Color: useColor(color, stdout)}); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 3
 	}
 	return result.ExitCode
+}
+
+func useColor(mode string, stdout io.Writer) bool {
+	if mode != "auto" {
+		return mode == "always"
+	}
+	file, ok := stdout.(*os.File)
+	if !ok || os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
+		return false
+	}
+	info, err := file.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
 func writeJSON(writer io.Writer, value any) error {
