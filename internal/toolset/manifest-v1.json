@@ -1,24 +1,24 @@
 {
   "version": 1,
   "release": "development",
-  "protocol": 1,
+  "protocol": 2,
   "entries": [
     {
-      "id": "drupal-debug-dev-php8.4",
+      "id": "drupal-static-dev-php8.4",
       "profile": "drupal",
-      "preset": {"id": "drupal-debug", "version": "1.0.0"},
+      "preset": {"id": "drupal-static", "version": "1.0.0"},
       "framework": null,
       "php": {
         "runtime": "8.4",
         "version": "8.4.26",
         "targets": {"min": "8.4", "max": "8.4"}
       },
-      "toolset": "debug-dev-v1-php8.4",
+      "toolset": "static-dev-v1-php8.4",
       "tools": {"php": "8.4.26"},
-      "capabilities": ["debug"],
+      "capabilities": ["debug", "syntax"],
       "development": true,
       "images": [
-        {"platform": "linux/amd64", "reference": "phpwarden:debug-php8.4-dev"}
+        {"platform": "linux/amd64", "reference": "phpwarden:static-php8.4-dev"}
       ]
     }
   ]

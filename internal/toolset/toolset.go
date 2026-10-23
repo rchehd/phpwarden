@@ -12,8 +12,8 @@ import (
 	"github.com/rchehd/phpwarden/internal/phpconstraint"
 )
 
-const DebugID = "debug-dev-v1-php8.4"
-const DebugPHPVersion = "8.4.26"
+const DevelopmentID = "static-dev-v1-php8.4"
+const DevelopmentPHPVersion = "8.4.26"
 
 type Selection struct {
 	Release          string            `json:"release"`

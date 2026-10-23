@@ -1,0 +1,8 @@
+--- a/web/modules/custom/demo/demo.module
++++ b/web/modules/custom/demo/demo.module
+@@ -7,4 +7,4 @@
+ 
+ 
+ 
+-$other = 1;
++$other = 2;

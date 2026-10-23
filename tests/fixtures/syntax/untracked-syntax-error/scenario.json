@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "id": "untracked-syntax-error",
+  "state": "untracked",
+  "changed_files": [
+    "web/modules/custom/demo/broken file.module"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "syntax",
+      "path": "web/modules/custom/demo/broken file.module",
+      "line": 2,
+      "contains": "$value = ;",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

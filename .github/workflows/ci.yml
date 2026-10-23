@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   docker:
-    name: Docker debug worker integration
+    name: Docker static worker integration
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -19,11 +19,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Build development worker image
-        run: docker build --platform linux/amd64 -f docker/Dockerfile -t phpwarden:debug-php8.4-dev .
+        run: docker build --platform linux/amd64 -f docker/Dockerfile -t phpwarden:static-php8.4-dev .
       - name: Run real Docker fixture tests
         run: python -m unittest tests.acceptance.docker_worker -v
         env:
-          PHPWARDEN_TEST_IMAGE: phpwarden:debug-php8.4-dev
+          PHPWARDEN_TEST_IMAGE: phpwarden:static-php8.4-dev
       - name: Run public launcher fixture tests
         run: python -m unittest tests.acceptance.launcher_cli -v
 

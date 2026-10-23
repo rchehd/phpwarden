@@ -27,7 +27,7 @@ func parseFixture(t *testing.T, entries ...entry) Catalog {
 	if entries == nil {
 		entries = []entry{}
 	}
-	data, err := json.Marshal(manifest{Version: 1, Release: "fixture-1", Protocol: 1, Entries: entries})
+	data, err := json.Marshal(manifest{Version: 1, Release: "fixture-1", Protocol: 2, Entries: entries})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestReleaseResolutionMatrix(t *testing.T) {
 			}
 			if err != nil || selected.Entry != tc.want || selected.Platform != tc.platform || selected.Release != "fixture-1" ||
 				selected.Preset.ID != "drupal-fixture" || selected.FrameworkVersion == nil || *selected.FrameworkVersion != tc.framework || selected.Development ||
-				!strings.Contains(selected.Image, "@sha256:") || selected.Tools["phpstan"] != "2.1.0" || selected.Protocol != 1 {
+				!strings.Contains(selected.Image, "@sha256:") || selected.Tools["phpstan"] != "2.1.0" || selected.Protocol != 2 {
 				t.Fatalf("wrong release selection: %+v %v", selected, err)
 			}
 		})
@@ -138,7 +138,7 @@ func TestInvalidManifests(t *testing.T) {
 		edit func(*manifest)
 	}{
 		{"manifest version", func(m *manifest) { m.Version = 2 }},
-		{"protocol version", func(m *manifest) { m.Protocol = 2 }},
+		{"protocol version", func(m *manifest) { m.Protocol = 1 }},
 		{"duplicate ID", func(m *manifest) { m.Entries = append(m.Entries, m.Entries[0]) }},
 		{"missing framework", func(m *manifest) { m.Entries[0].Framework = nil }},
 		{"invalid framework", func(m *manifest) { m.Entries[0].Framework = new("dev-main") }},
@@ -176,7 +176,7 @@ func TestInvalidManifests(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			source := manifest{Version: 1, Protocol: 1, Release: "fixture-1", Entries: []entry{fixtureEntry("d11", ">=11 <12", "8.4", "8.4.26", "8.3", "8.4")}}
+			source := manifest{Version: 1, Protocol: 2, Release: "fixture-1", Entries: []entry{fixtureEntry("d11", ">=11 <12", "8.4", "8.4.26", "8.3", "8.4")}}
 			tc.edit(&source)
 			data, _ := json.Marshal(source)
 			if _, err := ParseManifest(data); err == nil {
@@ -214,7 +214,7 @@ func TestBundledDevelopmentAndConcurrentSelections(t *testing.T) {
 	for range 20 {
 		group.Go(func() {
 			selected, err := catalog.Resolve(effective, "linux/amd64")
-			if err != nil || !selected.Development || selected.Release != "development" || selected.ID != DebugID || selected.PHPVersion != DebugPHPVersion || selected.FrameworkVersion != nil {
+			if err != nil || !selected.Development || selected.Release != "development" || selected.ID != DevelopmentID || selected.PHPVersion != DevelopmentPHPVersion || selected.FrameworkVersion != nil {
 				t.Errorf("wrong bundled selection: %+v %v", selected, err)
 				return
 			}

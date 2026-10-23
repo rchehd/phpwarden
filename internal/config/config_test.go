@@ -34,6 +34,11 @@ func TestDefaultsAndProvenance(t *testing.T) {
 	if !slices.Contains(debug.Functions, "var_dump") || !slices.Contains(debug.Functions, "dpm") {
 		t.Fatalf("missing base/Drupal debug functions: %v", debug.Functions)
 	}
+	syntax := result.Config.Tools.Syntax
+	if !syntax.Enabled || !syntax.Required || syntax.FailOn != "error" || syntax.TimeoutSeconds != 120 || syntax.ExtraExtensions == nil ||
+		result.Provenance["tools.syntax.enabled"] != "profile_default" {
+		t.Fatalf("unexpected syntax defaults: %+v", syntax)
+	}
 	if result.Provenance["php.runtime"] != "project_config" ||
 		result.Provenance["tools.debug.functions"] != "profile_default" ||
 		result.Provenance["scope.mode"] != "core_default" {
@@ -134,6 +139,15 @@ func TestInvalidConfigurations(t *testing.T) {
 		"empty functions":       minimal + "tools: {debug: {functions: []}}\n",
 		"duplicate function":    minimal + "tools: {debug: {functions: [var_dump, VAR_DUMP]}}\n",
 		"invalid function":      minimal + "tools: {debug: {functions: ['var_dump()']}}\n",
+		"syntax level":          minimal + "tools: {syntax: {level: 5}}\n",
+		"syntax zero timeout":   minimal + "tools: {syntax: {timeout_seconds: 0}}\n",
+		"syntax bad policy":     minimal + "tools: {syntax: {fail_on: errors}}\n",
+		"syntax bad extension":  minimal + "tools: {syntax: {extra_extensions: [php]}}\n",
+		"syntax path extension": minimal + "tools: {syntax: {extra_extensions: ['../php']}}\n",
+		"syntax duplicate ext":  minimal + "tools: {syntax: {extra_extensions: [.phtml, .phtml]}}\n",
+		"syntax upper ext":      minimal + "tools: {syntax: {extra_extensions: [.PHTML]}}\n",
+		"syntax bad include":    minimal + "tools: {syntax: {include: [../outside]}}\n",
+		"syntax bad exclude":    minimal + "tools: {syntax: {exclude: ['[']}}\n",
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -11,6 +11,10 @@ scope:
   mode: diff
   base: origin/main
 tools:
+  syntax:
+    enabled: true
+    required: true
+    fail_on: error
   debug:
     enabled: true
     required: true

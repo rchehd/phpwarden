@@ -41,7 +41,7 @@ func fixture(t *testing.T) (config.Location, config.Effective, scope.Options) {
 		t.Fatal(err)
 	}
 	filename := filepath.Join(root, config.Filename)
-	data := `{"version":1,"profile":"drupal","php":{"runtime":"8.4","target":{"min":"8.4","max":"8.4"}},"scope":{"mode":"full","include":["src"]}}`
+	data := `{"version":1,"profile":"drupal","php":{"runtime":"8.4","target":{"min":"8.4","max":"8.4"}},"scope":{"mode":"full","include":["src"]},"tools":{"syntax":{"enabled":false}}}`
 	if err := os.WriteFile(filename, []byte(data), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func dockerDouble(t *testing.T, location config.Location, calls *[]runner.Comman
 		case "context":
 			return runner.Result{Stdout: []byte(`"unix:///var/run/docker.sock"`)}
 		case "image":
-			return runner.Result{Stdout: []byte(`[{"Id":"` + testImage + `","Os":"linux","Architecture":"amd64","Config":{"Labels":{"io.phpwarden.protocol":"1","io.phpwarden.toolset":"` + toolset.DebugID + `","io.phpwarden.checkers":"debug","io.phpwarden.php-version":"8.4.26"}}}]`)}
+			return runner.Result{Stdout: []byte(`[{"Id":"` + testImage + `","Os":"linux","Architecture":"amd64","Config":{"Labels":{"io.phpwarden.protocol":"2","io.phpwarden.toolset":"` + toolset.DevelopmentID + `","io.phpwarden.checkers":"debug,syntax","io.phpwarden.php-version":"8.4.26"}}}]`)}
 		case "run":
 			for _, argument := range []string{"--read-only", "--network=none", "--cap-drop=ALL", "--security-opt=no-new-privileges:true", "--pull=never", testImage} {
 				if !slices.Contains(command.Args, argument) {
@@ -113,7 +113,7 @@ func dockerDouble(t *testing.T, location config.Location, calls *[]runner.Comman
 func TestDockerTransportUsesPinnedImageAndVersionedRequest(t *testing.T) {
 	location, effective, options := fixture(t)
 	var calls []runner.Command
-	result := Check(context.Background(), location, effective, options, true, dockerDouble(t, location, &calls))
+	result := Check(context.Background(), location, effective, options, []string{"debug"}, dockerDouble(t, location, &calls))
 	if result.ExitCode != 1 || !result.Complete || len(result.Findings) != 1 || *result.Environment.Image != testImage {
 		t.Fatalf("wrong worker result: %+v", result)
 	}
@@ -134,7 +134,7 @@ func TestDockerFailuresCannotReturnClean(t *testing.T) {
 				}
 				result := base(ctx, command)
 				if which == "wrong labels" && command.Args[0] == "image" {
-					result.Stdout = bytesReplace(result.Stdout, `"io.phpwarden.protocol":"1"`, `"io.phpwarden.protocol":"2"`)
+					result.Stdout = bytesReplace(result.Stdout, `"io.phpwarden.protocol":"2"`, `"io.phpwarden.protocol":"1"`)
 				}
 				if command.Args[0] != "run" {
 					return result
@@ -166,7 +166,7 @@ func TestDockerFailuresCannotReturnClean(t *testing.T) {
 				}
 				return result
 			})
-			result := Check(context.Background(), location, effective, options, false, process)
+			result := Check(context.Background(), location, effective, options, nil, process)
 			if result.ExitCode != 3 || result.Complete || result.Verdict != "error" {
 				t.Fatalf("failure accepted: %+v", result)
 			}
@@ -201,7 +201,7 @@ func TestCancellationAndTimeoutCleanUpContainers(t *testing.T) {
 			}
 			return base(ctx, command)
 		})
-		result := Check(ctx, location, effective, options, false, process)
+		result := Check(ctx, location, effective, options, nil, process)
 		cancel()
 		want := 130
 		if timeout {
@@ -222,7 +222,7 @@ func TestEmptyScopeNeedsNoDockerAndRemoteContextsAreRejected(t *testing.T) {
 		t.Fatal("empty scope must not invoke a process")
 		return runner.Result{}
 	})
-	result := Check(context.Background(), location, effective, options, false, unused)
+	result := Check(context.Background(), location, effective, options, nil, unused)
 	if result.ExitCode != 0 || !result.Complete || result.Checks[0].Status != "skipped" {
 		t.Fatalf("empty scope failed: %+v", result)
 	}

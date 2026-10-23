@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "id": "added-syntax-error",
+  "state": "unstaged",
+  "patch": "change.patch",
+  "changed_files": [
+    "web/modules/custom/demo/demo.module"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "syntax",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 4,
+      "contains": "$value = ;",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

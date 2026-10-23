@@ -12,10 +12,10 @@ import (
 
 func TestReleaseImageInspectionVerifiesDigestAndManifestLabels(t *testing.T) {
 	selected := toolset.Selection{ID: "fixture-toolset", Image: "ghcr.io/example/fixture@" + testImage,
-		Platform: "linux/amd64", Protocol: 1, Capabilities: []string{"debug", "phpstan"}, PHPVersion: "8.4.26"}
+		Platform: "linux/amd64", Protocol: 2, Capabilities: []string{"debug", "phpstan"}, PHPVersion: "8.4.26"}
 	for _, which := range []string{"matching", "missing digest", "wrong digest", "wrong platform", "wrong protocol", "wrong toolset", "wrong capabilities", "wrong PHP", "missing image"} {
 		t.Run(which, func(t *testing.T) {
-			labels := map[string]string{"io.phpwarden.protocol": "1", "io.phpwarden.toolset": selected.ID,
+			labels := map[string]string{"io.phpwarden.protocol": "2", "io.phpwarden.toolset": selected.ID,
 				"io.phpwarden.checkers": "debug,phpstan", "io.phpwarden.php-version": selected.PHPVersion}
 			digests := []string{selected.Image}
 			architecture := "amd64"
@@ -27,7 +27,7 @@ func TestReleaseImageInspectionVerifiesDigestAndManifestLabels(t *testing.T) {
 			case "wrong platform":
 				architecture = "arm64"
 			case "wrong protocol":
-				labels["io.phpwarden.protocol"] = "2"
+				labels["io.phpwarden.protocol"] = "1"
 			case "wrong toolset":
 				labels["io.phpwarden.toolset"] = "other"
 			case "wrong capabilities":

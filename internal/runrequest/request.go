@@ -13,10 +13,12 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/phpconstraint"
 	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/projectpath"
+	"github.com/rchehd/phpwarden/internal/protocol"
 	"github.com/rchehd/phpwarden/internal/scope"
 )
 
@@ -28,7 +30,7 @@ type Request struct {
 	Project        *profile.Facts    `json:"project,omitempty"`
 	Selection      scope.Selection   `json:"selection"`
 	Fingerprint    map[string]string `json:"fingerprint"`
-	OnlyDebug      bool              `json:"only_debug"`
+	Only           []string          `json:"only,omitempty"`
 	Image          string            `json:"image"`
 	Toolset        string            `json:"toolset"`
 	RuntimeVersion string            `json:"runtime_version,omitempty"`
@@ -37,7 +39,7 @@ type Request struct {
 var imageID = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 var runID = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
 
-func Build(location config.Location, effective config.Effective, selection scope.Selection, onlyDebug bool, image, toolset string) (Request, error) {
+func Build(location config.Location, effective config.Effective, selection scope.Selection, only []string, image, toolset string) (Request, error) {
 	fingerprint, err := Snapshot(location, selection)
 	if err != nil {
 		return Request{}, err
@@ -45,14 +47,17 @@ func Build(location config.Location, effective config.Effective, selection scope
 	if fingerprint["config"] != effective.SourceHash {
 		return Request{}, fmt.Errorf("configuration changed after loading")
 	}
-	result := Request{Version: 1, RunID: rand.Text(), ConfigFile: filepath.Base(location.Path), Config: effective.Config,
-		Project: effective.Project, Selection: selection, Fingerprint: fingerprint, OnlyDebug: onlyDebug, Image: image, Toolset: toolset}
+	result := Request{Version: protocol.Version, RunID: rand.Text(), ConfigFile: filepath.Base(location.Path), Config: effective.Config,
+		Project: effective.Project, Selection: selection, Fingerprint: fingerprint, Only: only, Image: image, Toolset: toolset}
 	return result, result.Validate()
 }
 
 func (request Request) Validate() error {
-	if request.Version != 1 || !runID.MatchString(request.RunID) || !imageID.MatchString(request.Image) || request.Toolset == "" {
+	if request.Version != protocol.Version || !runID.MatchString(request.RunID) || !imageID.MatchString(request.Image) || request.Toolset == "" {
 		return fmt.Errorf("invalid run request version, identity, or image/toolset")
+	}
+	if err := checker.ValidateOnly(request.Only); err != nil {
+		return err
 	}
 	if request.RuntimeVersion != "" {
 		canonical, err := phpconstraint.StableVersion(request.RuntimeVersion)

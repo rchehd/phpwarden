@@ -30,7 +30,7 @@ func Execute(ctx context.Context, root string, request runrequest.Request, proce
 	if err := request.Validate(); err != nil {
 		return failure("request_invalid", err)
 	}
-	if request.Toolset != toolset.DebugID {
+	if request.Toolset != toolset.DevelopmentID {
 		return failure("toolset_mismatch", fmt.Errorf("worker does not support requested toolset %q", request.Toolset))
 	}
 	location := config.Location{Root: root, Path: filepath.Join(root, request.ConfigFile)}
@@ -57,7 +57,7 @@ func Execute(ctx context.Context, root string, request runrequest.Request, proce
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(effective.Config.Runner.TimeoutSeconds)*time.Second)
 	defer cancel()
-	result := analyze(ctx, location, effective.Config, request.Selection, request.OnlyDebug, process)
+	result := analyze(ctx, location, effective.Config, request.Selection, request.Only, process)
 	validateRuntime(&result, effective)
 	result.RunID = request.RunID
 	result.Environment.Image, result.Environment.Toolset = &request.Image, &request.Toolset

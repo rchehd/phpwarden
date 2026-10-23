@@ -8,7 +8,7 @@
   "properties": {
     "version": {"const": 1},
     "release": {"$ref": "#/$defs/id"},
-    "protocol": {"const": 1},
+    "protocol": {"const": 2},
     "entries": {
       "type": "array",
       "items": {"$ref": "#/$defs/entry"}

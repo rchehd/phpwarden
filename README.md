@@ -14,7 +14,7 @@ PHPWarden is being designed as a standalone CLI with Docker-based tools and adap
 
 ## Development status
 
-The project is in early development. The Go CLI validates configuration, discovers Drupal layout and locked versions, inspects Git scope, selects a development toolset, and runs a PHP debug checker through Docker. A local development image contains PHP 8.4 and Git. Published images, automatic pulls, and agent integrations are not available yet.
+The project is in early development. The Go CLI validates configuration, discovers Drupal layout and locked versions, inspects Git scope, selects a development toolset, and runs PHP debug and syntax checkers through Docker. A local development image contains PHP 8.4 and Git. Published images, automatic pulls, and agent integrations are not available yet.
 
 ## Build and try the CLI
 
@@ -28,7 +28,7 @@ bin/phpwarden config show --config examples/drupal.phpwarden.yaml --format json
 
 For a project, save its configuration as `.phpwarden.yaml` in the project root. The CLI finds the nearest configuration from the current directory up to the Git worktree root, or accepts an explicit `--project` or `--config` path. Explicit paths also allow configuration validation outside Git. Relative command-line paths are resolved from the caller's directory.
 
-Validation checks YAML structure, the [v1 schema](schemas/config-v1.schema.json), PHP target ranges, and path boundaries. It rejects unknown fields and checker IDs, duplicate keys, aliases, and numeric PHP versions. Currently only the `debug` checker is implemented.
+Validation checks YAML structure, the [v1 schema](schemas/config-v1.schema.json), PHP target ranges, and path boundaries. It rejects unknown fields and checker IDs, duplicate keys, aliases, and numeric PHP versions. The implemented checkers are `debug` and `syntax`, both enabled by default.
 
 `config show` includes discovered project facts, core and Drupal defaults, explicit project overrides, and their provenance. Its `pending` list identifies unresolved values. `config validate` checks configuration syntax/schema and path boundaries without inspecting Composer metadata. Discovery validates Composer PHP requirements and compares installed Drupal version metadata when available. Full dependency integrity and release image compatibility remain future work. The development launcher currently requires PHP runtime and target `"8.4"`.
 
@@ -55,7 +55,7 @@ Scope inspection uses discovered Drupal custom directories when `scope.include` 
 
 Discovery reads files and directory metadata without loading Drupal, running Composer scripts, installing dependencies, or accessing a database. It runs for `config show`, `scope`, `resolve`, and both check commands. Use `config show --format json` to inspect `effective.project`, resolved configuration, provenance, and pending fields.
 
-The framework version comes from exact `drupal/core` or `drupal/core-recommended` entries in `composer.lock`, with installed core metadata as a fallback when the lock does not supply a version. A leading `v` is normalized. Conflicting metadata or a conflict with explicit `framework.version` are errors. Constraints, development branches, and prerelease versions are not guessed as stable versions. Without a usable discovered version, an explicit exact version is accepted with `project_config` provenance; otherwise the version stays pending. The current debug-only toolset can run with a pending version; future framework-dependent adapters will require verified compatibility.
+The framework version comes from exact `drupal/core` or `drupal/core-recommended` entries in `composer.lock`, with installed core metadata as a fallback when the lock does not supply a version. A leading `v` is normalized. Conflicting metadata or a conflict with explicit `framework.version` are errors. Constraints, development branches, and prerelease versions are not guessed as stable versions. Without a usable discovered version, an explicit exact version is accepted with `project_config` provenance; otherwise the version stays pending. The current framework-independent static toolset can run with a pending version; future framework-dependent adapters will require verified compatibility.
 
 The web root comes from Composer's `extra.drupal-scaffold.locations.web-root`, then `extra.installer-paths` for `type:drupal-core`. Otherwise a unique root, `web/`, or `docroot/` layout is recognized through `core/lib/Drupal.php` or custom directory conventions. Conflicting or ambiguous layouts return an error. These metadata fields follow [Drupal's Composer configuration](https://www.drupal.org/docs/develop/using-composer/manage-dependencies).
 
@@ -94,6 +94,19 @@ The checker tokenizes PHP source without executing it or loading project depende
 
 `tools.debug.enabled`, `required`, `fail_on`, `timeout_seconds`, `include`, and `exclude` control execution. `--only debug` explicitly enables the checker even when disabled in configuration. Reporting uses the shared Git line map. No project `vendor` directory is required.
 
+## Check PHP syntax
+
+`syntax` runs `php -l` separately for each selected PHP/Drupal file, without executing the source or loading project dependencies. It reports parser and compile errors across the entire selected file, including unchanged lines and files changed only by deletions. Error positions can point to the end of a file. Missing executables, timeouts, resource failures, and unrecognized tool output produce execution errors rather than a clean result.
+
+```sh
+phpwarden check --only syntax
+phpwarden check --only debug,syntax --mode full
+```
+
+Settings live under `tools.syntax`: `enabled`, `required`, `fail_on`, `timeout_seconds`, `include`, `exclude`, and `extra_extensions`. The timeout covers the complete syntax run. Default extensions are `.php`, `.module`, `.inc`, `.install`, `.theme`, `.profile`, `.engine`, and `.test`; `extra_extensions: [".phtml"]` adds to that list. `fail_on: never` keeps findings visible without blocking. Explicit `--only` enables the selected checkers and excludes all others; unknown or duplicate IDs are input errors.
+
+Lint uses the image's PHP runtime, currently 8.4.26. It does not prove compatibility with every configured PHP target, resolve missing functions/classes, or check interactions between separately compiled files. Deprecation and warning checks belong to other adapters. No site, database, Composer installation, or project `vendor` directory is needed.
+
 Reports follow the [v1 report schema](schemas/report-v1.schema.json), which is embedded and validated before output. Exit codes are `0` for no blocking findings, `1` for blocking findings, `2` for input errors, and `3` for required checker/process failures or changed inputs. Optional failures return `complete: false` and a visible `PARTIAL` text result. The worker checks file/configuration checksums and recomputes scope after analysis. Each helper run owns and removes its temporary directory.
 
 Reports include `environment.framework_version` when an exact version is available. Direct `worker check` reports have no resolved image/toolset metadata. Public `check` reports identify the inspected immutable local image ID and development toolset. Release compatibility validation remains pending.
@@ -110,7 +123,7 @@ phpwarden check --whole-files
 phpwarden check web/modules/custom/demo
 ```
 
-`resolve` reads the compatibility manifest embedded in the CLI, without Docker or network access. Its JSON selection includes the manifest release, entry, preset, tool versions, image, and platform. The bundled manifest currently contains only the development debug entry: Linux amd64, profile `drupal`, and PHP runtime/target `"8.4"`. This entry is explicitly independent of Drupal APIs and does not establish a Drupal version support matrix.
+`resolve` reads the compatibility manifest embedded in the CLI, without Docker or network access. Its JSON selection includes the manifest release, entry, preset, tool versions, image, and platform. The bundled manifest currently contains only the development static entry: Linux amd64, profile `drupal`, and PHP runtime/target `"8.4"`. This entry is explicitly independent of Drupal APIs and does not establish a Drupal version support matrix.
 
 The manifest schema is [manifest-v1.schema.json](schemas/manifest-v1.schema.json); the bundled data lives in [internal/toolset/manifest-v1.json](internal/toolset/manifest-v1.json). Release entries specify a framework version constraint, PHP runtime and exact patch, supported target range, versioned preset, toolset and exact tool versions, capabilities, and platform-specific image references pinned as `registry/repository@sha256:…`. Resolution requires one matching entry, including the project's Composer PHP requirements. Missing or ambiguous matches fail; entry order does not determine priority. A toolset/image may serve multiple non-overlapping framework ranges.
 
@@ -118,16 +131,16 @@ Only the tested development image is bundled today. Release-selection tests use 
 
 `check` computes Git scope on the host, verifies the local image's platform/protocol/toolset/PHP labels, and starts it by its inspected image ID. It sends a versioned request with effective settings, selected files/lines, input checksums, and the expected PHP version over stdin. The worker verifies inputs and its actual PHP version; the launcher also rechecks host checksums and Git scope. Linked worktrees and monorepos work without mounting external Git metadata into the worker.
 
-The launcher requires host Git and a local Docker Unix socket, with no host PHP, Composer, or Go requirement for the built binary. It mounts the project read-only, uses your UID/GID, disables container networking, and gives each run its own temporary filesystem and container name. Interruptions return `130`; global timeouts and runner failures return `3`, with best-effort removal of the run's container. An empty scope or disabled checker needs no Docker process after configuration/toolset validation.
+The launcher requires host Git and a local Docker Unix socket, with no host PHP, Composer, or Go requirement for the built binary. It mounts the project read-only, uses your UID/GID, disables container networking, and gives each run its own temporary filesystem and container name. Interruptions return `130`; global timeouts and runner failures return `3`, with best-effort removal of the run's container. An empty scope or disabling all requested checkers needs no Docker process after configuration/toolset validation.
 
-The development image must already exist under `phpwarden:debug-php8.4-dev`; a missing image returns an error with build instructions. There is no registry fallback or pull for this unpublished tag. Remote Docker contexts and other platforms are currently rejected. New launcher/worker protocol changes require rebuilding the development image.
+The development image must already exist under `phpwarden:static-php8.4-dev`; a missing image returns an error with build instructions. There is no registry fallback or pull for this unpublished tag. Remote Docker contexts and other platforms are currently rejected. The worker protocol is now v2, carrying a checker selection list instead of the previous debug-only flag. Rebuild the CLI and image together; old debug images cannot satisfy the new toolset/protocol/capability checks. The report format remains v1, with `environment.protocol: 2`.
 
 ## Run the development Docker image
 
 Build from this repository with Docker; Go and PHP are installed inside the build/runtime images:
 
 ```sh
-docker build -f docker/Dockerfile -t phpwarden:debug-php8.4-dev .
+docker build -f docker/Dockerfile -t phpwarden:static-php8.4-dev .
 ```
 
 From the Git project you want to check, with an existing `.phpwarden.yaml`, run:
@@ -138,12 +151,12 @@ docker run --rm --pull=never --network=none --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777 \
   --user "$(id -u):$(id -g)" \
   --mount "type=bind,source=$PWD,target=/workspace,readonly" \
-  phpwarden:debug-php8.4-dev worker check --only debug --format json
+  phpwarden:static-php8.4-dev worker check --only debug --format json
 ```
 
 Set PHP runtime/target to `"8.4"` and configure an available diff base. Source roots can be discovered or supplied through `scope.include`. Append `--mode full` for a full scan or `--base origin/main` to override the diff base. The command returns the worker's exit code and JSON report.
 
-This image contains only the debug checker, PHP 8.4.26, and Git. It requires no host PHP, Composer, or Go, and no project `vendor` directory. The image defaults to UID/GID 10001; the command above uses your UID/GID to read private project directories. Check mode mounts the project read-only and uses a private temporary filesystem. Git trusts only the known `/workspace` mount through the image's system configuration.
+This image contains the debug and syntax checkers, PHP 8.4.26, and Git. It requires no host PHP, Composer, or Go, and no project `vendor` directory. The image defaults to UID/GID 10001; the command above uses your UID/GID to read private project directories. Check mode mounts the project read-only and uses a private temporary filesystem. Git trusts only the known `/workspace` mount through the image's system configuration.
 
 Use a local Docker daemon with access to the source directory. Mount the entire Git repository for monorepos and pass `--project /workspace/path/to/project`. Linked worktrees or separate Git directories whose metadata lives outside the mount need additional path mapping; the launcher will handle those separately. Container paths in findings remain relative to the configured project.
 
@@ -172,12 +185,14 @@ Python fixture tests validate the scenario data and Git states. The separate wor
 The Docker suite runs the same six fixtures in four modes against the real image, checks read-only mounts and the default non-root user, verifies operation without host PHP/Go, and covers concurrent containers, runtime mismatch, and monorepo paths. Run it explicitly after building the image; it requires Python, Git, and Docker, without host PHP or Go:
 
 ```sh
-PHPWARDEN_TEST_IMAGE=phpwarden:debug-php8.4-dev \
+PHPWARDEN_TEST_IMAGE=phpwarden:static-php8.4-dev \
   python3 -m unittest tests.acceptance.docker_worker -v
 python3 -m unittest tests.acceptance.launcher_cli -v
 ```
 
 The launcher suite extracts the actual CLI binary from the built image and runs public `check` across the same 24 fixture combinations with no PHP or Go on the client PATH. It also checks linked worktrees, monorepos, offline resolve, and settings overrides. Go tests inject missing Docker/images, invalid reports, changed inputs, cancellation, and timeout failures.
+
+Five syntax fixtures add 20 combinations per worker, Docker, and launcher suite: added parser errors, old errors outside diff hunks, deletion-only errors at EOF, compile errors, and untracked paths with spaces. Shared acceptance checks cover explicit checker selection, disabled defaults, nonblocking findings, extra extensions, exclusions, and source that must never execute. Optional execution failures keep `complete: false`; already observed blocking findings still return exit 1 unless a required execution failure takes precedence with exit 3.
 
 Drupal discovery acceptance covers root/web/docroot/custom web roots, multisite custom directories, automatic source roots, explicit broad roots with profile exclusions, locked version reporting, malformed metadata, and version conflicts. These are small synthetic Git projects; they do not establish compatibility with a full installed Drupal application.
 

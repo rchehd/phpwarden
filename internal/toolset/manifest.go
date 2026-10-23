@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/rchehd/phpwarden/internal/phpconstraint"
+	"github.com/rchehd/phpwarden/internal/protocol"
 	"github.com/rchehd/phpwarden/schemas"
 )
 
@@ -96,6 +97,9 @@ func ParseManifest(data []byte) (Catalog, error) {
 	if err := json.Unmarshal(data, &source); err != nil {
 		return Catalog{}, err
 	}
+	if source.Protocol != protocol.Version {
+		return Catalog{}, fmt.Errorf("unsupported worker protocol %d", source.Protocol)
+	}
 	result := Catalog{release: source.Release, protocol: source.Protocol}
 	seen := make(map[string]bool)
 	toolsets := make(map[string]string)
@@ -156,10 +160,10 @@ func compileEntry(release string, item entry) (candidate, error) {
 	} else if !item.Development {
 		return result, fmt.Errorf("release entries require an explicit framework constraint")
 	}
-	if item.Development && (release != "development" || item.Framework != nil || item.Toolset != DebugID ||
-		item.PHP.Version != DebugPHPVersion || item.PHP.Runtime != "8.4" || item.PHP.Targets.Min != "8.4" || item.PHP.Targets.Max != "8.4" ||
-		!slices.Equal(item.Capabilities, []string{"debug"})) {
-		return result, fmt.Errorf("only the bundled framework-independent debug development toolset is supported")
+	if item.Development && (release != "development" || item.Framework != nil || item.Toolset != DevelopmentID ||
+		item.PHP.Version != DevelopmentPHPVersion || item.PHP.Runtime != "8.4" || item.PHP.Targets.Min != "8.4" || item.PHP.Targets.Max != "8.4" ||
+		!slices.Equal(item.Capabilities, []string{"debug", "syntax"})) {
+		return result, fmt.Errorf("only the bundled framework-independent static development toolset is supported")
 	}
 	platforms := make(map[string]bool)
 	for _, image := range item.Images {
@@ -168,7 +172,7 @@ func compileEntry(release string, item entry) (candidate, error) {
 		}
 		platforms[image.Platform] = true
 		if item.Development {
-			if image.Platform != "linux/amd64" || image.Reference != "phpwarden:debug-php8.4-dev" {
+			if image.Platform != "linux/amd64" || image.Reference != "phpwarden:static-php8.4-dev" {
 				return result, fmt.Errorf("unsupported development image or platform")
 			}
 		} else if !publishedImage.MatchString(image.Reference) {

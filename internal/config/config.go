@@ -51,7 +51,18 @@ type Runner struct {
 }
 
 type Tools struct {
-	Debug Debug `json:"debug"`
+	Debug  Debug  `json:"debug"`
+	Syntax Syntax `json:"syntax"`
+}
+
+type Syntax struct {
+	Enabled         bool     `json:"enabled"`
+	Required        bool     `json:"required"`
+	FailOn          string   `json:"fail_on"`
+	TimeoutSeconds  int      `json:"timeout_seconds"`
+	Include         []string `json:"include,omitempty"`
+	Exclude         []string `json:"exclude"`
+	ExtraExtensions []string `json:"extra_extensions"`
 }
 
 type Debug struct {
@@ -115,7 +126,8 @@ func Parse(data []byte) (Effective, error) {
 			Framework: Framework{Version: "auto"},
 			Scope:     Scope{Mode: "diff", Exclude: []string{}},
 			Runner:    Runner{TimeoutSeconds: 300},
-			Tools: Tools{Debug: Debug{
+			Tools: Tools{Syntax: Syntax{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120,
+				Exclude: []string{}, ExtraExtensions: []string{}}, Debug: Debug{
 				Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120,
 				Exclude: []string{}, Functions: defaults.DebugFunctions,
 			}},
@@ -127,6 +139,9 @@ func Parse(data []byte) (Effective, error) {
 			"tools.debug.required": "core_default", "tools.debug.fail_on": "core_default",
 			"tools.debug.timeout_seconds": "core_default", "tools.debug.exclude": "core_default",
 			"tools.debug.functions": "profile_default",
+			"tools.syntax.enabled":  "profile_default", "tools.syntax.required": "core_default",
+			"tools.syntax.fail_on": "core_default", "tools.syntax.timeout_seconds": "core_default",
+			"tools.syntax.exclude": "core_default", "tools.syntax.extra_extensions": "core_default",
 		},
 		Pending: []string{},
 	}
@@ -226,14 +241,14 @@ func markProvenance(values map[string]any, prefix string, sources map[string]str
 }
 
 func validateValues(cfg Config) error {
-	for _, values := range [][]string{cfg.Scope.Include, cfg.Tools.Debug.Include} {
+	for _, values := range [][]string{cfg.Scope.Include, cfg.Tools.Debug.Include, cfg.Tools.Syntax.Include} {
 		for _, value := range values {
 			if err := projectpath.Validate(value); err != nil {
 				return err
 			}
 		}
 	}
-	for _, values := range [][]string{cfg.Scope.Exclude, cfg.Tools.Debug.Exclude} {
+	for _, values := range [][]string{cfg.Scope.Exclude, cfg.Tools.Debug.Exclude, cfg.Tools.Syntax.Exclude} {
 		if err := validatePatterns(values); err != nil {
 			return err
 		}

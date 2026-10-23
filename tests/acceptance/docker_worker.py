@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from tests.support.scenarios import materialize
+from tests.support.syntax import check_syntax_fixtures
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures" / "scenarios"
@@ -28,7 +29,7 @@ def snapshot(root):
 class DockerWorkerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.image = os.environ.get("PHPWARDEN_TEST_IMAGE", "phpwarden:debug-php8.4-dev")
+        cls.image = os.environ.get("PHPWARDEN_TEST_IMAGE", "phpwarden:static-php8.4-dev")
         result = subprocess.run(
             ["docker", "image", "inspect", cls.image],
             capture_output=True,
@@ -127,7 +128,7 @@ class DockerWorkerTest(unittest.TestCase):
 
     def test_default_user_and_read_only_project(self):
         self.assertEqual(self.metadata["Config"]["User"], "10001:10001")
-        self.assertEqual(self.metadata["Config"]["Labels"]["io.phpwarden.checkers"], "debug")
+        self.assertEqual(self.metadata["Config"]["Labels"]["io.phpwarden.checkers"], "debug,syntax")
         with materialize(FIXTURES / "clean-debug") as scenario:
             self.configure(scenario)
             scenario.root.chmod(0o755)
@@ -150,6 +151,19 @@ class DockerWorkerTest(unittest.TestCase):
             self.assertNotEqual(completed.returncode, 0)
             self.assertIn("read-only", completed.stderr.lower())
             self.assertFalse((scenario.root / "unexpected").exists())
+
+    def test_syntax_findings_include_errors_outside_diff(self):
+        def run(scenario, arguments):
+            before = snapshot(scenario.root)
+            result = self.report(
+                self.run_container(
+                    scenario.root, ["worker", "check", "--format", "json", *arguments]
+                )
+            )
+            self.assertEqual(snapshot(scenario.root), before)
+            return result
+
+        check_syntax_fixtures(self, self.configure, run)
 
     def test_no_host_php_or_go_and_no_runtime_build_tools(self):
         with materialize(FIXTURES / "added-debug") as scenario:

@@ -8,7 +8,12 @@ FIXTURES = Path(__file__).parent / "fixtures" / "scenarios"
 
 class ScenarioFixturesTest(unittest.TestCase):
     def scenarios(self):
-        directories = sorted(path for path in FIXTURES.iterdir() if path.is_dir())
+        directories = sorted(
+            path
+            for group in (FIXTURES, FIXTURES.parent / "syntax")
+            for path in group.iterdir()
+            if path.is_dir()
+        )
         self.assertGreater(len(directories), 0, "No scenario fixtures found")
         return directories
 
@@ -40,6 +45,10 @@ class ScenarioFixturesTest(unittest.TestCase):
                     self.assertTrue(path.is_relative_to(scenario.root))
                     lines = path.read_text().splitlines()
                     self.assertGreater(finding["line"], 0)
+                    if finding.get("eof"):
+                        self.assertEqual(finding["checker"], "syntax")
+                        self.assertEqual(finding["line"], len(lines) + 1)
+                        continue
                     self.assertLessEqual(finding["line"], len(lines))
                     self.assertIn(finding["contains"], lines[finding["line"] - 1])
 

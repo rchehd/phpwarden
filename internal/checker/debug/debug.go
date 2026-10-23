@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/runner"
@@ -21,14 +22,6 @@ import (
 
 //go:embed helper.php
 var helper []byte
-
-type Outcome struct {
-	Check       report.Check
-	Findings    []report.Finding
-	Diagnostics []report.Diagnostic
-	Runtime     *string
-	PHPVersion  *string
-}
 
 type helperReport struct {
 	Version    int    `json:"version"`
@@ -43,8 +36,8 @@ type helperReport struct {
 
 var phpMinor = regexp.MustCompile(`^[1-9][0-9]*\.[0-9]+$`)
 
-func Run(ctx context.Context, root string, selection scope.Selection, cfg config.Debug, process runner.Process) Outcome {
-	result := Outcome{Check: report.Check{ID: "debug", Status: "passed", Required: cfg.Required, FailOn: cfg.FailOn}, Findings: []report.Finding{}, Diagnostics: []report.Diagnostic{}}
+func Run(ctx context.Context, root string, selection scope.Selection, cfg config.Debug, process runner.Process) checker.Outcome {
+	result := checker.Outcome{Check: report.Check{ID: "debug", Status: "passed", Required: cfg.Required, FailOn: cfg.FailOn}, Findings: []report.Finding{}, Diagnostics: []report.Diagnostic{}}
 	if !cfg.Enabled || len(selection.Files) == 0 {
 		reason := "no_files"
 		if !cfg.Enabled {
@@ -53,7 +46,7 @@ func Run(ctx context.Context, root string, selection scope.Selection, cfg config
 		result.Check.Status, result.Check.Reason = "skipped", &reason
 		return result
 	}
-	fail := func(status, code, message string) Outcome {
+	fail := func(status, code, message string) checker.Outcome {
 		result.Check.Status, result.Check.Reason = status, &code
 		checker := "debug"
 		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: code, Stage: "checker", Message: message, Checker: &checker})

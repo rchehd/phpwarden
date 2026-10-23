@@ -50,7 +50,7 @@
           "requested_runtime": {"type": "string"},
           "php_target_min": {"type": "string"}, "php_target_max": {"type": "string"},
           "image": {"type": ["string", "null"]}, "toolset": {"type": ["string", "null"]},
-          "protocol": {"const": 1}
+          "protocol": {"enum": [1, 2]}
         }
       }]
     },
@@ -69,7 +69,7 @@
   },
   "allOf": [
     {"if": {"properties": {"exit_code": {"const": 0}}}, "then": {"properties": {"verdict": {"const": "pass"}}}},
-    {"if": {"properties": {"exit_code": {"const": 1}}}, "then": {"properties": {"verdict": {"const": "fail"}, "complete": {"const": true}}}},
+    {"if": {"properties": {"exit_code": {"const": 1}}}, "then": {"properties": {"verdict": {"const": "fail"}}}},
     {"if": {"properties": {"exit_code": {"enum": [2, 3, 130]}}}, "then": {"properties": {"verdict": {"const": "error"}, "complete": {"const": false}}}}
   ],
   "$defs": {

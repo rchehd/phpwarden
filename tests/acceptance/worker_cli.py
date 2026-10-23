@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from tests.support.scenarios import materialize
+from tests.support.syntax import check_syntax_fixtures, check_syntax_settings
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures" / "scenarios"
@@ -91,6 +92,12 @@ class WorkerCLITest(unittest.TestCase):
                         self.assertEqual(actual, expected)
                         self.assertFalse((scenario.root / "vendor").exists())
 
+    def test_syntax_findings_include_errors_outside_diff(self):
+        check_syntax_fixtures(self, self.configure, self.run_worker)
+
+    def test_syntax_settings_and_explicit_selection(self):
+        check_syntax_settings(self, self.configure, self.run_worker)
+
     def test_process_failures_and_optional_policy(self):
         for name, script, settings, code, status in (
             ("missing", None, {}, 3, "unavailable"),
@@ -101,6 +108,10 @@ class WorkerCLITest(unittest.TestCase):
         ):
             with self.subTest(case=name), materialize(FIXTURES / "added-debug") as scenario:
                 self.configure(scenario, **settings)
+                filename = scenario.root / ".phpwarden.yaml"
+                config = json.loads(filename.read_text())
+                config["tools"]["syntax"] = {"enabled": False}
+                filename.write_text(json.dumps(config))
                 with tempfile.TemporaryDirectory(prefix="phpwarden-path-") as temporary:
                     directory = Path(temporary)
                     (directory / "git").symlink_to(shutil.which("git"))

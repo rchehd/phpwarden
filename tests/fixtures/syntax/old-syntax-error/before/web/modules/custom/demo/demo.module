@@ -1,0 +1,10 @@
+<?php
+
+function demo_value() {
+  $value = ;
+  return $value;
+}
+
+
+
+$other = 1;

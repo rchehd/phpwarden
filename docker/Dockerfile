@@ -17,11 +17,11 @@ RUN apk add --no-cache git ca-certificates \
     && php -r 'if (!function_exists("token_get_all") || PHP_VERSION !== "8.4.26") { exit(1); }'
 
 COPY --from=build /out/phpwarden /usr/local/bin/phpwarden
-LABEL org.opencontainers.image.title="PHPWarden debug worker" \
-    io.phpwarden.protocol="1" \
-    io.phpwarden.toolset="debug-dev-v1-php8.4" \
+LABEL org.opencontainers.image.title="PHPWarden static worker" \
+    io.phpwarden.protocol="2" \
+    io.phpwarden.toolset="static-dev-v1-php8.4" \
     io.phpwarden.php-version="8.4.26" \
-    io.phpwarden.checkers="debug"
+    io.phpwarden.checkers="debug,syntax"
 
 WORKDIR /workspace
 USER 10001:10001

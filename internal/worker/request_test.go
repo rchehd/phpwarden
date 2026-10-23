@@ -16,14 +16,14 @@ import (
 )
 
 func TestRequestWorkerDoesNotNeedGitAndRejectsChangedInputs(t *testing.T) {
-	for _, which := range []string{"no git", "wire roundtrip", "file", "config", "traversal", "symlink", "missing range", "bad range", "protocol", "toolset", "effective config"} {
+	for _, which := range []string{"no git", "wire roundtrip", "file", "config", "traversal", "symlink", "missing range", "bad range", "protocol", "toolset", "effective config", "unknown checker", "duplicate checker"} {
 		t.Run(which, func(t *testing.T) {
 			location, effective, options := fixture(t)
 			selection, err := scope.Build(context.Background(), options)
 			if err != nil {
 				t.Fatal(err)
 			}
-			request, err := runrequest.Build(location, effective, selection, false, "sha256:"+strings.Repeat("a", 64), toolset.DebugID)
+			request, err := runrequest.Build(location, effective, selection, nil, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -64,11 +64,15 @@ func TestRequestWorkerDoesNotNeedGitAndRejectsChangedInputs(t *testing.T) {
 			case "bad range":
 				request.Selection.LineMap["src/demo.module"] = []scope.Range{{Start: 0, End: 2}}
 			case "protocol":
-				request.Version = 2
+				request.Version = 1
 			case "toolset":
 				request.Toolset = "other"
 			case "effective config":
 				request.Config.Tools.Debug.Enabled = false
+			case "unknown checker":
+				request.Only = []string{"phpstna"}
+			case "duplicate checker":
+				request.Only = []string{"syntax", "syntax"}
 			}
 			process := processFunc(func(context.Context, runner.Command) runner.Result {
 				if which != "no git" && which != "wire roundtrip" {
@@ -114,7 +118,7 @@ func TestComposerChangesDuringWorkerExecutionAreStale(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			request, err := runrequest.Build(location, effective, selection, false, "sha256:"+strings.Repeat("a", 64), toolset.DebugID)
+			request, err := runrequest.Build(location, effective, selection, nil, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID)
 			if err != nil {
 				t.Fatal(err)
 			}

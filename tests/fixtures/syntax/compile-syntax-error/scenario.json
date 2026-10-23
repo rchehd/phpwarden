@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "id": "compile-syntax-error",
+  "state": "staged",
+  "patch": "change.patch",
+  "changed_files": [
+    "web/modules/custom/demo/demo.module"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "syntax",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 3,
+      "contains": "function first()",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

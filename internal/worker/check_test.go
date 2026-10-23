@@ -41,7 +41,7 @@ func TestActualPHPPatchMustSatisfyComposerRequirements(t *testing.T) {
 				}
 				return runner.Result{Stdout: []byte(data)}
 			})
-			result := Check(context.Background(), location, effective, options, false, process)
+			result := Check(context.Background(), location, effective, options, nil, process)
 			want := 3
 			if patch == "8.4.27" {
 				want = 0
@@ -66,7 +66,7 @@ func fixture(t *testing.T) (config.Location, config.Effective, scope.Options) {
 		t.Fatal(err)
 	}
 	filename := filepath.Join(root, ".phpwarden.yaml")
-	data := `{"version":1,"profile":"drupal","php":{"runtime":"8.4","target":{"min":"8.4","max":"8.4"}},"scope":{"mode":"full","include":["src"]}}`
+	data := `{"version":1,"profile":"drupal","php":{"runtime":"8.4","target":{"min":"8.4","max":"8.4"}},"scope":{"mode":"full","include":["src"]},"tools":{"syntax":{"enabled":false}}}`
 	if err := os.WriteFile(filename, []byte(data), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestChangingInputsCannotProduceFreshPass(t *testing.T) {
 				}
 				return cleanResult()
 			})
-			result := Check(context.Background(), location, effective, options, false, process)
+			result := Check(context.Background(), location, effective, options, nil, process)
 			if result.ExitCode != 3 || result.Complete || result.Diagnostics[len(result.Diagnostics)-1].Code != "stale" {
 				t.Fatalf("stale result accepted: %+v", result)
 			}
@@ -133,7 +133,7 @@ func TestConcurrentWorkersOwnTheirTemporaryDirectories(t *testing.T) {
 	var group sync.WaitGroup
 	for range 2 {
 		group.Go(func() {
-			result := Check(context.Background(), location, effective, options, false, process)
+			result := Check(context.Background(), location, effective, options, nil, process)
 			if result.ExitCode != 0 || !result.Complete {
 				t.Errorf("concurrent check failed: %+v", result)
 			}
@@ -164,7 +164,7 @@ func TestDisabledAndNonPHPFilesDoNotRequirePHP(t *testing.T) {
 			t.Fatal("PHP must not run")
 			return runner.Result{}
 		})
-		result := Check(context.Background(), location, effective, options, false, process)
+		result := Check(context.Background(), location, effective, options, nil, process)
 		if result.ExitCode != 0 || !result.Complete || result.Checks[0].Status != "skipped" {
 			t.Fatalf("bad applicability: %+v", result)
 		}

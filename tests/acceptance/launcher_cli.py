@@ -8,6 +8,7 @@ from pathlib import Path
 
 from tests.acceptance.docker_worker import snapshot
 from tests.support.scenarios import materialize
+from tests.support.syntax import check_syntax_fixtures, check_syntax_settings
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures" / "scenarios"
@@ -19,7 +20,7 @@ class LauncherCLITest(unittest.TestCase):
         cls.temporary = tempfile.TemporaryDirectory(prefix="phpwarden-launcher-")
         cls.addClassCleanup(cls.temporary.cleanup)
         cls.binary = Path(cls.temporary.name) / "phpwarden"
-        image = "phpwarden:debug-php8.4-dev"
+        image = "phpwarden:static-php8.4-dev"
         container = "phpwarden-cli-test-" + uuid.uuid4().hex
         try:
             subprocess.run(
@@ -68,6 +69,28 @@ class LauncherCLITest(unittest.TestCase):
         self.assertEqual(completed.returncode, result["exit_code"], result)
         return result
 
+    def test_syntax_findings_include_errors_outside_diff(self):
+        def configure(scenario):
+            self.configure(scenario.root, scenario.base)
+
+        def run(scenario, arguments):
+            before = snapshot(scenario.root)
+            result = self.run_cli(scenario.root, ["check", *arguments], scenario.env)
+            self.assertEqual(snapshot(scenario.root), before)
+            self.assertEqual(result["environment"]["protocol"], 2)
+            return result
+
+        check_syntax_fixtures(self, configure, run)
+
+    def test_syntax_settings_and_explicit_selection(self):
+        check_syntax_settings(
+            self,
+            lambda scenario: self.configure(scenario.root, scenario.base),
+            lambda scenario, arguments: self.run_cli(
+                scenario.root, ["check", *arguments], scenario.env
+            ),
+        )
+
     def test_public_check_matches_all_fixture_modes_without_host_php_or_go(self):
         for directory in sorted(FIXTURES.iterdir()):
             for mode in ("diff", "full", "whole-files", "paths"):
@@ -88,7 +111,7 @@ class LauncherCLITest(unittest.TestCase):
                         self.assertEqual(result["exit_code"], 1 if verdict == "fail" else 0)
                         self.assertTrue(result["complete"])
                         self.assertTrue(result["environment"]["image"].startswith("sha256:"))
-                        self.assertEqual(result["environment"]["toolset"], "debug-dev-v1-php8.4")
+                        self.assertEqual(result["environment"]["toolset"], "static-dev-v1-php8.4")
                         expected = sorted(
                             (row["checker"], row["path"], row["line"])
                             for row in scenario.spec["findings"]
@@ -148,10 +171,10 @@ class LauncherCLITest(unittest.TestCase):
             result = self.run_cli(scenario.root, ["resolve"], scenario.env)
             self.assertTrue(result["valid"])
             self.assertTrue(result["selection"]["development"])
-            self.assertEqual(result["selection"]["image"], "phpwarden:debug-php8.4-dev")
+            self.assertEqual(result["selection"]["image"], "phpwarden:static-php8.4-dev")
             self.assertEqual(result["selection"]["release"], "development")
-            self.assertEqual(result["selection"]["entry"], "drupal-debug-dev-php8.4")
-            self.assertEqual(result["selection"]["preset"]["id"], "drupal-debug")
+            self.assertEqual(result["selection"]["entry"], "drupal-static-dev-php8.4")
+            self.assertEqual(result["selection"]["preset"]["id"], "drupal-static")
             self.assertEqual(result["selection"]["tools"]["php"], "8.4.26")
             result = self.run_cli(scenario.root, ["check"], scenario.env)
             self.assertEqual(result["exit_code"], 0)

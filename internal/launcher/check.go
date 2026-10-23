@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/report"
@@ -26,7 +27,7 @@ import (
 	"github.com/rchehd/phpwarden/schemas"
 )
 
-func Check(ctx context.Context, location config.Location, effective config.Effective, options scope.Options, onlyDebug bool, process runner.Process) report.Report {
+func Check(ctx context.Context, location config.Location, effective config.Effective, options scope.Options, only []string, process runner.Process) report.Report {
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(effective.Config.Runner.TimeoutSeconds)*time.Second)
 	defer cancel()
 	failure := func(code string, err error) report.Report {
@@ -49,8 +50,8 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 		}
 		return report.InputError("scope", err)
 	}
-	if len(selection.Files) == 0 || !effective.Config.Tools.Debug.Enabled && !onlyDebug {
-		return worker.Check(ctx, location, effective, options, onlyDebug, process)
+	if len(selection.Files) == 0 || !checker.AnyEnabled(effective.Config, only) {
+		return worker.Check(ctx, location, effective, options, only, process)
 	}
 	if err := discovery.Unchanged(location, effective); err != nil {
 		return failure("stale", err)
@@ -62,7 +63,7 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 	if err != nil {
 		return failure("image_unavailable", err)
 	}
-	request, err := runrequest.Build(location, effective, selection, onlyDebug, image, selected.ID)
+	request, err := runrequest.Build(location, effective, selection, only, image, selected.ID)
 	if err != nil {
 		return failure("stale", err)
 	}
@@ -202,8 +203,19 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 			result.Environment.Toolset == nil || *result.Environment.Toolset != request.Toolset ||
 			result.Environment.RequestedRuntime != request.Config.PHP.Runtime || result.Environment.PHPRuntime != nil && *result.Environment.PHPRuntime != request.Config.PHP.Runtime ||
 			result.Environment.TargetMin != request.Config.PHP.Target.Min || result.Environment.TargetMax != request.Config.PHP.Target.Max ||
-			len(result.Checks) != 1 || result.Checks[0].ID != "debug" {
+			result.Environment.Protocol != request.Version || len(result.Checks) != len(checker.Requested(request.Only)) {
 			return result, fmt.Errorf("worker report does not match the requested inputs and toolset")
+		}
+		seen := make(map[string]bool)
+		for _, check := range result.Checks {
+			required, failOn := request.Config.Tools.Debug.Required, request.Config.Tools.Debug.FailOn
+			if check.ID == "syntax" {
+				required, failOn = request.Config.Tools.Syntax.Required, request.Config.Tools.Syntax.FailOn
+			}
+			if !slices.Contains(checker.Requested(request.Only), check.ID) || seen[check.ID] || check.Required != required || check.FailOn != failOn {
+				return result, fmt.Errorf("worker checker selection or policy does not match the request")
+			}
+			seen[check.ID] = true
 		}
 		if request.Config.Framework.Version != "auto" && request.Config.Framework.Version != "" &&
 			(result.Environment.FrameworkVersion == nil || *result.Environment.FrameworkVersion != request.Config.Framework.Version) {
@@ -215,7 +227,12 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 		}
 	}
 	for _, finding := range result.Findings {
-		if finding.Path == nil || finding.Line == nil || finding.Checker != "debug" || !request.Selection.Contains(*finding.Path, *finding.Line) {
+		if finding.Path == nil || finding.Line == nil || !slices.Contains(checker.Requested(request.Only), finding.Checker) {
+			return result, fmt.Errorf("worker finding is outside the requested scope")
+		}
+		if _, exists := request.Selection.LineMap[*finding.Path]; !exists ||
+			finding.Checker == "debug" && (finding.Kind != "code" || !request.Selection.Contains(*finding.Path, *finding.Line)) ||
+			finding.Checker == "syntax" && finding.Kind != "syntax" {
 			return result, fmt.Errorf("worker finding is outside the requested scope")
 		}
 	}

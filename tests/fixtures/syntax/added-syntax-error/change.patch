@@ -1,0 +1,10 @@
+--- a/web/modules/custom/demo/demo.module
++++ b/web/modules/custom/demo/demo.module
+@@ -1,6 +1,6 @@
+ <?php
+ 
+ function demo_value() {
+-  $value = 1;
++  $value = ;
+   return $value;
+ }

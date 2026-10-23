@@ -1,6 +1,11 @@
 package report
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/rchehd/phpwarden/schemas"
+)
 
 func TestFailurePrecedenceAndOptionalCoverage(t *testing.T) {
 	for _, testcase := range []struct {
@@ -25,5 +30,29 @@ func TestFailurePrecedenceAndOptionalCoverage(t *testing.T) {
 				t.Fatalf("bad aggregate: %+v", result)
 			}
 		})
+	}
+}
+
+func TestEarlierFindingsStillBlockWhenOptionalCheckerLaterFails(t *testing.T) {
+	for _, policy := range []string{"error", "never"} {
+		result := New()
+		result.Checks = []Check{{ID: "syntax", Status: "error", Required: false, FailOn: policy, Reason: new("process_failed")}}
+		result.Findings = []Finding{{Checker: "syntax", Rule: "php.syntax", Kind: "syntax", Severity: "error", Message: "Syntax error", Path: new("demo.php"), Line: new(2)}}
+		result.Finalize()
+		want := 1
+		if policy == "never" {
+			want = 0
+		}
+		if result.Complete || result.ExitCode != want {
+			t.Fatalf("partial findings lost their policy: %+v", result)
+		}
+		data, _ := json.Marshal(result)
+		var document any
+		if err := json.Unmarshal(data, &document); err != nil {
+			t.Fatal(err)
+		}
+		if err := schemas.ValidateReport(document); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

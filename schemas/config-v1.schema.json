@@ -54,6 +54,22 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "syntax": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean", "default": true},
+            "required": {"type": "boolean", "default": true},
+            "fail_on": {"type": "string", "enum": ["error", "warning", "never"], "default": "error"},
+            "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 2147483647, "default": 120},
+            "include": {"$ref": "#/$defs/include"},
+            "exclude": {"$ref": "#/$defs/exclude"},
+            "extra_extensions": {
+              "type": "array", "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^\\.[a-z][a-z0-9_]*$"}
+            }
+          }
+        },
         "debug": {
           "type": "object",
           "additionalProperties": false,

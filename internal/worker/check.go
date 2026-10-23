@@ -9,18 +9,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/checker/debug"
+	"github.com/rchehd/phpwarden/internal/checker/syntax"
 	"github.com/rchehd/phpwarden/internal/compatibility"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/profile"
+	"github.com/rchehd/phpwarden/internal/protocol"
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/runner"
 	"github.com/rchehd/phpwarden/internal/runrequest"
 	"github.com/rchehd/phpwarden/internal/scope"
 )
 
-func Check(ctx context.Context, location config.Location, effective config.Effective, options scope.Options, onlyDebug bool, process runner.Process) report.Report {
+func Check(ctx context.Context, location config.Location, effective config.Effective, options scope.Options, only []string, process runner.Process) report.Report {
 	cfg := effective.Config
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(cfg.Runner.TimeoutSeconds)*time.Second)
 	defer cancel()
@@ -50,7 +53,7 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 	if err := discovery.Unchanged(location, effective); err != nil {
 		return failure("stale", err)
 	}
-	result = analyze(ctx, location, cfg, selection, onlyDebug, process)
+	result = analyze(ctx, location, cfg, selection, only, process)
 	validateRuntime(&result, effective)
 	after, err := runrequest.Snapshot(location, selection)
 	if err != nil {
@@ -72,39 +75,62 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 func newReport(cfg config.Config, selection scope.Selection) report.Report {
 	result := report.New()
 	result.Profile, result.Scope = &cfg.Profile, &selection
-	result.Environment = &report.Environment{RequestedRuntime: cfg.PHP.Runtime, TargetMin: cfg.PHP.Target.Min, TargetMax: cfg.PHP.Target.Max, Protocol: 1}
+	result.Environment = &report.Environment{RequestedRuntime: cfg.PHP.Runtime, TargetMin: cfg.PHP.Target.Min, TargetMax: cfg.PHP.Target.Max, Protocol: protocol.Version}
 	if cfg.Framework.Version != "auto" && cfg.Framework.Version != "" {
 		result.Environment.FrameworkVersion = &cfg.Framework.Version
 	}
 	return result
 }
 
-func analyze(ctx context.Context, location config.Location, cfg config.Config, selection scope.Selection, onlyDebug bool, process runner.Process) report.Report {
+func analyze(ctx context.Context, location config.Location, cfg config.Config, selection scope.Selection, only []string, process runner.Process) report.Report {
 	result := newReport(cfg, selection)
 	defaults, ok := profile.Lookup(cfg.Profile)
 	if !ok {
 		return report.InputError("profile", fmt.Errorf("unsupported profile %q", cfg.Profile))
 	}
-	selected := selection.Filter(cfg.Tools.Debug.Include, cfg.Tools.Debug.Exclude, func(filename string) bool {
-		return slices.Contains(defaults.PHPExtensions, strings.ToLower(filepath.Ext(filename)))
-	})
-	if onlyDebug {
-		cfg.Tools.Debug.Enabled = true
+	if err := checker.ValidateOnly(only); err != nil {
+		return report.InputError("selection", err)
 	}
-	outcome := debug.Run(ctx, location.Root, selected, cfg.Tools.Debug, process)
-	result.Checks = append(result.Checks, outcome.Check)
-	result.Findings = append(result.Findings, outcome.Findings...)
-	result.Diagnostics = append(result.Diagnostics, outcome.Diagnostics...)
-	result.Environment.PHPRuntime = outcome.Runtime
-	result.Environment.PHPVersion = outcome.PHPVersion
-	if outcome.Runtime != nil && *outcome.Runtime != cfg.PHP.Runtime {
-		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "runtime_mismatch", Stage: "worker", Message: fmt.Sprintf("worker PHP runtime %s does not match configured %s", *outcome.Runtime, cfg.PHP.Runtime)})
+	for _, id := range checker.Requested(only) {
+		var outcome checker.Outcome
+		if id == "syntax" {
+			settings := cfg.Tools.Syntax
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			extensions := append(slices.Clone(defaults.PHPExtensions), settings.ExtraExtensions...)
+			selected := selection.Filter(settings.Include, settings.Exclude, func(filename string) bool {
+				return slices.Contains(extensions, strings.ToLower(filepath.Ext(filename)))
+			})
+			outcome = syntax.Run(ctx, location.Root, selected, settings, process)
+		} else {
+			settings := cfg.Tools.Debug
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			selected := selection.Filter(settings.Include, settings.Exclude, func(filename string) bool {
+				return slices.Contains(defaults.PHPExtensions, strings.ToLower(filepath.Ext(filename)))
+			})
+			outcome = debug.Run(ctx, location.Root, selected, settings, process)
+		}
+		result.Checks = append(result.Checks, outcome.Check)
+		result.Findings = append(result.Findings, outcome.Findings...)
+		result.Diagnostics = append(result.Diagnostics, outcome.Diagnostics...)
+		if outcome.Runtime != nil {
+			if *outcome.Runtime != cfg.PHP.Runtime || result.Environment.PHPRuntime != nil && *outcome.Runtime != *result.Environment.PHPRuntime ||
+				result.Environment.PHPVersion != nil && outcome.PHPVersion != nil && *result.Environment.PHPVersion != *outcome.PHPVersion {
+				result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "runtime_mismatch", Stage: "worker", Message: fmt.Sprintf("%s checker PHP runtime does not match the configured runtime or other checkers", id)})
+			}
+			result.Environment.PHPRuntime = outcome.Runtime
+			if outcome.PHPVersion != nil {
+				result.Environment.PHPVersion = outcome.PHPVersion
+			}
+		}
 	}
 	result.Finalize()
 	return result
 }
 
 func validateRuntime(result *report.Report, effective config.Effective) {
+	if result.Environment == nil {
+		return
+	}
 	for _, pending := range effective.Pending {
 		if pending == "php.runtime.patch" || pending == "php.target.patch" || pending == "framework.installed_version" {
 			if pending != "php.runtime.patch" || result.Environment.PHPVersion == nil {

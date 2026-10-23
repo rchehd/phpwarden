@@ -88,6 +88,14 @@ func (result *Report) Finalize() {
 		if check.Status == "failed" && result.ExitCode == 0 {
 			result.ExitCode = 1
 		}
+		if result.ExitCode == 0 && check.FailOn != "never" {
+			for _, finding := range result.Findings {
+				if finding.Checker == check.ID && (finding.Severity == "error" || check.FailOn == "warning" && finding.Severity == "warning") {
+					result.ExitCode = 1
+					break
+				}
+			}
+		}
 	}
 	for _, diagnostic := range result.Diagnostics {
 		if diagnostic.Checker == nil {

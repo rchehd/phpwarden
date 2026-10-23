@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/launcher"
@@ -37,7 +38,7 @@ Scope options:
   --mode diff|full     Override configured mode
   --base REF           Diff base ref
   --whole-files        Include all lines of selected diff files
-  --only debug         Explicitly select the debug checker
+  --only ID[,ID...]    Select debug, syntax, or both; enable selected checkers
 
 Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
 Check uses the local development Docker image (Linux amd64, PHP runtime/target 8.4).
@@ -120,8 +121,12 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	if !isScope && !isWorker && !isCheck && (args.mode != "" || args.base != "" || args.wholeFiles) {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("scope options require the scope command"))
 	}
-	if args.only != "" && ((!isWorker && !isCheck) || args.only != "debug") {
-		return fail(stdout, stderr, args, "usage", fmt.Errorf("--only supports debug in check/worker check; unknown or unavailable checker %q", args.only))
+	only, err := checker.ParseOnly(args.only)
+	if err != nil {
+		return fail(stdout, stderr, args, "usage", err)
+	}
+	if args.only != "" && !isWorker && !isCheck {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("--only requires check or worker check"))
 	}
 	location, err := config.Resolve(config.LocationOptions{CWD: cwd, Project: args.project, Config: args.config})
 	if err != nil {
@@ -151,9 +156,9 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		}
 		var result report.Report
 		if isCheck {
-			result = launcher.Check(ctx, location, effective, options, args.only == "debug", runner.Exec{})
+			result = launcher.Check(ctx, location, effective, options, only, runner.Exec{})
 		} else {
-			result = worker.Check(ctx, location, effective, options, args.only == "debug", runner.Exec{})
+			result = worker.Check(ctx, location, effective, options, only, runner.Exec{})
 		}
 		return writeReport(stdout, stderr, args.format, result)
 	}

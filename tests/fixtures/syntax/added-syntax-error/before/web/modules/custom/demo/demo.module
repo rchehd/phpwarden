@@ -1,0 +1,6 @@
+<?php
+
+function demo_value() {
+  $value = 1;
+  return $value;
+}
