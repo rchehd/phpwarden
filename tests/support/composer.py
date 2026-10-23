@@ -6,22 +6,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
 
+from tests.support.phpmd import TOOLS
 from tests.support.scenarios import materialize
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "composer-validate"
-TOOLS = (
-    "composer-audit",
-    "composer-validate",
-    "debug",
-    "drupal-config",
-    "phpcs",
-    "phpmd",
-    "phpstan",
-    "syntax",
-    "twig-cs-fixer",
-    "whitespace",
-    "yaml",
-)
 RULES = ("composer.validate.error", "composer.lock.error", "composer.validate.warning")
 COMPOSER_VERSION = "2.10.3"
 ADVISORY = {

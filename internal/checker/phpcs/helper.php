@@ -12,8 +12,28 @@ try {
     require $bundle . '/vendor/squizlabs/php_codesniffer/autoload.php';
     class PHPWardenJSON extends \PHP_CodeSniffer\Reports\Json
     {
+        public static bool $fix = false;
+
+        public static array $edits = [];
+
         public function generateFileReport(array $report, \PHP_CodeSniffer\Files\File $phpcsFile, bool $showSources = false, int $width = 80)
         {
+            if (self::$fix) {
+                $path = $report['filename'];
+                $before = file_get_contents($path);
+                $config = clone $phpcsFile->config;
+                $config->stdinPath = $path;
+                $copy = new \PHP_CodeSniffer\Files\DummyFile($before, $phpcsFile->ruleset, $config);
+                $copy->process();
+                if ($copy->getFixableCount() > 0 && !$copy->fixer->fixFile()) {
+                    throw new RuntimeException('PHPCS fixes did not converge');
+                }
+                $after = $copy->fixer->getContents();
+                if ($before !== $after) {
+                    self::$edits[] = ['path' => $path, 'before' => hash('sha256', $before), 'after' => base64_encode($after)];
+                }
+                $copy->cleanUp();
+            }
             $messages = [];
             foreach ($report['messages'] as $line => $columns) {
                 foreach ($columns as $column => $errors) {
@@ -34,6 +54,7 @@ try {
         }
     }
     $request = json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);
+    PHPWardenJSON::$fix = $request['fix'] ?? false;
     $xml = new XMLWriter();
     $xml->openMemory();
     $xml->startDocument('1.0', 'UTF-8');
@@ -66,6 +87,7 @@ try {
         'compatibility_version' => ltrim(InstalledVersions::getPrettyVersion('phpcompatibility/php-compatibility'), 'v'),
         'exit_code' => $exit,
         'report' => $report,
+        'edits' => PHPWardenJSON::$edits,
     ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE), "\n";
 } catch (Throwable $error) {
     while (ob_get_level() > 0) {

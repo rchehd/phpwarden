@@ -16,11 +16,17 @@ from tests.support.composer import (
     check_composer_validate_fixtures,
     check_composer_validate_settings,
 )
+from tests.support.deptrac import check_deptrac
 from tests.support.drupal_config import (
     check_drupal_config_custom_layout,
     check_drupal_config_fixtures,
     check_drupal_config_settings,
 )
+from tests.support.eventhorizon import check_eventhorizon, check_eventhorizon_config
+from tests.support.fix import check_fix
+from tests.support.gitleaks import check_gitleaks_fixtures, check_strict_rules
+from tests.support.node import check_node_no_config, check_node_tools
+from tests.support.packagecheck import check_package_tools
 from tests.support.phpcs import (
     check_phpcs_fixtures,
     check_phpcs_project_rules,
@@ -33,8 +39,10 @@ from tests.support.phpstan import (
     check_phpstan_project_config,
     check_phpstan_settings,
 )
+from tests.support.rector import check_rector, check_rector_project_config
 from tests.support.scenarios import materialize
-from tests.support.syntax import check_syntax_fixtures
+from tests.support.semgrep import check_semgrep, check_semgrep_project_rules
+from tests.support.syntax import check_parallel_syntax, check_syntax_fixtures
 from tests.support.twig_cs_fixer import (
     check_twig_cs_fixer_fixtures,
     check_twig_cs_fixer_project_config,
@@ -82,17 +90,24 @@ class DockerWorkerTest(unittest.TestCase):
                 "composer-validate": {"enabled": False},
                 "phpcs": {"enabled": False},
                 "phpmd": {"enabled": False},
+                "eslint": {"enabled": False},
+                "gitleaks": {"enabled": False},
+                "stylelint": {"enabled": False},
+                "jscpd": {"enabled": False},
                 "phpstan": {"enabled": False},
                 "twig-cs-fixer": {"enabled": False},
             },
         }
         (scenario.root / ".phpwarden.yaml").write_text(json.dumps(config))
 
-    def run_container(self, root, arguments, *, entrypoint=None, default_user=False, env=None):
+    def run_container(
+        self, root, arguments, *, entrypoint=None, default_user=False, env=None, writable=False
+    ):
         name = "phpwarden-test-" + uuid.uuid4().hex
         mount = io.StringIO()
         csv.writer(mount, lineterminator="").writerow(
-            ["type=bind", f"source={root}", "target=/workspace", "readonly"]
+            ["type=bind", f"source={root}", "target=/workspace"]
+            + ([] if writable else ["readonly"])
         )
         command = [
             "docker",
@@ -171,7 +186,7 @@ class DockerWorkerTest(unittest.TestCase):
         self.assertEqual(self.metadata["Config"]["User"], "10001:10001")
         self.assertEqual(
             self.metadata["Config"]["Labels"]["io.phpwarden.checkers"],
-            "composer-audit,composer-validate,debug,drupal-config,phpcs,phpmd,phpstan,syntax,twig-cs-fixer,whitespace,yaml",
+            "composer-audit,composer-require-checker,composer-unused,composer-validate,dead-code,debug,deptrac,drupal-config,eslint,eventhorizon,gitleaks,jscpd,phpcs,phpmd,phpstan,rector,semgrep,stylelint,syntax,twig-cs-fixer,whitespace,yaml",
         )
         with materialize(FIXTURES / "clean-debug") as scenario:
             self.configure(scenario)
@@ -225,9 +240,14 @@ class DockerWorkerTest(unittest.TestCase):
     def run_check(self, scenario, arguments):
         before = snapshot(scenario.root)
         result = self.report(
-            self.run_container(scenario.root, ["worker", "check", "--format", "json", *arguments])
+            self.run_container(
+                scenario.root,
+                ["worker", "check", "--format", "json", *arguments],
+                writable="--fix" in arguments,
+            )
         )
-        self.assertEqual(snapshot(scenario.root), before)
+        if "--fix" not in arguments:
+            self.assertEqual(snapshot(scenario.root), before)
         return result
 
     def test_whitespace_fixtures(self):
@@ -275,6 +295,48 @@ class DockerWorkerTest(unittest.TestCase):
     def test_twig_cs_fixer_project_config(self):
         check_twig_cs_fixer_project_config(self, self.configure, self.run_check)
 
+    def test_package_dependency_tools(self):
+        check_package_tools(self, self.configure, self.run_check)
+
+    def test_parallel_syntax(self):
+        check_parallel_syntax(self, self.configure, self.run_check)
+
+    def test_deptrac_architecture(self):
+        check_deptrac(self, self.configure, self.run_check)
+
+    def test_rector_dry_run(self):
+        check_rector(self, self.configure, self.run_check)
+
+    def test_rector_project_config(self):
+        check_rector_project_config(self, self.configure, self.run_check)
+
+    def test_semgrep_security(self):
+        check_semgrep(self, self.configure, self.run_check)
+
+    def test_semgrep_project_rules(self):
+        check_semgrep_project_rules(self, self.configure, self.run_check)
+
+    def test_eventhorizon_caching(self):
+        check_eventhorizon(self, self.configure, self.run_check)
+
+    def test_eventhorizon_config(self):
+        check_eventhorizon_config(self, self.configure, self.run_check)
+
+    def test_fix_and_recheck(self):
+        check_fix(self, self.configure, self.run_check)
+
+    def test_gitleaks_fixtures(self):
+        check_gitleaks_fixtures(self, self.configure, self.run_check)
+
+    def test_phpstan_strict_rules(self):
+        check_strict_rules(self, self.configure, self.run_check)
+
+    def test_node_tools(self):
+        check_node_tools(self, self.configure, self.run_check)
+
+    def test_node_no_config(self):
+        check_node_no_config(self, self.configure, self.run_check)
+
     def test_phpmd_fixtures(self):
         check_phpmd_fixtures(self, self.configure, self.run_check)
 
@@ -306,7 +368,7 @@ class DockerWorkerTest(unittest.TestCase):
                 self.assertEqual(result["exit_code"], 1)
             completed = self.run_container(
                 scenario.root,
-                ["-c", "! command -v go && ! command -v python3 && ! command -v composer"],
+                ["-c", "! command -v go && command -v python3 && ! command -v composer"],
                 entrypoint="/bin/sh",
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
@@ -355,6 +417,10 @@ class DockerWorkerTest(unittest.TestCase):
                     "composer-validate": {"enabled": False},
                     "phpcs": {"enabled": False},
                     "phpmd": {"enabled": False},
+                    "eslint": {"enabled": False},
+                    "gitleaks": {"enabled": False},
+                    "stylelint": {"enabled": False},
+                    "jscpd": {"enabled": False},
                     "phpstan": {"enabled": False},
                     "twig-cs-fixer": {"enabled": False},
                 },

@@ -32,6 +32,10 @@ tools:
     autoload: auto
     drupal: true
     deprecations: true
+    strict_rules:
+      enabled: false
+      all: true
+      rules: {}
   twig-cs-fixer:
     enabled: true
     required: true
@@ -45,6 +49,100 @@ tools:
     standards: [Drupal, DrupalPractice]
     compatibility:
       enabled: false
+  dead-code:
+    enabled: false
+    fail_on: error
+  eventhorizon:
+    enabled: false
+    required: true
+    fail_on: never
+    caching: true
+    config_sync: []
+    exclude_rules: []
+  composer-require-checker:
+    enabled: false
+    fail_on: never
+    composer_root: ""
+    config: ""
+    discover_config: true
+    scan_files: []
+    allowed_symbols: []
+    extra_inputs: []
+    memory_limit_mb: 1024
+  composer-unused:
+    enabled: false
+    fail_on: never
+    composer_root: ""
+    config: ""
+    discover_config: true
+    exclude_packages: []
+    exclude_directories: []
+    extra_inputs: []
+    memory_limit_mb: 1024
+  deptrac:
+    enabled: false
+    required: true
+    fail_on: error
+    timeout_seconds: 300
+    config: ""
+    discover_config: true
+    extra_inputs: []
+    report_uncovered: false
+    fail_on_uncovered: false
+    report_skipped: false
+    memory_limit_mb: 1024
+    exclude: []
+  rector:
+    enabled: false
+    required: true
+    fail_on: never
+    timeout_seconds: 600
+    config: ""
+    discover_config: true
+    target_php: ""
+    target_drupal: ""
+    sets: []
+    rules: []
+    skip_rules: []
+    extra_inputs: []
+    extra_extensions: []
+    dry_run: true
+    memory_limit_mb: 1024
+    exclude: []
+  semgrep:
+    enabled: false
+    required: true
+    fail_on: error
+    discover_config: true
+    use_defaults: true
+    rulesets: []
+    rules: []
+    exclude_rules: []
+    severities: [ERROR, WARNING, INFO]
+    baseline: ""
+    rule_timeout_seconds: 5
+    memory_limit_mb: 1024
+  eslint:
+    enabled: true
+    fail_on: error
+    discover_config: true
+  stylelint:
+    enabled: true
+    fail_on: error
+    discover_config: true
+  jscpd:
+    enabled: true
+    fail_on: error
+    min_tokens: 70
+    min_lines: 6
+    mode: mild
+  gitleaks:
+    enabled: true
+    required: true
+    fail_on: error
+    discover_config: true
+    rules: []
+    extra_inputs: []
   phpmd:
     enabled: true
     required: true
@@ -72,6 +170,8 @@ tools:
     required: true
     fail_on: error
   syntax:
+    backend: php
+    parallel_jobs: 4
     enabled: true
     required: true
     fail_on: error

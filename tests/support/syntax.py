@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from tests.support.phpmd import TOOLS
 from tests.support.scenarios import materialize
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "syntax"
@@ -32,19 +33,7 @@ def check_syntax_fixtures(test, configure, run):
                 test.assertTrue(all(row["kind"] == "syntax" for row in result["findings"]))
                 test.assertEqual(
                     [row["id"] for row in result["checks"]],
-                    [
-                        "composer-audit",
-                        "composer-validate",
-                        "debug",
-                        "drupal-config",
-                        "phpcs",
-                        "phpmd",
-                        "phpstan",
-                        "syntax",
-                        "twig-cs-fixer",
-                        "whitespace",
-                        "yaml",
-                    ],
+                    sorted(TOOLS),
                 )
                 if mode == "diff" and directory.name == "deletion-syntax-error":
                     test.assertEqual(
@@ -63,6 +52,10 @@ def check_syntax_settings(test, configure, run):
             "debug": {"enabled": False},
             "phpcs": {"enabled": False},
             "phpmd": {"enabled": False},
+            "eslint": {"enabled": False},
+            "gitleaks": {"enabled": False},
+            "stylelint": {"enabled": False},
+            "jscpd": {"enabled": False},
             "phpstan": {"enabled": False},
             "twig-cs-fixer": {"enabled": False},
             "drupal-config": {"enabled": False},
@@ -101,3 +94,36 @@ def check_syntax_settings(test, configure, run):
         config["tools"]["syntax"]["exclude"] = ["**/*.phtml"]
         filename.write_text(json.dumps(config))
         test.assertEqual(run(scenario, [])["exit_code"], 0)
+
+
+def check_parallel_syntax(test, configure, run):
+    for directory in sorted(FIXTURES.iterdir()):
+        with test.subTest(scenario=directory.name), materialize(directory) as scenario:
+            configure(scenario)
+            filename = scenario.root / ".phpwarden.yaml"
+            config = json.loads(filename.read_text())
+            config["tools"] = {tool: {"enabled": False} for tool in TOOLS}
+            config["tools"]["syntax"] = {
+                "enabled": True,
+                "backend": "parallel-lint",
+                "parallel_jobs": 2,
+            }
+            filename.write_text(json.dumps(config))
+            for args in ([], ["--mode", "full"], ["--whole-files"], scenario.spec["changed_files"]):
+                result = run(scenario, args)
+                test.assertEqual(result["exit_code"], 1, result)
+                test.assertTrue(result["complete"], result)
+                test.assertEqual(
+                    [(row["path"], row["line"]) for row in result["findings"]],
+                    [(row["path"], row["line"]) for row in scenario.spec["findings"]],
+                    result,
+                )
+            target = scenario.root / scenario.spec["changed_files"][0]
+            target.write_text("<?php\nfile_put_contents(__DIR__ . '/executed', 'bad');\n")
+            result = run(scenario, [target.relative_to(scenario.root).as_posix()])
+            test.assertEqual(result["exit_code"], 0, result)
+            test.assertFalse(target.with_name("executed").exists())
+            target.write_text("<?php // lint > 99.0\n$value = ;\n")
+            result = run(scenario, [target.relative_to(scenario.root).as_posix()])
+            test.assertEqual(result["exit_code"], 3, result)
+            test.assertFalse(result["complete"], result)

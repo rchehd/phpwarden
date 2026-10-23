@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -25,6 +26,8 @@ import (
 const Version = "2.3.1"
 const DrupalVersion = "2.2.2"
 const DeprecationVersion = "2.0.5"
+const DeadCodeVersion = "1.4.2"
+const StrictRulesVersion = "2.1.0"
 
 //go:embed helper.php
 var helper []byte
@@ -61,15 +64,36 @@ type nativeReport struct {
 	Errors []string        `json:"errors"`
 }
 
+// analysis is one PHPStan run: the regular checker on selected files, or dead code over whole source roots.
+type analysis struct {
+	id         string
+	paths      []string
+	extensions []string
+	includes   []string
+	identifier string
+	severity   string
+	level      *int
+	exclude    []string
+	// PHP files load with the autoloader, before PHPStan builds its container; NEON files are included.
+	files map[string][]byte
+}
+
+func bundlePath() string {
+	executable, _ := os.Executable()
+	return filepath.Clean(filepath.Join(filepath.Dir(executable), "..", "lib", "phpwarden", "phpstan"))
+}
+
 // A nonempty dependencies error means installed packages do not match composer.lock.
 func Run(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.PHPStan, target config.Target, dependencies string, process runner.Process) checker.Outcome {
-	executable, _ := os.Executable()
-	bundle := filepath.Clean(filepath.Join(filepath.Dir(executable), "..", "lib", "phpwarden", "phpstan"))
-	return run(ctx, root, composerRoot, selection, cfg, target, dependencies, bundle, process)
+	return run(ctx, root, composerRoot, selection, cfg, target, dependencies, bundlePath(), process)
 }
 
 func run(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.PHPStan, target config.Target, dependencies, bundle string, process runner.Process) checker.Outcome {
-	result := checker.Outcome{Check: report.Check{ID: "phpstan", Status: "passed", Required: cfg.Required, FailOn: cfg.FailOn}, Findings: []report.Finding{}, Diagnostics: []report.Diagnostic{}}
+	return analyse(ctx, root, composerRoot, selection, cfg, target, dependencies, bundle, process, analysis{id: "phpstan", paths: selection.Files, severity: "error"})
+}
+
+func analyse(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.PHPStan, target config.Target, dependencies, bundle string, process runner.Process, mode analysis) checker.Outcome {
+	result := checker.Outcome{Check: report.Check{ID: mode.id, Status: "passed", Required: cfg.Required, FailOn: cfg.FailOn}, Findings: []report.Finding{}, Diagnostics: []report.Diagnostic{}}
 	if !cfg.Enabled || len(selection.Files) == 0 {
 		reason := "no_files"
 		if !cfg.Enabled {
@@ -80,7 +104,7 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 	}
 	fail := func(status, code, text string) checker.Outcome {
 		result.Check.Status, result.Check.Reason = status, &code
-		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: code, Stage: "checker", Checker: new("phpstan"), Message: text})
+		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: code, Stage: "checker", Checker: new(mode.id), Message: text})
 		return result
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(cfg.TimeoutSeconds)*time.Second)
@@ -120,6 +144,12 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 	if cfg.Deprecations {
 		includes = append(includes, filepath.Join(bundle, "vendor/phpstan/phpstan-deprecation-rules/rules.neon"))
 	}
+	if mode.id == "phpstan" && cfg.StrictRules.Enabled {
+		includes = append(includes, filepath.Join(bundle, "vendor/phpstan/phpstan-strict-rules/rules.neon"))
+	}
+	for _, name := range mode.includes {
+		includes = append(includes, filepath.Join(bundle, name))
+	}
 	for _, name := range append(append([]string{selected}, cfg.Includes...), cfg.Baseline) {
 		if name != "" {
 			includes = append(includes, filepath.Join(root, filepath.FromSlash(name)))
@@ -132,7 +162,34 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 		}
 		return values
 	}
-	extensions := []string{"php"}
+	preload := []string{}
+	if autoload != "" {
+		preload = append(preload, filepath.Join(root, filepath.FromSlash(autoload)))
+	}
+	for _, name := range slices.Sorted(maps.Keys(mode.files)) {
+		filename := filepath.Join(temporary, name)
+		if err := os.WriteFile(filename, mode.files[name], 0o600); err != nil {
+			return fail("error", "helper_prepare", err.Error())
+		}
+		if strings.HasSuffix(name, ".neon") {
+			includes = append(includes, filename)
+		} else {
+			preload = append(preload, filename)
+		}
+	}
+	if len(preload) > 1 || len(preload) == 1 && autoload == "" {
+		quote := strings.NewReplacer(`\`, `\\`, `'`, `\'`)
+		wrapper := "<?php\n"
+		for _, name := range preload {
+			wrapper += "require '" + quote.Replace(name) + "';\n"
+		}
+		filename := filepath.Join(temporary, "autoload.php")
+		if err := os.WriteFile(filename, []byte(wrapper), 0o600); err != nil {
+			return fail("error", "helper_prepare", err.Error())
+		}
+		preload = []string{filename}
+	}
+	extensions := append([]string{"php"}, mode.extensions...)
 	for _, name := range selection.Files {
 		ext := strings.TrimPrefix(filepath.Ext(name), ".")
 		if !slices.Contains(extensions, ext) {
@@ -150,7 +207,8 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 		return major*10000 + minor*100 + patch
 	}
 	input, _ := json.Marshal(map[string]any{"includes": includes, "extensions": extensions, "php_version": map[string]int{"min": versionID(target.Min, false), "max": versionID(target.Max, true)},
-		"diff": selection.Mode == "diff" && !selection.WholeFiles, "bootstrapFiles": absolute(cfg.BootstrapFiles), "scanDirectories": absolute(cfg.ScanDirectories), "stubFiles": absolute(cfg.StubFiles)})
+		"diff": selection.Mode == "diff" && !selection.WholeFiles || mode.id != "phpstan", "bootstrapFiles": absolute(cfg.BootstrapFiles), "scanDirectories": absolute(cfg.ScanDirectories), "stubFiles": absolute(cfg.StubFiles), "exclude": append([]string{}, mode.exclude...),
+		"strict_rules": cfg.StrictRules, "strict_enabled": mode.id == "phpstan" && cfg.StrictRules.Enabled})
 	phpArgs := []string{"-d", "auto_prepend_file=", "-d", "auto_append_file=", "-d", "display_errors=stderr", "-d", "log_errors=0", "-d", "memory_limit=" + strconv.Itoa(cfg.MemoryLimitMB) + "M"}
 	execution := process.Run(ctx, runner.Command{Name: "php", Directory: root, Input: input, Args: append(slices.Clone(phpArgs), script, bundle, temporary)})
 	processFailure := func(execution runner.Result) *checker.Outcome {
@@ -173,7 +231,7 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 		return fail("error", "helper_prepare", fmt.Sprintf("PHPStan preparation exited %d: %s", execution.ExitCode, execution.Stderr))
 	}
 	var meta metadata
-	if err := strictJSON(execution.Stdout, &meta); err != nil || len(execution.Stderr) > 0 || meta.Version != 1 || meta.Tools["phpstan/phpstan"] != Version || meta.Tools["mglaman/phpstan-drupal"] != DrupalVersion || meta.Tools["phpstan/phpstan-deprecation-rules"] != DeprecationVersion {
+	if err := strictJSON(execution.Stdout, &meta); err != nil || len(execution.Stderr) > 0 || meta.Version != 1 || meta.Tools["phpstan/phpstan"] != Version || meta.Tools["mglaman/phpstan-drupal"] != DrupalVersion || meta.Tools["phpstan/phpstan-deprecation-rules"] != DeprecationVersion || meta.Tools["shipmonk/dead-code-detector"] != DeadCodeVersion || meta.Tools["phpstan/phpstan-strict-rules"] != StrictRulesVersion {
 		return fail("error", "invalid_report", "Expected PHPStan metadata from the pinned toolset")
 	}
 	canonical, err := phpconstraint.StableVersion(meta.PHPVersion)
@@ -182,16 +240,18 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 	}
 	result.Runtime, result.PHPVersion = &meta.Runtime, &meta.PHPVersion
 	args := append(slices.Clone(phpArgs), filepath.Join(bundle, "vendor/phpstan/phpstan/phpstan"), "analyse", "--configuration="+filepath.Join(temporary, "phpstan.neon"), "--error-format=json", "--no-progress", "--no-ansi", "--memory-limit="+strconv.Itoa(cfg.MemoryLimitMB)+"M")
-	if autoload != "" {
-		args = append(args, "--autoload-file="+filepath.Join(root, filepath.FromSlash(autoload)))
+	if len(preload) > 0 {
+		args = append(args, "--autoload-file="+preload[0])
 	}
-	if cfg.Level != nil {
+	if mode.level != nil {
+		args = append(args, "--level="+strconv.Itoa(*mode.level))
+	} else if cfg.Level != nil {
 		args = append(args, "--level="+strconv.Itoa(*cfg.Level))
 	} else if selected == "" && len(cfg.Includes) == 0 {
 		args = append(args, "--level=3")
 	}
 	args = append(args, "--")
-	args = append(args, absolute(selection.Files)...)
+	args = append(args, absolute(mode.paths)...)
 	environment := slices.DeleteFunc(os.Environ(), func(variable string) bool {
 		name, _, _ := strings.Cut(variable, "=")
 		return slices.Contains(agentVariables, name)
@@ -207,9 +267,9 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 	if execution.ExitCode != 0 && execution.ExitCode != 1 {
 		return fail("error", "analysis_failed", fmt.Sprintf("PHPStan exited %d: %s %s", execution.ExitCode, strings.TrimSpace(string(execution.Stderr)), strings.TrimSpace(string(execution.Stdout))))
 	}
-	rows, globals, err := decode(execution.Stdout, execution.ExitCode, root, selection.Files)
+	rows, globals, err := decode(execution.Stdout, execution.ExitCode, root, mode.paths)
 	if err != nil {
-		return fail("error", "invalid_report", err.Error())
+		return fail("error", "invalid_report", strings.TrimSpace(err.Error()+": "+string(execution.Stderr)))
 	}
 	if len(execution.Stderr) > 0 {
 		return fail("error", "analysis_failed", strings.TrimSpace(string(execution.Stderr)))
@@ -219,16 +279,20 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 	}
 	for name, file := range rows {
 		for _, row := range file.Messages {
+			// Dead code analyses whole roots, so other PHPStan errors there must not stop it.
+			if mode.identifier != "" && !strings.HasPrefix(row.Identifier, mode.identifier) {
+				continue
+			}
 			if !row.Ignorable || row.Line == nil || row.Identifier == "" {
 				return fail("error", "analysis_failed", fmt.Sprintf("PHPStan could not complete analysis of %q: %s", name, row.Message))
 			}
-			if !selection.Contains(name, *row.Line) {
+			if !selection.Contains(name, *row.Line) || !strings.HasPrefix(row.Identifier, mode.identifier) {
 				continue
 			}
-			result.Findings = append(result.Findings, report.Finding{Checker: "phpstan", Rule: row.Identifier, Kind: "code", Severity: "error", Message: row.Message, Path: new(name), Line: row.Line})
+			result.Findings = append(result.Findings, report.Finding{Checker: mode.id, Rule: row.Identifier, Kind: "code", Severity: mode.severity, Message: row.Message, Path: new(name), Line: row.Line})
 		}
 	}
-	if len(result.Findings) > 0 && cfg.FailOn != "never" {
+	if len(result.Findings) > 0 && (cfg.FailOn == "warning" || cfg.FailOn == "error" && mode.severity == "error") {
 		result.Check.Status = "failed"
 	}
 	return result
@@ -267,7 +331,7 @@ func decode(data []byte, exit int, root string, files []string) (map[string]file
 			name, _ = filepath.Rel(root, name)
 		}
 		name = filepath.ToSlash(name)
-		if !slices.Contains(files, name) || file.Messages == nil || file.Errors != len(file.Messages) {
+		if !slices.ContainsFunc(files, func(selected string) bool { return name == selected || strings.HasPrefix(name, selected+"/") }) || file.Messages == nil || file.Errors != len(file.Messages) {
 			return nil, nil, fmt.Errorf("PHPStan file or totals do not match selected inputs")
 		}
 		if _, exists := result[name]; exists {

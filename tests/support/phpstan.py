@@ -1,22 +1,10 @@
 import json
 from pathlib import Path
 
+from tests.support.phpmd import TOOLS
 from tests.support.scenarios import materialize
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "phpstan"
-TOOLS = (
-    "composer-audit",
-    "composer-validate",
-    "debug",
-    "drupal-config",
-    "phpcs",
-    "phpmd",
-    "phpstan",
-    "syntax",
-    "twig-cs-fixer",
-    "whitespace",
-    "yaml",
-)
 
 
 def check_phpstan_fixtures(test, configure, run):

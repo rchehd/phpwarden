@@ -19,7 +19,7 @@ type Options struct {
 }
 
 // Global findings name their file in a message prefix because the report schema keeps their path null.
-var globalFile = regexp.MustCompile(`^(?:YAML file|Twig template|Composer file) ("(?:[^"\\]|\\.)*"): `)
+var globalFile = regexp.MustCompile(`^(?:YAML file|Twig template|Composer file|Composer package|Config sync) ("(?:[^"\\]|\\.)*"): `)
 
 var trailingLink = regexp.MustCompile(`\s(https?://\S+)$`)
 
@@ -66,6 +66,14 @@ func (w *writer) severity(value string) string {
 
 func Write(out io.Writer, result report.Report, options Options) error {
 	w := &writer{out: out, options: options}
+	if len(result.FixedFiles) > 0 {
+		names := make([]string, len(result.FixedFiles))
+		for i, name := range result.FixedFiles {
+			names[i] = display(name)
+		}
+		w.line("Fixed %d file(s): %s", len(result.FixedFiles), strings.Join(names, ", "))
+		w.line("")
+	}
 	if len(result.Checks) == 0 {
 		w.line("%s", w.paint("1", "PHPWarden did not run any checks."))
 		w.line("")

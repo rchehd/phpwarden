@@ -48,6 +48,7 @@ func TestConfigCommands(t *testing.T) {
 
 func TestUsageErrorsNeverReturnSuccess(t *testing.T) {
 	cases := [][]string{
+		{"scope", "--fix"}, {"config", "show", "--fix"}, {"check", "--fix", "--fix"}, {"--version", "--fix"},
 		{"check"}, {"init"}, {"config"}, {"config", "shwo"}, {"config", "show", "extra"},
 		{"config", "show", "--project"}, {"config", "show", "--config="},
 		{"config", "show", "--config", "--help"}, {"config", "show", "--only", "phpstna"},

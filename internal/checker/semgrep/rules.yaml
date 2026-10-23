@@ -1,0 +1,74 @@
+rules:
+  - id: phpwarden.php.request-command-injection
+    languages: [php]
+    mode: taint
+    severity: ERROR
+    message: Potential command injection from request data; avoid shell execution or quote individual arguments.
+    pattern-sources: &request_sources
+      - pattern: $_GET[$KEY]
+        exact: true
+      - pattern: $_POST[$KEY]
+        exact: true
+      - pattern: $_REQUEST[$KEY]
+        exact: true
+      - pattern: $_COOKIE[$KEY]
+        exact: true
+      - pattern: $REQUEST->query->get(...)
+        exact: true
+      - pattern: $REQUEST->request->get(...)
+        exact: true
+    pattern-sanitizers:
+      - pattern: escapeshellarg(...)
+        exact: true
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: exec($CMD, ...)
+              - pattern: system($CMD, ...)
+              - pattern: shell_exec($CMD)
+              - pattern: passthru($CMD, ...)
+              - pattern: popen($CMD, ...)
+              - pattern: proc_open($CMD, ...)
+          - focus-metavariable: $CMD
+  - id: phpwarden.php.request-sql-injection
+    languages: [php]
+    mode: taint
+    severity: ERROR
+    message: Request data reaches SQL query text; use placeholders and bound parameters.
+    pattern-sources: *request_sources
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB->query($SQL, ...)
+              - pattern: db_query($SQL, ...)
+          - focus-metavariable: $SQL
+  - id: phpwarden.php.request-xss
+    languages: [php]
+    mode: taint
+    severity: ERROR
+    message: Potential XSS from request data reaching HTML output or trusted markup; escape for the output context.
+    pattern-sources: *request_sources
+    pattern-sanitizers:
+      - pattern: htmlspecialchars(...)
+        exact: true
+      - pattern: htmlentities(...)
+        exact: true
+      - pattern: \Drupal\Component\Utility\Html::escape(...)
+        exact: true
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: echo $HTML;
+              - pattern: print $HTML;
+              - pattern: \Drupal\Core\Render\Markup::create($HTML)
+          - focus-metavariable: $HTML
+  - id: phpwarden.php.request-unserialize
+    languages: [php]
+    mode: taint
+    severity: WARNING
+    message: Request data reaches unserialize; prefer a validated data format such as JSON.
+    pattern-sources: *request_sources
+    pattern-sinks:
+      - patterns:
+          - pattern: unserialize($DATA, ...)
+          - focus-metavariable: $DATA

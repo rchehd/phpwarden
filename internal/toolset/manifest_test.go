@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/rchehd/phpwarden/internal/checker/eventhorizon"
+	"github.com/rchehd/phpwarden/internal/checker/semgrep"
 	yamlcheck "github.com/rchehd/phpwarden/internal/checker/yaml"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/profile"
@@ -192,7 +194,7 @@ func TestInvalidManifests(t *testing.T) {
 		strings.Replace(string(bundledManifest), `"php": "8.4.26"`, `"php": "8.4.26", "php": "8.4.26"`, 1),
 		strings.Replace(string(bundledManifest), `"version": 1`, `"version": 1, "unexpected": true`, 1),
 		strings.Replace(string(bundledManifest), `"runtime": "8.4"`, `"runtime": "8.4", "typo": true`, 1),
-		strings.Replace(string(bundledManifest), `"version": "1.8.0"`, `"version": null`, 1),
+		strings.Replace(string(bundledManifest), `"version": "1.17.0"`, `"version": null`, 1),
 		strings.Replace(string(bundledManifest), `"framework": null`, `"framework": "^11"`, 1),
 		strings.Replace(string(bundledManifest), `"debug"`, `"phpstan"`, 1),
 		strings.Replace(string(bundledManifest), `"linux/amd64"`, `"linux/arm64"`, 1),
@@ -246,7 +248,7 @@ func TestBundledYAMLVersionsMatchDependencyLock(t *testing.T) {
 	if selected.Tools["symfony-yaml"] != yamlcheck.Version {
 		t.Fatal("YAML checker and manifest versions differ")
 	}
-	for _, name := range []string{"yaml", "phpcs", "phpstan", "twig-cs-fixer", "composer"} {
+	for _, name := range []string{"yaml", "phpcs", "phpstan", "twig-cs-fixer", "composer", "rector", "deptrac", "composer-unused", "parallel-lint", "composer-require-checker/php8.4"} {
 		data, err := os.ReadFile("../../tools/" + name + "/composer.lock")
 		if err != nil {
 			t.Fatal(err)
@@ -261,7 +263,31 @@ func TestBundledYAMLVersionsMatchDependencyLock(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, pkg := range lock.Packages {
-			if selected.Tools[strings.ReplaceAll(pkg.Name, "/", "-")] != strings.TrimPrefix(pkg.Version, "v") {
+			key := strings.ReplaceAll(pkg.Name, "/", "-")
+			if name == "rector" && pkg.Name == "phpstan/phpstan" {
+				key = "rector-phpstan"
+			}
+			if name == "deptrac" {
+				switch pkg.Name {
+				case "deptrac/deptrac":
+					key = "deptrac-deptrac"
+				case "phpstan/phpstan":
+					key = "deptrac-phpstan"
+				default:
+					key = "deptrac-dependency-" + key
+				}
+			}
+			if name == "composer-unused" && pkg.Name != "icanhazstring/composer-unused" {
+				key = "unused-" + key
+			}
+			if name == "composer-require-checker/php8.4" && pkg.Name != "maglnet/composer-require-checker" {
+				key = "require-checker-" + key
+			}
+			version := strings.TrimPrefix(pkg.Version, "v")
+			if name == "deptrac" && pkg.Name == "jetbrains/phpstorm-stubs" {
+				version += ".0"
+			}
+			if selected.Tools[key] != version {
 				t.Fatalf("manifest version differs from lock for %s", pkg.Name)
 			}
 		}
@@ -283,6 +309,112 @@ func TestBundledRuntimesSelectTheirImages(t *testing.T) {
 	for _, versions := range [][3]string{{"8.1", "8.1", "8.2"}, {"8.3", "8.0", "8.3"}, {"8.5", "8.1", "8.5"}} {
 		if selected, err := catalog.Resolve(effectiveVersion("auto", versions[0], versions[1], versions[2]), "linux/amd64"); err == nil {
 			t.Fatalf("unsupported runtime %s target %s..%s selected %s", versions[0], versions[1], versions[2], selected.Image)
+		}
+	}
+}
+
+func TestEventHorizonSourceLockMatchesManifestAndImage(t *testing.T) {
+	data, err := os.ReadFile("../../tools/eventhorizon/sources.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var source struct {
+		Version      string
+		Revision     string
+		EventHorizon struct {
+			URL    string
+			SHA256 string
+		}
+		PyYAML struct {
+			Version string
+			URL     string
+			SHA256  string
+		}
+	}
+	if err := json.Unmarshal(data, &source); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := bundled()
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, err := catalog.Resolve(effectiveVersion("auto", "8.4", "8.4", "8.4"), "linux/amd64")
+	if err != nil || source.Version != eventhorizon.Version || source.Revision != eventhorizon.Revision || source.PyYAML.Version != eventhorizon.YAMLVersion ||
+		selected.Tools["eventhorizon-cli"] != source.Version || selected.Tools["pyyaml"] != source.PyYAML.Version {
+		t.Fatalf("EventHorizon source/manifest mismatch: %v", err)
+	}
+	dockerfile, err := os.ReadFile("../../docker/Dockerfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{source.EventHorizon.URL, source.EventHorizon.SHA256, source.PyYAML.URL, source.PyYAML.SHA256, source.Revision} {
+		if expected == "" || !strings.Contains(string(dockerfile), expected) {
+			t.Fatalf("image source pin missing: %q", expected)
+		}
+	}
+}
+
+func TestSemgrepSourceLockMatchesManifestAndImage(t *testing.T) {
+	data, err := os.ReadFile("../../tools/semgrep/sources.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var source struct {
+		Version      string `json:"version"`
+		RulesVersion string `json:"rules_version"`
+		Source       struct{ URL, SHA256, Revision string }
+		Wheels       map[string]struct{ URL, SHA256 string }
+	}
+	if err := json.Unmarshal(data, &source); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := bundled()
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, err := catalog.Resolve(effectiveVersion("auto", "8.4", "8.4", "8.4"), "linux/amd64")
+	if err != nil || source.Version != semgrep.Version || source.RulesVersion != semgrep.RulesVersion || selected.Tools["semgrep"] != source.Version || selected.Tools["phpwarden-semgrep-rules"] != source.RulesVersion {
+		t.Fatalf("Semgrep manifest/source mismatch: %v", err)
+	}
+	dockerfile, err := os.ReadFile("../../docker/Dockerfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{source.Source.URL, source.Source.SHA256, source.Wheels["musllinux_1_2_x86_64"].URL, source.Wheels["musllinux_1_2_x86_64"].SHA256} {
+		if expected == "" || !strings.Contains(string(dockerfile), expected) {
+			t.Fatalf("missing Semgrep image source pin: %q", expected)
+		}
+	}
+}
+
+func TestRequireCheckerLocksForEveryRuntime(t *testing.T) {
+	catalog, err := bundled()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, runtime := range []string{"8.1", "8.2", "8.3", "8.4"} {
+		selected, err := catalog.Resolve(effectiveVersion("auto", runtime, runtime, runtime), "linux/amd64")
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile("../../tools/composer-require-checker/php" + runtime + "/composer.lock")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var lock struct {
+			Packages []struct{ Name, Version string }
+		}
+		if json.Unmarshal(data, &lock) != nil {
+			t.Fatal("invalid require checker lock")
+		}
+		for _, pkg := range lock.Packages {
+			key := strings.ReplaceAll(pkg.Name, "/", "-")
+			if pkg.Name != "maglnet/composer-require-checker" {
+				key = "require-checker-" + key
+			}
+			if selected.Tools[key] != strings.TrimPrefix(pkg.Version, "v") {
+				t.Fatalf("%s %s manifest/lock mismatch", runtime, pkg.Name)
+			}
 		}
 	}
 }

@@ -1,0 +1,12 @@
+deptrac:
+  paths: [src]
+  layers:
+    - name: Domain
+      collectors:
+        - {type: classLike, value: 'App\\Domain\\.*'}
+    - name: Infrastructure
+      collectors:
+        - {type: classLike, value: 'App\\Infrastructure\\.*'}
+  ruleset:
+    Domain: []
+    Infrastructure: []

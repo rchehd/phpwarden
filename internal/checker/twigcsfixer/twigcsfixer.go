@@ -9,11 +9,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/config"
+	"github.com/rchehd/phpwarden/internal/edit"
 	"github.com/rchehd/phpwarden/internal/phpconstraint"
 	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/report"
@@ -41,6 +43,7 @@ type helperReport struct {
 	PHPVersion string                 `json:"php_version"`
 	Tools      map[string]string      `json:"tools"`
 	Files      map[string][]violation `json:"files"`
+	Edits      []edit.Edit            `json:"edits,omitempty"`
 }
 
 func Run(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.TwigCSFixer, profileID string, process runner.Process) checker.Outcome {
@@ -50,6 +53,16 @@ func Run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 }
 
 func run(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.TwigCSFixer, profileID, bundle string, process runner.Process) checker.Outcome {
+	return runMode(ctx, root, composerRoot, selection, cfg, profileID, bundle, process, false)
+}
+
+func Fix(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.TwigCSFixer, profileID string, process runner.Process) checker.Outcome {
+	executable, _ := os.Executable()
+	bundle := filepath.Clean(filepath.Join(filepath.Dir(executable), "..", "lib", "phpwarden", "twig-cs-fixer"))
+	return runMode(ctx, root, composerRoot, selection, cfg, profileID, bundle, process, true)
+}
+
+func runMode(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.TwigCSFixer, profileID, bundle string, process runner.Process, fixing bool) checker.Outcome {
 	result := checker.Outcome{Check: report.Check{ID: "twig-cs-fixer", Status: "passed", Required: cfg.Required, FailOn: cfg.FailOn}, Findings: []report.Finding{}, Diagnostics: []report.Diagnostic{}}
 	if !cfg.Enabled || len(selection.Files) == 0 {
 		reason := "no_files"
@@ -94,7 +107,7 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 		configPath = new(filepath.Join(root, filepath.FromSlash(selected)))
 	}
 	defaults, _ := profile.Lookup(profileID)
-	input, _ := json.Marshal(map[string]any{"config": configPath, "removed_rules": defaults.TwigCSFixerRemovedRules, "files": files})
+	input, _ := json.Marshal(map[string]any{"config": configPath, "removed_rules": defaults.TwigCSFixerRemovedRules, "files": files, "fix": fixing})
 	execution := process.Run(ctx, runner.Command{Name: "php", Directory: root, Input: input, Args: []string{"-d", "auto_prepend_file=", "-d", "auto_append_file=", "-d", "display_errors=stderr", "-d", "log_errors=0", "-d", "memory_limit=256M", script, bundle}})
 	if execution.Unavailable {
 		return fail("unavailable", "executable_missing", "PHP executable is unavailable in the worker")
@@ -108,6 +121,20 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 	parsed, err := decode(execution.Stdout, execution.Stderr, files)
 	if err != nil {
 		return fail("error", "invalid_report", err.Error())
+	}
+	if !fixing && len(parsed.Edits) != 0 || fixing && parsed.Edits == nil {
+		return fail("error", "invalid_report", "Twig CS Fixer output does not match the requested operation")
+	}
+	for _, change := range parsed.Edits {
+		name := change.Path
+		if filepath.IsAbs(name) {
+			name, err = filepath.Rel(root, name)
+		}
+		if err != nil || !slices.Contains(selection.Files, filepath.ToSlash(name)) {
+			return fail("error", "invalid_report", "Twig CS Fixer returned an unexpected fix path")
+		}
+		change.Path = filepath.ToSlash(name)
+		result.Edits = append(result.Edits, change)
 	}
 	result.Runtime, result.PHPVersion = &parsed.Runtime, &parsed.PHPVersion
 	for i, name := range selection.Files {

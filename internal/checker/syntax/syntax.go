@@ -28,6 +28,9 @@ func Run(ctx context.Context, root string, selection scope.Selection, cfg config
 		result.Check.Status, result.Check.Reason = "skipped", &reason
 		return result
 	}
+	if cfg.Backend == "parallel-lint" {
+		return runParallel(ctx, root, selection, cfg, parallelBundle(), process)
+	}
 	fail := func(status, code, message string) checker.Outcome {
 		result.Check.Status, result.Check.Reason = status, &code
 		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: code, Stage: "checker", Message: message, Checker: new("syntax")})

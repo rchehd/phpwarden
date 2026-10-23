@@ -19,6 +19,130 @@ php:
     max: "8.4"
 `
 
+func TestSemgrepDefaultsLocalRulesAndConfiguration(t *testing.T) {
+	effective, err := Parse([]byte(minimal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := effective.Config.Tools.Semgrep
+	if settings.Enabled || !settings.Required || settings.FailOn != "error" || !settings.UseDefaults || !settings.DiscoverConfig || len(settings.Severities) != 3 || settings.MemoryLimitMB != 1024 || settings.RuleTimeoutSeconds != 5 || effective.Provenance["tools.semgrep.rules"] != "core_default" {
+		t.Fatalf("Semgrep defaults: %+v", settings)
+	}
+	effective, err = Parse([]byte(minimal + `tools:
+  semgrep:
+    enabled: true
+    use_defaults: false
+    config: quality/security.yaml
+    rulesets: [quality/local.json]
+    rules: [custom.rule]
+    exclude_rules: []
+    severities: [ERROR]
+    baseline: quality/baseline.json
+    extra_extensions: [.custom]
+    rule_timeout_seconds: 10
+`))
+	if err != nil || !effective.Config.Tools.Semgrep.Enabled || effective.Config.Tools.Semgrep.UseDefaults || effective.Config.Tools.Semgrep.RuleTimeoutSeconds != 10 {
+		t.Fatalf("Semgrep overrides: %+v, %v", effective, err)
+	}
+	for _, invalid := range []string{
+		"tools: {semgrep: {config: ../outside.yml}}", "tools: {semgrep: {config: 'https://example.com/rules.yml'}}", "tools: {semgrep: {config: auto}}", "tools: {semgrep: {config: rules.jsonnet}}", "tools: {semgrep: {rulesets: [/outside.yml]}}", "tools: {semgrep: {severities: []}}", "tools: {semgrep: {severities: [CRITICAL]}}", "tools: {semgrep: {rule_timeout_seconds: 0}}", "tools: {semgrep: {memory_limit_mb: 0}}", "tools: {semgrep: {extra_extensions: [php]}}",
+	} {
+		if _, err := Parse([]byte(minimal + invalid + "\n")); err == nil {
+			t.Fatalf("invalid Semgrep config accepted: %s", invalid)
+		}
+	}
+}
+
+func TestEventHorizonDefaultsAndConfiguration(t *testing.T) {
+	effective, err := Parse([]byte(minimal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := effective.Config.Tools.EventHorizon
+	if settings.Enabled || !settings.Required || settings.FailOn != "never" || !settings.Caching || settings.ConfigSync == nil || settings.ExcludeRules == nil || effective.Provenance["tools.eventhorizon.caching"] != "core_default" {
+		t.Fatalf("EventHorizon defaults: %+v", settings)
+	}
+	effective, err = Parse([]byte(minimal + `tools:
+  eventhorizon:
+    enabled: true
+    caching: false
+    config_sync: [config/site-one, web/sites/site-two/config/sync]
+    exclude_rules: [config.orphaned_entity]
+    fail_on: warning
+`))
+	if err != nil || !effective.Config.Tools.EventHorizon.Enabled || effective.Config.Tools.EventHorizon.Caching || len(effective.Config.Tools.EventHorizon.ConfigSync) != 2 || effective.Provenance["tools.eventhorizon.fail_on"] != "project_config" {
+		t.Fatalf("EventHorizon overrides: %+v, %v", effective, err)
+	}
+	for _, invalid := range []string{
+		"tools: {eventhorizon: {config_sync: [../outside]}}",
+		"tools: {eventhorizon: {config_sync: [/outside]}}",
+		"tools: {eventhorizon: {exclude_rules: [unknown_rule]}}",
+		"tools: {eventhorizon: {timeout_seconds: 0}}",
+		"tools: {eventhorizon: {exclude: ['[']}}",
+	} {
+		if _, err := Parse([]byte(minimal + invalid + "\n")); err == nil {
+			t.Fatalf("invalid EventHorizon settings accepted: %s", invalid)
+		}
+	}
+}
+
+func TestNodeCheckerConfiguration(t *testing.T) {
+	valid := minimal + `tools:
+  eslint: {config: src/eslint.config.cjs, extra_extensions: [.ts], extra_inputs: [shared.js]}
+  stylelint: {config: src/.stylelintrc.json, fail_on: warning}
+  jscpd: {min_tokens: 100, min_lines: 8, mode: weak}
+`
+	effective, err := Parse([]byte(valid))
+	if err != nil || effective.Config.Tools.JSCPD.MinTokens != 100 || effective.Config.Tools.Stylelint.FailOn != "warning" ||
+		effective.Provenance["tools.jscpd.min_tokens"] != "project_config" {
+		t.Fatalf("Node checker settings: %+v, %v", effective, err)
+	}
+	for _, invalid := range []string{
+		"tools: {eslint: {config: ../outside.js}}",
+		"tools: {stylelint: {extra_inputs: [/outside.js]}}",
+		"tools: {jscpd: {min_tokens: 0}}",
+		"tools: {jscpd: {mode: unknown}}",
+		"tools: {eslint: {exclude: ['[']}}",
+	} {
+		if _, err := Parse([]byte(minimal + invalid + "\n")); err == nil {
+			t.Fatalf("invalid Node configuration accepted: %s", invalid)
+		}
+	}
+}
+
+func TestStrictRulesAndGitleaksConfiguration(t *testing.T) {
+	effective, err := Parse([]byte(minimal + `tools:
+  phpstan:
+    strict_rules:
+      enabled: true
+      all: false
+      rules: {disallowedLooseComparison: true, disallowedEmpty: false}
+  gitleaks:
+    config: quality/gitleaks.toml
+    baseline: quality/baseline.json
+    ignore_file: quality/gitleaks.ignore
+    rules: [generic-api-key]
+    extra_inputs: [quality/shared.toml]
+`))
+	if err != nil || !effective.Config.Tools.PHPStan.StrictRules.Enabled || effective.Config.Tools.PHPStan.StrictRules.All ||
+		!effective.Config.Tools.PHPStan.StrictRules.Rules["disallowedLooseComparison"] || effective.Config.Tools.Gitleaks.Baseline != "quality/baseline.json" ||
+		effective.Provenance["tools.phpstan.strict_rules.rules.disallowedLooseComparison"] != "project_config" {
+		t.Fatalf("strict/Gitleaks configuration: %+v, %v", effective, err)
+	}
+	for _, value := range []string{
+		"tools: {phpstan: {strict_rules: {rules: {unknownRule: true}}}}",
+		"tools: {phpstan: {strict_rules: {rules: {disallowedEmpty: 1}}}}",
+		"tools: {gitleaks: {config: ../outside.toml}}",
+		"tools: {gitleaks: {baseline: /outside.json}}",
+		"tools: {gitleaks: {ignore_file: ../outside}}",
+		"tools: {gitleaks: {rules: ['bad,rule']}}",
+	} {
+		if _, err := Parse([]byte(minimal + value + "\n")); err == nil {
+			t.Fatalf("invalid strict/Gitleaks configuration accepted: %s", value)
+		}
+	}
+}
+
 func TestDefaultsAndProvenance(t *testing.T) {
 	result, err := Parse([]byte(minimal))
 	if err != nil {
@@ -66,6 +190,10 @@ func TestDefaultsAndProvenance(t *testing.T) {
 		!phpstan.Drupal || !phpstan.Deprecations || phpstan.MemoryLimitMB != 512 || phpstan.Includes == nil || phpstan.Exclude == nil ||
 		result.Provenance["tools.phpstan.drupal"] != "profile_default" || result.Provenance["tools.phpstan.level"] != "" {
 		t.Fatalf("unexpected PHPStan defaults: %+v", phpstan)
+	}
+	if phpstan.StrictRules.Enabled || !phpstan.StrictRules.All || phpstan.StrictRules.Rules == nil ||
+		!result.Config.Tools.Gitleaks.Enabled || !result.Config.Tools.Gitleaks.Required || result.Config.Tools.Gitleaks.FailOn != "error" {
+		t.Fatalf("unexpected strict/Gitleaks defaults: %+v %+v", phpstan.StrictRules, result.Config.Tools.Gitleaks)
 	}
 	twig := result.Config.Tools.TwigCSFixer
 	if !twig.Enabled || !twig.Required || twig.FailOn != "error" || !twig.DiscoverConfig || twig.Config != "" || twig.ExtraExtensions == nil || twig.ExtraInputs == nil ||
@@ -135,7 +263,7 @@ func TestInvalidConfigurations(t *testing.T) {
 		"unknown field":         minimal + "profiel: drupal\n",
 		"nested unknown field":  minimal + "runner: {timeot: 1}\n",
 		"unknown checker":       minimal + "tools: {phpstna: {}}\n",
-		"unimplemented checker": minimal + "tools: {jscpd: {}}\n",
+		"unimplemented checker": minimal + "tools: {exakat: {}}\n",
 		"unsupported profile":   strings.Replace(minimal, "profile: drupal", "profile: laravel", 1),
 		"missing profile":       strings.Replace(minimal, "profile: drupal\n", "", 1),
 		"unknown version":       strings.Replace(minimal, "version: 1", "version: 2", 1),
@@ -341,5 +469,64 @@ func TestConcurrentParsingDoesNotShareMutableDefaults(t *testing.T) {
 				t.Fatal("defaults leaked between configs")
 			}
 		})
+	}
+}
+
+func TestRectorUpgradeSettingsAreSeparateAndDryRunOnly(t *testing.T) {
+	effective, err := Parse([]byte(minimal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaults := effective.Config.Tools.Rector
+	if defaults.Enabled || !defaults.DryRun || defaults.FailOn != "never" || !defaults.Required || defaults.TargetPHP != "" || defaults.TargetDrupal != "" || effective.Provenance["tools.rector.dry_run"] != "core_default" {
+		t.Fatalf("Rector defaults: %+v", defaults)
+	}
+	effective, err = Parse([]byte(minimal + "tools: {rector: {enabled: true, target_php: '8.5', target_drupal: '11.1', sets: [drupal-11.0], skip_rules: ['Rector\\Renaming\\Rector\\FuncCall\\RenameFunctionRector']}}\n"))
+	if err != nil || effective.Config.Tools.Rector.TargetPHP != "8.5" || effective.Config.PHP.Runtime != "8.3" {
+		t.Fatalf("upgrade target was confused with project runtime: %+v %v", effective, err)
+	}
+	for _, invalid := range []string{"{dry_run: false}", "{target_php: '9.0'}", "{config: ../rector.php}", "{config: auto}", "{sets: [/outside.php]}", "{rules: [not_a_class]}", "{extra_extensions: [php]}", "{memory_limit_mb: 0}"} {
+		if _, err := Parse([]byte(minimal + "tools: {rector: " + invalid + "}\n")); err == nil {
+			t.Fatalf("invalid Rector config accepted: %s", invalid)
+		}
+	}
+}
+
+func TestDeptracRequiresOptInAndLocalConfiguration(t *testing.T) {
+	effective, err := Parse([]byte(minimal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaults := effective.Config.Tools.Deptrac
+	if defaults.Enabled || !defaults.Required || defaults.FailOn != "error" || !defaults.DiscoverConfig || defaults.ReportUncovered || defaults.FailOnUncovered || defaults.ReportSkipped || defaults.MemoryLimitMB != 1024 || effective.Provenance["tools.deptrac.config"] != "core_default" {
+		t.Fatalf("Deptrac defaults: %+v", defaults)
+	}
+	effective, err = Parse([]byte(minimal + "tools: {deptrac: {enabled: true, config: config/deptrac.yaml, fail_on: never, report_uncovered: true, report_skipped: true}}\n"))
+	if err != nil || !effective.Config.Tools.Deptrac.Enabled || !effective.Config.Tools.Deptrac.ReportUncovered {
+		t.Fatalf("Deptrac overrides: %+v %v", effective, err)
+	}
+	for _, invalid := range []string{"{config: ../outside.yaml}", "{config: /outside.yaml}", "{config: deptrac.php}", "{memory_limit_mb: 0}", "{report_uncovered: 1}", "{extra_inputs: [../outside.yaml]}"} {
+		if _, err := Parse([]byte(minimal + "tools: {deptrac: " + invalid + "}\n")); err == nil {
+			t.Fatalf("invalid Deptrac config accepted: %s", invalid)
+		}
+	}
+}
+
+func TestPackageAndParallelSyntaxSettings(t *testing.T) {
+	effective, err := Parse([]byte(minimal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if effective.Config.Tools.ComposerRequireChecker.Enabled || effective.Config.Tools.ComposerUnused.Enabled || effective.Config.Tools.ComposerUnused.FailOn != "never" || effective.Config.Tools.Syntax.Backend != "php" || effective.Config.Tools.Syntax.ParallelJobs != 4 {
+		t.Fatal("unexpected tool defaults")
+	}
+	for _, data := range []string{"{syntax: {backend: unknown}}", "{syntax: {parallel_jobs: 0}}", "{syntax: {parallel_jobs: 33}}", "{composer-unused: {composer_root: ../outside}}", "{composer-unused: {config: unused.json}}", "{composer-require-checker: {config: checker.php}}", "{composer-require-checker: {scan_files: [../outside.php]}}"} {
+		if _, err := Parse([]byte(minimal + "tools: " + data + "\n")); err == nil {
+			t.Fatalf("invalid tool settings accepted: %s", data)
+		}
+	}
+	effective, err = Parse([]byte(minimal + "tools: {syntax: {backend: parallel-lint, parallel_jobs: 2}, composer-unused: {enabled: true, composer_root: package, exclude_packages: [acme/demo]}, composer-require-checker: {scan_files: [demo.module], allowed_symbols: ['Drupal\\demo\\Plugin']}}\n"))
+	if err != nil || effective.Config.Tools.Syntax.Backend != "parallel-lint" || effective.Provenance["tools.syntax.backend"] != "project_config" {
+		t.Fatalf("tool settings: %+v %v", effective, err)
 	}
 }

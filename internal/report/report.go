@@ -20,6 +20,7 @@ type Report struct {
 	Checks      []Check          `json:"checks"`
 	Findings    []Finding        `json:"findings"`
 	Diagnostics []Diagnostic     `json:"diagnostics"`
+	FixedFiles  []string         `json:"fixed_files,omitempty"`
 }
 
 type Environment struct {
@@ -52,14 +53,15 @@ type Check struct {
 }
 
 type Finding struct {
-	Checker  string  `json:"checker"`
-	Rule     string  `json:"rule"`
-	Kind     string  `json:"kind"`
-	Severity string  `json:"severity"`
-	Message  string  `json:"message"`
-	Path     *string `json:"path"`
-	Line     *int    `json:"line"`
-	Column   *int    `json:"column"`
+	Fingerprint *string `json:"fingerprint,omitempty"`
+	Checker     string  `json:"checker"`
+	Rule        string  `json:"rule"`
+	Kind        string  `json:"kind"`
+	Severity    string  `json:"severity"`
+	Message     string  `json:"message"`
+	Path        *string `json:"path"`
+	Line        *int    `json:"line"`
+	Column      *int    `json:"column"`
 }
 
 type Diagnostic struct {

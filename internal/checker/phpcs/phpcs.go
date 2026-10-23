@@ -16,6 +16,7 @@ import (
 
 	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/config"
+	"github.com/rchehd/phpwarden/internal/edit"
 	"github.com/rchehd/phpwarden/internal/phpconstraint"
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/runner"
@@ -49,13 +50,14 @@ type fileReport struct {
 	Messages []message `json:"messages"`
 }
 type helperReport struct {
-	Version              int    `json:"version"`
-	Runtime              string `json:"runtime"`
-	PHPVersion           string `json:"php_version"`
-	PHPCSVersion         string `json:"phpcs_version"`
-	CoderVersion         string `json:"coder_version"`
-	CompatibilityVersion string `json:"compatibility_version"`
-	ExitCode             int    `json:"exit_code"`
+	Version              int         `json:"version"`
+	Runtime              string      `json:"runtime"`
+	PHPVersion           string      `json:"php_version"`
+	PHPCSVersion         string      `json:"phpcs_version"`
+	CoderVersion         string      `json:"coder_version"`
+	CompatibilityVersion string      `json:"compatibility_version"`
+	ExitCode             int         `json:"exit_code"`
+	Edits                []edit.Edit `json:"edits,omitempty"`
 	Report               struct {
 		Totals totals                `json:"totals"`
 		Files  map[string]fileReport `json:"files"`
@@ -69,6 +71,16 @@ func Run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 }
 
 func run(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.PHPCS, target config.Target, bundle string, process runner.Process) checker.Outcome {
+	return runMode(ctx, root, composerRoot, selection, cfg, target, bundle, process, false)
+}
+
+func Fix(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.PHPCS, target config.Target, process runner.Process) checker.Outcome {
+	executable, _ := os.Executable()
+	bundle := filepath.Clean(filepath.Join(filepath.Dir(executable), "..", "lib", "phpwarden", "phpcs"))
+	return runMode(ctx, root, composerRoot, selection, cfg, target, bundle, process, true)
+}
+
+func runMode(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.PHPCS, target config.Target, bundle string, process runner.Process, fixing bool) checker.Outcome {
 	result := checker.Outcome{Check: report.Check{ID: "phpcs", Status: "passed", Required: cfg.Required, FailOn: cfg.FailOn}, Findings: []report.Finding{}, Diagnostics: []report.Diagnostic{}}
 	if !cfg.Enabled || len(selection.Files) == 0 {
 		reason := "no_files"
@@ -146,7 +158,7 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 		for i, name := range batch.Files {
 			files[i] = filepath.Join(root, filepath.FromSlash(name))
 		}
-		input, _ := json.Marshal(map[string]any{"standards": standards, "args": args, "files": files})
+		input, _ := json.Marshal(map[string]any{"standards": standards, "args": args, "files": files, "fix": fixing})
 		execution := process.Run(ctx, runner.Command{Name: "php", Directory: root, Input: input, Args: []string{"-d", "auto_prepend_file=", "-d", "auto_append_file=", "-d", "display_errors=stderr", "-d", "log_errors=0", "-d", "memory_limit=256M", script, bundle}})
 		if execution.Unavailable {
 			return fail("unavailable", "executable_missing", "PHP executable is unavailable in the worker")
@@ -160,6 +172,20 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 		parsed, err := decode(execution.Stdout, execution.Stderr, root, batch.Files)
 		if err != nil {
 			return fail("error", "invalid_report", err.Error())
+		}
+		if !fixing && len(parsed.Edits) != 0 || fixing && parsed.Edits == nil {
+			return fail("error", "invalid_report", "PHPCS fix output does not match the requested operation")
+		}
+		for _, change := range parsed.Edits {
+			name := change.Path
+			if filepath.IsAbs(name) {
+				name, err = filepath.Rel(root, name)
+			}
+			if err != nil || !slices.Contains(batch.Files, filepath.ToSlash(name)) {
+				return fail("error", "invalid_report", "PHPCS returned an unexpected fix path")
+			}
+			change.Path = filepath.ToSlash(name)
+			result.Edits = append(result.Edits, change)
 		}
 		if result.PHPVersion != nil && *result.PHPVersion != parsed.PHPVersion {
 			return fail("error", "invalid_report", "PHPCS runtime changed between ruleset groups")

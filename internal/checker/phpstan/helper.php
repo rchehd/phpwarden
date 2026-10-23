@@ -10,7 +10,7 @@ try {
     $temporary = $argv[2];
     require $bundle . '/vendor/autoload.php';
     $versions = [];
-    foreach (['phpstan/phpstan', 'mglaman/phpstan-drupal', 'phpstan/phpstan-deprecation-rules'] as $name) {
+    foreach (['phpstan/phpstan', 'mglaman/phpstan-drupal', 'phpstan/phpstan-deprecation-rules', 'shipmonk/dead-code-detector', 'phpstan/phpstan-strict-rules'] as $name) {
         $versions[$name] = ltrim(InstalledVersions::getPrettyVersion($name), 'v');
     }
     $literal = static fn(string $value): string => str_replace('%', '%%', $value);
@@ -24,6 +24,12 @@ try {
     ];
     if ($request['diff']) {
         $parameters['reportUnmatchedIgnoredErrors'] = false;
+    }
+    if ($request['exclude'] !== []) {
+        $parameters['excludePaths'] = ['analyse' => array_map($literal, $request['exclude'])];
+    }
+    if ($request['strict_enabled']) {
+        $parameters['strictRules'] = ['allRules' => $request['strict_rules']['all']] + $request['strict_rules']['rules'];
     }
     foreach (['bootstrapFiles', 'scanDirectories', 'stubFiles'] as $key) {
         if ($request[$key] !== []) {

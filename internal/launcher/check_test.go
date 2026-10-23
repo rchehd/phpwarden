@@ -41,7 +41,7 @@ func fixture(t *testing.T) (config.Location, config.Effective, scope.Options) {
 		t.Fatal(err)
 	}
 	filename := filepath.Join(root, config.Filename)
-	data := `{"version":1,"profile":"drupal","php":{"runtime":"8.4","target":{"min":"8.4","max":"8.4"}},"scope":{"mode":"full","include":["src"]},"tools":{"syntax":{"enabled":false},"phpcs":{"enabled":false},"phpmd":{"enabled":false},"phpstan":{"enabled":false},"twig-cs-fixer":{"enabled":false}}}`
+	data := `{"version":1,"profile":"drupal","php":{"runtime":"8.4","target":{"min":"8.4","max":"8.4"}},"scope":{"mode":"full","include":["src"]},"tools":{"gitleaks":{"enabled":false},"eslint":{"enabled":false},"stylelint":{"enabled":false},"jscpd":{"enabled":false},"syntax":{"enabled":false},"phpcs":{"enabled":false},"phpmd":{"enabled":false},"phpstan":{"enabled":false},"twig-cs-fixer":{"enabled":false}}}`
 	if err := os.WriteFile(filename, []byte(data), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func dockerDouble(t *testing.T, location config.Location, calls *[]runner.Comman
 		case "context":
 			return runner.Result{Stdout: []byte(`"unix:///var/run/docker.sock"`)}
 		case "image":
-			return runner.Result{Stdout: []byte(`[{"Id":"` + testImage + `","Os":"linux","Architecture":"amd64","Config":{"Labels":{"io.phpwarden.protocol":"2","io.phpwarden.toolset":"` + toolset.DevelopmentID("8.4") + `","io.phpwarden.checkers":"composer-audit,composer-validate,debug,drupal-config,phpcs,phpmd,phpstan,syntax,twig-cs-fixer,whitespace,yaml","io.phpwarden.php-version":"8.4.26","io.phpwarden.symfony-yaml-version":"6.4.48","io.phpwarden.phpcs-version":"4.0.4","io.phpwarden.coder-version":"9.0.1","io.phpwarden.phpcompatibility-version":"10.0.0-alpha2","io.phpwarden.phpstan-version":"2.3.1","io.phpwarden.phpstan-drupal-version":"2.2.2","io.phpwarden.phpstan-deprecations-version":"2.0.5","io.phpwarden.twig-cs-fixer-version":"4.1.1","io.phpwarden.twig-version":"3.30.0","io.phpwarden.composer-version":"2.10.3","io.phpwarden.phpmd-version":"3.0.0","io.phpwarden.pdepend-version":"3.0.0"}}}]`)}
+			return runner.Result{Stdout: []byte(`[{"Id":"` + testImage + `","Os":"linux","Architecture":"amd64","Config":{"Labels":{"io.phpwarden.protocol":"2","io.phpwarden.toolset":"` + toolset.DevelopmentID("8.4") + `","io.phpwarden.checkers":"composer-audit,composer-require-checker,composer-unused,composer-validate,dead-code,debug,deptrac,drupal-config,eslint,eventhorizon,gitleaks,jscpd,phpcs,phpmd,phpstan,rector,semgrep,stylelint,syntax,twig-cs-fixer,whitespace,yaml","io.phpwarden.php-version":"8.4.26","io.phpwarden.symfony-yaml-version":"6.4.48","io.phpwarden.phpcs-version":"4.0.4","io.phpwarden.coder-version":"9.0.1","io.phpwarden.phpcompatibility-version":"10.0.0-alpha2","io.phpwarden.phpstan-version":"2.3.1","io.phpwarden.phpstan-drupal-version":"2.2.2","io.phpwarden.phpstan-deprecations-version":"2.0.5","io.phpwarden.twig-cs-fixer-version":"4.1.1","io.phpwarden.twig-version":"3.30.0","io.phpwarden.composer-version":"2.10.3","io.phpwarden.phpmd-version":"3.0.0","io.phpwarden.pdepend-version":"3.0.0","io.phpwarden.dead-code-detector-version":"1.4.2","io.phpwarden.node-version":"22.22.3","io.phpwarden.eslint-version":"9.39.5","io.phpwarden.stylelint-version":"17.16.0","io.phpwarden.jscpd-version":"4.3.0","io.phpwarden.eventhorizon-version":"0.1.0","io.phpwarden.eventhorizon-revision":"ae11df1cd8e4e2b843c6c53bac60026ef344935f","io.phpwarden.pyyaml-version":"6.0.3","io.phpwarden.composer-require-checker-version":"4.16.1","io.phpwarden.composer-unused-version":"0.9.7","io.phpwarden.parallel-lint-version":"1.4.0","io.phpwarden.deptrac-version":"4.4.0","io.phpwarden.deptrac-phpstan-version":"2.3.1","io.phpwarden.rector-version":"2.6.1","io.phpwarden.drupal-rector-version":"1.1.3","io.phpwarden.rector-phpstan-version":"2.3.1","io.phpwarden.drupal-finder-version":"1.3.1","io.phpwarden.semgrep-version":"1.182.0","io.phpwarden.semgrep-rules-version":"1.0.0","io.phpwarden.gitleaks-version":"8.30.1","io.phpwarden.phpstan-strict-rules-version":"2.1.0"}}}]`)}
 		case "run":
 			for _, argument := range []string{"--read-only", "--network=none", "--cap-drop=ALL", "--security-opt=no-new-privileges:true", "--pull=never", testImage} {
 				if !slices.Contains(command.Args, argument) {
@@ -143,7 +143,7 @@ func TestNativeCheckerTransportAndPolicyValidation(t *testing.T) {
 				process := processFunc(func(ctx context.Context, command runner.Command) runner.Result {
 					result := base(ctx, command)
 					if mutation == "old capabilities" && command.Args[0] == "image" {
-						result.Stdout = bytesReplace(result.Stdout, "composer-audit,composer-validate,debug,drupal-config,phpcs,phpmd,phpstan,syntax,twig-cs-fixer,whitespace,yaml", "debug,syntax,yaml")
+						result.Stdout = bytesReplace(result.Stdout, "composer-audit,composer-require-checker,composer-unused,composer-validate,dead-code,debug,deptrac,drupal-config,eslint,eventhorizon,gitleaks,jscpd,phpcs,phpmd,phpstan,rector,semgrep,stylelint,syntax,twig-cs-fixer,whitespace,yaml", "debug,syntax,yaml")
 					}
 					if command.Args[0] == "run" {
 						if mutation == "wrong kind" {

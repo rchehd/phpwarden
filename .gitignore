@@ -8,3 +8,17 @@ __pycache__/
 /tools/phpstan/vendor/
 /tools/twig-cs-fixer/vendor/
 /tools/composer/vendor/
+
+/tools/node/node_modules/
+/tools/eventhorizon/vendor/
+/tools/eventhorizon/.prepare-*/
+/tools/semgrep/vendor/
+/tools/semgrep/.prepare-*/
+
+/tools/rector/vendor/
+
+/tools/deptrac/vendor/
+
+/tools/composer-require-checker/php*/vendor/
+/tools/composer-unused/vendor/
+/tools/parallel-lint/vendor/

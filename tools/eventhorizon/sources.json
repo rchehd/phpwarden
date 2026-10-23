@@ -1,0 +1,13 @@
+{
+  "version": "0.1.0",
+  "revision": "ae11df1cd8e4e2b843c6c53bac60026ef344935f",
+  "eventhorizon": {
+    "url": "https://codeload.github.com/qed42/eventhorizon-cli-mode/tar.gz/ae11df1cd8e4e2b843c6c53bac60026ef344935f",
+    "sha256": "f02e6f78411f90ef6db1d9e7727f4e6a66d220938bc195a67cd902fcb8eec430"
+  },
+  "pyyaml": {
+    "version": "6.0.3",
+    "url": "https://files.pythonhosted.org/packages/05/8e/961c0007c59b8dd7729d542c61a4d537767a59645b82a0b521206e1e25c2/pyyaml-6.0.3.tar.gz",
+    "sha256": "d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f"
+  }
+}

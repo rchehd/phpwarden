@@ -14,9 +14,16 @@ import (
 	"unicode/utf8"
 
 	"github.com/rchehd/phpwarden/internal/checker"
+	"github.com/rchehd/phpwarden/internal/checker/deptrac"
+	"github.com/rchehd/phpwarden/internal/checker/eventhorizon"
+	"github.com/rchehd/phpwarden/internal/checker/gitleaks"
+	"github.com/rchehd/phpwarden/internal/checker/nodecheck"
+	"github.com/rchehd/phpwarden/internal/checker/packagecheck"
 	"github.com/rchehd/phpwarden/internal/checker/phpcs"
 	"github.com/rchehd/phpwarden/internal/checker/phpmd"
 	"github.com/rchehd/phpwarden/internal/checker/phpstan"
+	"github.com/rchehd/phpwarden/internal/checker/rector"
+	"github.com/rchehd/phpwarden/internal/checker/semgrep"
 	"github.com/rchehd/phpwarden/internal/checker/twigcsfixer"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/phpconstraint"
@@ -79,6 +86,26 @@ func (request Request) Validate() error {
 		return err
 	}
 	keys := append([]string{"config"}, fileKeys(request.Selection.Files)...)
+	for _, id := range []string{"composer-require-checker", "composer-unused"} {
+		if packagecheck.InputRequired(request.Config, request.Selection, request.Only, id) {
+			keys = append(keys, id)
+		}
+	}
+	if deptrac.InputRequired(request.Config, request.Selection, request.Only) {
+		keys = append(keys, "deptrac")
+	}
+	if rector.InputRequired(request.Config, request.Selection, request.Only) {
+		keys = append(keys, "rector")
+	}
+	if semgrep.InputRequired(request.Config, request.Selection, request.Only) {
+		keys = append(keys, "semgrep")
+	}
+	if eventhorizon.InputRequired(request.Config, request.Selection, request.Only) {
+		keys = append(keys, "eventhorizon")
+	}
+	if gitleaks.InputRequired(request.Config, request.Selection, request.Only) {
+		keys = append(keys, "gitleaks")
+	}
 	if phpcs.InputRequired(request.Config, request.Selection, request.Only) {
 		keys = append(keys, "phpcs")
 	}
@@ -88,8 +115,16 @@ func (request Request) Validate() error {
 	if phpstan.InputRequired(request.Config, request.Selection, request.Only) {
 		keys = append(keys, "phpstan")
 	}
+	if phpstan.DeadCodeInputRequired(request.Config, request.Selection, request.Only) {
+		keys = append(keys, "dead-code")
+	}
 	if twigcsfixer.InputRequired(request.Config, request.Selection, request.Only) {
 		keys = append(keys, "twig-cs-fixer")
+	}
+	for _, id := range []string{"eslint", "stylelint", "jscpd"} {
+		if nodecheck.InputRequired(request.Config, request.Selection, request.Only, id) {
+			keys = append(keys, id)
+		}
 	}
 	if len(request.Fingerprint) != len(keys) {
 		return fmt.Errorf("fingerprint does not match selected inputs")
@@ -189,8 +224,40 @@ func Snapshot(location config.Location, selection scope.Selection, only []string
 	if phpstan.InputRequired(effective.Config, selection, only) {
 		result["phpstan"] = phpstan.ContextHash(location.Root)
 	}
+	if phpstan.DeadCodeInputRequired(effective.Config, selection, only) {
+		result["dead-code"] = phpstan.ContextHash(location.Root)
+	}
 	if twigcsfixer.InputRequired(effective.Config, selection, only) {
 		result["twig-cs-fixer"] = twigcsfixer.ContextHash(location.Root, effective.Config.ComposerRoot, effective.Config.Tools.TwigCSFixer)
+	}
+	for _, id := range []string{"composer-require-checker", "composer-unused"} {
+		if packagecheck.InputRequired(effective.Config, selection, only, id) {
+			result[id] = packagecheck.ContextHash(location.Root)
+		}
+	}
+	if deptrac.InputRequired(effective.Config, selection, only) {
+		result["deptrac"] = deptrac.ContextHash(location.Root)
+	}
+	if rector.InputRequired(effective.Config, selection, only) {
+		result["rector"] = rector.ContextHash(location.Root)
+	}
+	if semgrep.InputRequired(effective.Config, selection, only) {
+		result["semgrep"] = semgrep.ContextHash(location.Root, effective.Config.ComposerRoot, effective.Config.Tools.Semgrep)
+	}
+	if eventhorizon.InputRequired(effective.Config, selection, only) {
+		result["eventhorizon"] = eventhorizon.ContextHash(location.Root, selection, effective.Config.Tools.EventHorizon)
+	}
+	if gitleaks.InputRequired(effective.Config, selection, only) {
+		result["gitleaks"] = gitleaks.ContextHash(location.Root, effective.Config.ComposerRoot, effective.Config.Tools.Gitleaks)
+	}
+	contextHash := ""
+	for _, id := range []string{"eslint", "stylelint", "jscpd"} {
+		if nodecheck.InputRequired(effective.Config, selection, only, id) {
+			if contextHash == "" {
+				contextHash = nodecheck.ContextHash(location.Root)
+			}
+			result[id] = contextHash
+		}
 	}
 	return result, nil
 }

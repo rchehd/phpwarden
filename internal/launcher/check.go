@@ -19,6 +19,12 @@ import (
 
 	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/checker/composeraudit"
+	"github.com/rchehd/phpwarden/internal/checker/deptrac"
+	"github.com/rchehd/phpwarden/internal/checker/eventhorizon"
+	"github.com/rchehd/phpwarden/internal/checker/nodecheck"
+	"github.com/rchehd/phpwarden/internal/checker/packagecheck"
+	"github.com/rchehd/phpwarden/internal/checker/rector"
+	"github.com/rchehd/phpwarden/internal/checker/semgrep"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/report"
@@ -237,7 +243,10 @@ func inspect(ctx context.Context, selection toolset.Selection, process runner.Pr
 	if version, ok := selection.Tools["symfony-yaml"]; ok && image.Config.Labels["io.phpwarden.symfony-yaml-version"] != version {
 		return "", fmt.Errorf("local image Symfony YAML version label does not match the selected toolset")
 	}
-	for tool, label := range map[string]string{"squizlabs-php_codesniffer": "phpcs", "drupal-coder": "coder", "phpcompatibility-php-compatibility": "phpcompatibility", "phpstan-phpstan": "phpstan", "mglaman-phpstan-drupal": "phpstan-drupal", "phpstan-phpstan-deprecation-rules": "phpstan-deprecations", "vincentlanglet-twig-cs-fixer": "twig-cs-fixer", "twig-twig": "twig", "composer-composer": "composer", "phpmd-phpmd": "phpmd", "pdepend-pdepend": "pdepend"} {
+	if _, ok := selection.Tools["eventhorizon-cli"]; ok && image.Config.Labels["io.phpwarden.eventhorizon-revision"] != eventhorizon.Revision {
+		return "", fmt.Errorf("local image EventHorizon revision label does not match the selected toolset")
+	}
+	for tool, label := range map[string]string{"squizlabs-php_codesniffer": "phpcs", "drupal-coder": "coder", "phpcompatibility-php-compatibility": "phpcompatibility", "phpstan-phpstan": "phpstan", "mglaman-phpstan-drupal": "phpstan-drupal", "phpstan-phpstan-deprecation-rules": "phpstan-deprecations", "vincentlanglet-twig-cs-fixer": "twig-cs-fixer", "twig-twig": "twig", "composer-composer": "composer", "phpmd-phpmd": "phpmd", "pdepend-pdepend": "pdepend", "shipmonk-dead-code-detector": "dead-code-detector", "node": "node", "eslint": "eslint", "stylelint": "stylelint", "jscpd": "jscpd", "gitleaks": "gitleaks", "php-parallel-lint-php-parallel-lint": "parallel-lint", "maglnet-composer-require-checker": "composer-require-checker", "icanhazstring-composer-unused": "composer-unused", "deptrac-deptrac": "deptrac", "deptrac-phpstan": "deptrac-phpstan", "rector-rector": "rector", "palantirnet-drupal-rector": "drupal-rector", "rector-phpstan": "rector-phpstan", "webflo-drupal-finder": "drupal-finder", "semgrep": "semgrep", "phpwarden-semgrep-rules": "semgrep-rules", "eventhorizon-cli": "eventhorizon", "pyyaml": "pyyaml", "phpstan-phpstan-strict-rules": "phpstan-strict-rules"} {
 		if version, ok := selection.Tools[tool]; ok && image.Config.Labels["io.phpwarden."+label+"-version"] != version {
 			return "", fmt.Errorf("local image %s version label does not match the selected toolset", label)
 		}
@@ -294,6 +303,24 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 				required, failOn = request.Config.Tools.DrupalConfig.Required, request.Config.Tools.DrupalConfig.FailOn
 			} else if check.ID == "phpcs" {
 				required, failOn = request.Config.Tools.PHPCS.Required, request.Config.Tools.PHPCS.FailOn
+			} else if check.ID == "eslint" || check.ID == "stylelint" || check.ID == "jscpd" {
+				settings := nodecheck.Settings(request.Config, check.ID)
+				required, failOn = settings.Required, settings.FailOn
+			} else if check.ID == "composer-require-checker" || check.ID == "composer-unused" {
+				settings := packagecheck.Settings(request.Config, check.ID)
+				required, failOn = settings.Required, settings.FailOn
+			} else if check.ID == "deptrac" {
+				required, failOn = request.Config.Tools.Deptrac.Required, request.Config.Tools.Deptrac.FailOn
+			} else if check.ID == "rector" {
+				required, failOn = request.Config.Tools.Rector.Required, request.Config.Tools.Rector.FailOn
+			} else if check.ID == "semgrep" {
+				required, failOn = request.Config.Tools.Semgrep.Required, request.Config.Tools.Semgrep.FailOn
+			} else if check.ID == "eventhorizon" {
+				required, failOn = request.Config.Tools.EventHorizon.Required, request.Config.Tools.EventHorizon.FailOn
+			} else if check.ID == "gitleaks" {
+				required, failOn = request.Config.Tools.Gitleaks.Required, request.Config.Tools.Gitleaks.FailOn
+			} else if check.ID == "dead-code" {
+				required, failOn = request.Config.Tools.DeadCode.Required, request.Config.Tools.DeadCode.FailOn
 			} else if check.ID == "phpmd" {
 				required, failOn = request.Config.Tools.PHPMD.Required, request.Config.Tools.PHPMD.FailOn
 			} else if check.ID == "phpstan" {
@@ -323,6 +350,70 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 		if !slices.Contains(checker.Requested(request.Only), finding.Checker) {
 			return result, fmt.Errorf("worker finding is outside the requested scope")
 		}
+		if finding.Checker == "composer-require-checker" || finding.Checker == "composer-unused" {
+			prefix := fmt.Sprintf("Composer package %q: ", path.Join(packagecheck.Root(request.Config, finding.Checker), "composer.json"))
+			known := finding.Checker == "composer-require-checker" && finding.Rule == "composer-require-checker.unknown_symbol" || finding.Checker == "composer-unused" && (finding.Rule == "composer-unused.candidate" || finding.Rule == "composer-unused.unmatched_exclusion")
+			if request.Selection.Mode != "full" || finding.Kind != "global" || finding.Severity != "warning" || !known || !strings.HasPrefix(finding.Message, prefix) {
+				return result, fmt.Errorf("invalid package dependency finding")
+			}
+			continue
+		}
+		if finding.Checker == "deptrac" {
+			selected := deptrac.Select(request.Selection, request.Config.Tools.Deptrac)
+			settings := request.Config.Tools.Deptrac
+			severity := map[string]string{"deptrac.violation": "error", "deptrac.skipped": "info", "deptrac.uncovered": "warning", "deptrac.configuration_warning": "warning"}[finding.Rule]
+			if finding.Rule == "deptrac.uncovered" && settings.FailOnUncovered {
+				severity = "error"
+			}
+			if len(selected.Files) == 0 || severity == "" || finding.Severity != severity || finding.Rule == "deptrac.skipped" && !settings.ReportSkipped || finding.Rule == "deptrac.uncovered" && !settings.ReportUncovered && !settings.FailOnUncovered {
+				return result, fmt.Errorf("invalid Deptrac finding")
+			}
+			if finding.Rule == "deptrac.configuration_warning" {
+				if finding.Kind != "global" || !strings.HasPrefix(finding.Message, "Deptrac configuration: ") {
+					return result, fmt.Errorf("invalid Deptrac configuration warning")
+				}
+			} else if finding.Kind != "code" || finding.Path == nil || finding.Line == nil || !selected.Contains(*finding.Path, *finding.Line) {
+				return result, fmt.Errorf("Deptrac finding is outside the requested scope")
+			}
+			continue
+		}
+		if finding.Checker == "rector" {
+			selected := rector.Select(request.Selection, request.Config.Tools.Rector)
+			if finding.Kind != "code" || finding.Rule != "rector.upgrade" || finding.Severity != "warning" || finding.Path == nil || finding.Line == nil || !selected.Contains(*finding.Path, *finding.Line) {
+				return result, fmt.Errorf("Rector suggestion is outside the requested scope")
+			}
+			continue
+		}
+		if finding.Checker == "semgrep" {
+			selected := semgrep.Select(request.Selection, request.Config.Tools.Semgrep)
+			if finding.Kind != "code" || finding.Path == nil || finding.Line == nil || finding.Fingerprint == nil || !selected.Contains(*finding.Path, *finding.Line) {
+				return result, fmt.Errorf("Semgrep finding is outside the requested scope or lacks a fingerprint")
+			}
+			continue
+		}
+		if finding.Checker == "eventhorizon" {
+			selected := eventhorizon.Select(request.Selection, request.Config.Tools.EventHorizon)
+			if !slices.Contains(eventhorizon.Rules, finding.Rule) || finding.Severity != "warning" && finding.Severity != "info" {
+				return result, fmt.Errorf("invalid EventHorizon finding")
+			}
+			if finding.Kind == "global" {
+				matched := false
+				for _, directory := range request.Config.Tools.EventHorizon.ConfigSync {
+					for _, filename := range selected.Files {
+						if path.Ext(filename) == ".yml" && path.Dir(filename) == path.Clean(directory) && strings.HasPrefix(finding.Rule, "config.") &&
+							strings.HasPrefix(finding.Message, fmt.Sprintf("Config sync %q: ", path.Clean(directory))) {
+							matched = true
+						}
+					}
+				}
+				if !matched {
+					return result, fmt.Errorf("EventHorizon config finding does not match a selected config directory")
+				}
+			} else if finding.Kind != "code" || finding.Path == nil || finding.Line == nil || !strings.HasPrefix(finding.Rule, "caching.") || !selected.Contains(*finding.Path, *finding.Line) {
+				return result, fmt.Errorf("EventHorizon finding is outside the requested scope")
+			}
+			continue
+		}
 		if (finding.Checker == "yaml" || finding.Checker == "twig-cs-fixer" || finding.Checker == "composer-validate" || finding.Checker == "phpmd") && finding.Kind == "global" {
 			prefix := map[string]string{"yaml": "YAML file %q: ", "twig-cs-fixer": "Twig template %q: ", "composer-validate": "Composer file %q: ", "phpmd": "PHP file %q: "}[finding.Checker]
 			filenames := request.Selection.Files
@@ -344,8 +435,17 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 		if finding.Path == nil || finding.Line == nil {
 			return result, fmt.Errorf("worker finding is outside the requested scope")
 		}
+		if finding.Checker == "eslint" || finding.Checker == "stylelint" || finding.Checker == "jscpd" {
+			_, selected := request.Selection.LineMap[*finding.Path]
+			if !selected || (finding.Kind != "code" && finding.Kind != "syntax") ||
+				finding.Kind == "code" && !request.Selection.Contains(*finding.Path, *finding.Line) ||
+				finding.Checker == "jscpd" && (finding.Kind != "code" || finding.Severity != "warning") {
+				return result, fmt.Errorf("worker finding is outside the requested scope")
+			}
+			continue
+		}
 		if _, exists := request.Selection.LineMap[*finding.Path]; !exists ||
-			(finding.Checker == "debug" || finding.Checker == "whitespace" || finding.Checker == "phpcs" || finding.Checker == "phpmd" || finding.Checker == "phpstan" || finding.Checker == "twig-cs-fixer") && (finding.Kind != "code" || !request.Selection.Contains(*finding.Path, *finding.Line)) ||
+			(finding.Checker == "debug" || finding.Checker == "gitleaks" || finding.Checker == "dead-code" || finding.Checker == "whitespace" || finding.Checker == "phpcs" || finding.Checker == "phpmd" || finding.Checker == "phpstan" || finding.Checker == "twig-cs-fixer") && (finding.Kind != "code" || !request.Selection.Contains(*finding.Path, *finding.Line)) ||
 			finding.Checker == "drupal-config" && finding.Kind != "code" ||
 			(finding.Checker == "syntax" || finding.Checker == "yaml") && finding.Kind != "syntax" {
 			return result, fmt.Errorf("worker finding is outside the requested scope")

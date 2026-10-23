@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "id": "gitleaks-unstaged",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/demo.module"
+  ],
+  "settings": {
+    "rules": [
+      "phpwarden-test"
+    ]
+  },
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "gitleaks",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 2,
+      "contains": "PHPWARDEN_TEST_AAAAAAAAAAAAAAAA",
+      "modes": [
+        "full"
+      ]
+    },
+    {
+      "checker": "gitleaks",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 3,
+      "contains": "PHPWARDEN_TEST_BBBBBBBBBBBBBBBB",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

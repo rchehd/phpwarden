@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from tests.support.phpmd import TOOLS
 from tests.support.scenarios import materialize
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "yaml"
@@ -32,19 +33,7 @@ def check_yaml_fixtures(test, configure, run):
                 test.assertEqual(result["diagnostics"], [])
                 test.assertEqual(
                     [row["id"] for row in result["checks"]],
-                    [
-                        "composer-audit",
-                        "composer-validate",
-                        "debug",
-                        "drupal-config",
-                        "phpcs",
-                        "phpmd",
-                        "phpstan",
-                        "syntax",
-                        "twig-cs-fixer",
-                        "whitespace",
-                        "yaml",
-                    ],
+                    list(TOOLS),
                 )
                 for row in result["findings"]:
                     test.assertEqual(row["kind"], "global" if row["line"] is None else "syntax")
@@ -66,6 +55,10 @@ def check_yaml_settings(test, configure, run):
             "debug": {"enabled": False},
             "phpcs": {"enabled": False},
             "phpmd": {"enabled": False},
+            "eslint": {"enabled": False},
+            "gitleaks": {"enabled": False},
+            "stylelint": {"enabled": False},
+            "jscpd": {"enabled": False},
             "phpstan": {"enabled": False},
             "twig-cs-fixer": {"enabled": False},
             "drupal-config": {"enabled": False},

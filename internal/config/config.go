@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -55,20 +56,31 @@ type Runner struct {
 }
 
 type Tools struct {
-	PHPStan          PHPStan          `json:"phpstan"`
-	TwigCSFixer      TwigCSFixer      `json:"twig-cs-fixer"`
-	ComposerValidate ComposerValidate `json:"composer-validate"`
-	ComposerAudit    ComposerAudit    `json:"composer-audit"`
-	PHPCS            PHPCS            `json:"phpcs"`
-	PHPMD            PHPMD            `json:"phpmd"`
-	DrupalConfig     DrupalConfig     `json:"drupal-config"`
-	Debug            Debug            `json:"debug"`
-	Syntax           Syntax           `json:"syntax"`
-	YAML             YAML             `json:"yaml"`
-	Whitespace       Whitespace       `json:"whitespace"`
+	ComposerRequireChecker ComposerRequireChecker `json:"composer-require-checker"`
+	ComposerUnused         ComposerUnused         `json:"composer-unused"`
+	Deptrac                Deptrac                `json:"deptrac"`
+	Rector                 Rector                 `json:"rector"`
+	Semgrep                Semgrep                `json:"semgrep"`
+	EventHorizon           EventHorizon           `json:"eventhorizon"`
+	Gitleaks               Gitleaks               `json:"gitleaks"`
+	ESLint                 NodeLint               `json:"eslint"`
+	Stylelint              NodeLint               `json:"stylelint"`
+	JSCPD                  JSCPD                  `json:"jscpd"`
+	PHPStan                PHPStan                `json:"phpstan"`
+	DeadCode               DeadCode               `json:"dead-code"`
+	TwigCSFixer            TwigCSFixer            `json:"twig-cs-fixer"`
+	ComposerValidate       ComposerValidate       `json:"composer-validate"`
+	ComposerAudit          ComposerAudit          `json:"composer-audit"`
+	PHPCS                  PHPCS                  `json:"phpcs"`
+	PHPMD                  PHPMD                  `json:"phpmd"`
+	DrupalConfig           DrupalConfig           `json:"drupal-config"`
+	Debug                  Debug                  `json:"debug"`
+	Syntax                 Syntax                 `json:"syntax"`
+	YAML                   YAML                   `json:"yaml"`
+	Whitespace             Whitespace             `json:"whitespace"`
 }
 
-type PHPStan struct {
+type NodeLint struct {
 	Enabled         bool     `json:"enabled"`
 	Required        bool     `json:"required"`
 	FailOn          string   `json:"fail_on"`
@@ -77,17 +89,169 @@ type PHPStan struct {
 	Exclude         []string `json:"exclude"`
 	Config          string   `json:"config"`
 	DiscoverConfig  bool     `json:"discover_config"`
-	Level           *int     `json:"level,omitempty"`
-	Includes        []string `json:"includes"`
-	Baseline        string   `json:"baseline"`
-	BootstrapFiles  []string `json:"bootstrap_files"`
-	ScanDirectories []string `json:"scan_directories"`
-	StubFiles       []string `json:"stub_files"`
-	Autoload        string   `json:"autoload"`
-	Drupal          bool     `json:"drupal"`
-	Deprecations    bool     `json:"deprecations"`
-	MemoryLimitMB   int      `json:"memory_limit_mb"`
 	ExtraExtensions []string `json:"extra_extensions"`
+	ExtraInputs     []string `json:"extra_inputs"`
+}
+
+type JSCPD struct {
+	Enabled        bool     `json:"enabled"`
+	Required       bool     `json:"required"`
+	FailOn         string   `json:"fail_on"`
+	TimeoutSeconds int      `json:"timeout_seconds"`
+	Include        []string `json:"include,omitempty"`
+	Exclude        []string `json:"exclude"`
+	Config         string   `json:"config"`
+	DiscoverConfig bool     `json:"discover_config"`
+	MinTokens      int      `json:"min_tokens"`
+	MinLines       int      `json:"min_lines"`
+	Mode           string   `json:"mode"`
+}
+
+type PHPStan struct {
+	Enabled         bool        `json:"enabled"`
+	Required        bool        `json:"required"`
+	FailOn          string      `json:"fail_on"`
+	TimeoutSeconds  int         `json:"timeout_seconds"`
+	Include         []string    `json:"include,omitempty"`
+	Exclude         []string    `json:"exclude"`
+	Config          string      `json:"config"`
+	DiscoverConfig  bool        `json:"discover_config"`
+	Level           *int        `json:"level,omitempty"`
+	Includes        []string    `json:"includes"`
+	Baseline        string      `json:"baseline"`
+	BootstrapFiles  []string    `json:"bootstrap_files"`
+	ScanDirectories []string    `json:"scan_directories"`
+	StubFiles       []string    `json:"stub_files"`
+	Autoload        string      `json:"autoload"`
+	Drupal          bool        `json:"drupal"`
+	Deprecations    bool        `json:"deprecations"`
+	MemoryLimitMB   int         `json:"memory_limit_mb"`
+	ExtraExtensions []string    `json:"extra_extensions"`
+	StrictRules     StrictRules `json:"strict_rules"`
+}
+
+type StrictRules struct {
+	Enabled bool            `json:"enabled"`
+	All     bool            `json:"all"`
+	Rules   map[string]bool `json:"rules"`
+}
+
+type Gitleaks struct {
+	Enabled        bool     `json:"enabled"`
+	Required       bool     `json:"required"`
+	FailOn         string   `json:"fail_on"`
+	TimeoutSeconds int      `json:"timeout_seconds"`
+	Include        []string `json:"include,omitempty"`
+	Exclude        []string `json:"exclude"`
+	Config         string   `json:"config"`
+	DiscoverConfig bool     `json:"discover_config"`
+	Baseline       string   `json:"baseline"`
+	IgnoreFile     string   `json:"ignore_file"`
+	Rules          []string `json:"rules"`
+	ExtraInputs    []string `json:"extra_inputs"`
+}
+
+type EventHorizon struct {
+	Enabled        bool     `json:"enabled"`
+	Required       bool     `json:"required"`
+	FailOn         string   `json:"fail_on"`
+	TimeoutSeconds int      `json:"timeout_seconds"`
+	Include        []string `json:"include,omitempty"`
+	Exclude        []string `json:"exclude"`
+	Caching        bool     `json:"caching"`
+	ConfigSync     []string `json:"config_sync"`
+	ExcludeRules   []string `json:"exclude_rules"`
+}
+
+type PackageTool struct {
+	Enabled        bool     `json:"enabled"`
+	Required       bool     `json:"required"`
+	FailOn         string   `json:"fail_on"`
+	TimeoutSeconds int      `json:"timeout_seconds"`
+	ComposerRoot   string   `json:"composer_root"`
+	Config         string   `json:"config"`
+	DiscoverConfig bool     `json:"discover_config"`
+	ExtraInputs    []string `json:"extra_inputs"`
+	MemoryLimitMB  int      `json:"memory_limit_mb"`
+}
+
+type ComposerRequireChecker struct {
+	PackageTool
+	ScanFiles      []string `json:"scan_files"`
+	AllowedSymbols []string `json:"allowed_symbols"`
+}
+
+type ComposerUnused struct {
+	PackageTool
+	ExcludePackages    []string `json:"exclude_packages"`
+	ExcludeDirectories []string `json:"exclude_directories"`
+}
+
+type Deptrac struct {
+	Enabled         bool     `json:"enabled"`
+	Required        bool     `json:"required"`
+	FailOn          string   `json:"fail_on"`
+	TimeoutSeconds  int      `json:"timeout_seconds"`
+	Include         []string `json:"include,omitempty"`
+	Exclude         []string `json:"exclude"`
+	Config          string   `json:"config"`
+	DiscoverConfig  bool     `json:"discover_config"`
+	ExtraInputs     []string `json:"extra_inputs"`
+	ReportUncovered bool     `json:"report_uncovered"`
+	FailOnUncovered bool     `json:"fail_on_uncovered"`
+	ReportSkipped   bool     `json:"report_skipped"`
+	MemoryLimitMB   int      `json:"memory_limit_mb"`
+}
+
+type Rector struct {
+	Enabled         bool     `json:"enabled"`
+	Required        bool     `json:"required"`
+	FailOn          string   `json:"fail_on"`
+	TimeoutSeconds  int      `json:"timeout_seconds"`
+	Include         []string `json:"include,omitempty"`
+	Exclude         []string `json:"exclude"`
+	Config          string   `json:"config"`
+	DiscoverConfig  bool     `json:"discover_config"`
+	TargetPHP       string   `json:"target_php"`
+	TargetDrupal    string   `json:"target_drupal"`
+	Sets            []string `json:"sets"`
+	Rules           []string `json:"rules"`
+	SkipRules       []string `json:"skip_rules"`
+	ExtraInputs     []string `json:"extra_inputs"`
+	ExtraExtensions []string `json:"extra_extensions"`
+	MemoryLimitMB   int      `json:"memory_limit_mb"`
+	DryRun          bool     `json:"dry_run"`
+}
+
+type Semgrep struct {
+	Enabled            bool     `json:"enabled"`
+	Required           bool     `json:"required"`
+	FailOn             string   `json:"fail_on"`
+	TimeoutSeconds     int      `json:"timeout_seconds"`
+	Include            []string `json:"include,omitempty"`
+	Exclude            []string `json:"exclude"`
+	Config             string   `json:"config"`
+	DiscoverConfig     bool     `json:"discover_config"`
+	UseDefaults        bool     `json:"use_defaults"`
+	Rulesets           []string `json:"rulesets"`
+	Rules              []string `json:"rules"`
+	ExcludeRules       []string `json:"exclude_rules"`
+	Severities         []string `json:"severities"`
+	Baseline           string   `json:"baseline"`
+	ExtraInputs        []string `json:"extra_inputs"`
+	ExtraExtensions    []string `json:"extra_extensions"`
+	RuleTimeoutSeconds int      `json:"rule_timeout_seconds"`
+	MemoryLimitMB      int      `json:"memory_limit_mb"`
+}
+
+type DeadCode struct {
+	Enabled        bool     `json:"enabled"`
+	Required       bool     `json:"required"`
+	FailOn         string   `json:"fail_on"`
+	TimeoutSeconds int      `json:"timeout_seconds"`
+	Include        []string `json:"include,omitempty"`
+	Exclude        []string `json:"exclude"`
+	MemoryLimitMB  int      `json:"memory_limit_mb"`
 }
 
 type ComposerValidate struct {
@@ -208,6 +372,8 @@ type YAML struct {
 }
 
 type Syntax struct {
+	Backend         string   `json:"backend"`
+	ParallelJobs    int      `json:"parallel_jobs"`
 	Enabled         bool     `json:"enabled"`
 	Required        bool     `json:"required"`
 	FailOn          string   `json:"fail_on"`
@@ -283,8 +449,19 @@ func Parse(data []byte) (Effective, error) {
 			Runner:       Runner{TimeoutSeconds: 300},
 			Tools: Tools{PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
 				Includes: []string{}, BootstrapFiles: []string{}, ScanDirectories: []string{}, StubFiles: []string{}, Autoload: "auto",
-				Drupal: defaults.PHPStanDrupal, Deprecations: true, MemoryLimitMB: 512, ExtraExtensions: []string{}},
-				ComposerValidate: ComposerValidate{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}},
+				Drupal: defaults.PHPStanDrupal, Deprecations: true, MemoryLimitMB: 512, ExtraExtensions: []string{}, StrictRules: StrictRules{All: true, Rules: map[string]bool{}}},
+				Gitleaks:               Gitleaks{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true, Rules: []string{}, ExtraInputs: []string{}},
+				EventHorizon:           EventHorizon{Enabled: false, Required: true, FailOn: "never", TimeoutSeconds: 120, Exclude: []string{}, Caching: true, ConfigSync: []string{}, ExcludeRules: []string{}},
+				ComposerRequireChecker: ComposerRequireChecker{PackageTool: PackageTool{Enabled: false, Required: true, FailOn: "never", TimeoutSeconds: 300, DiscoverConfig: true, ExtraInputs: []string{}, MemoryLimitMB: 1024}, ScanFiles: []string{}, AllowedSymbols: []string{}},
+				ComposerUnused:         ComposerUnused{PackageTool: PackageTool{Enabled: false, Required: true, FailOn: "never", TimeoutSeconds: 300, DiscoverConfig: true, ExtraInputs: []string{}, MemoryLimitMB: 1024}, ExcludePackages: []string{}, ExcludeDirectories: []string{}},
+				Deptrac:                Deptrac{Enabled: false, Required: true, FailOn: "error", TimeoutSeconds: 300, Exclude: []string{}, DiscoverConfig: true, ExtraInputs: []string{}, MemoryLimitMB: 1024},
+				Rector:                 Rector{Enabled: false, Required: true, FailOn: "never", TimeoutSeconds: 600, Exclude: []string{}, DiscoverConfig: true, Sets: []string{}, Rules: []string{}, SkipRules: []string{}, ExtraInputs: []string{}, ExtraExtensions: []string{}, MemoryLimitMB: 1024, DryRun: true},
+				Semgrep:                Semgrep{Enabled: false, Required: true, FailOn: "error", TimeoutSeconds: 300, Exclude: []string{}, DiscoverConfig: true, UseDefaults: true, Rulesets: []string{}, Rules: []string{}, ExcludeRules: []string{}, Severities: []string{"ERROR", "WARNING", "INFO"}, ExtraInputs: []string{}, ExtraExtensions: []string{}, RuleTimeoutSeconds: 5, MemoryLimitMB: 1024},
+				DeadCode:               DeadCode{Enabled: false, Required: true, FailOn: "error", TimeoutSeconds: 600, Exclude: []string{}, MemoryLimitMB: 1024},
+				ESLint:                 NodeLint{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{"**/*.min.js"}, DiscoverConfig: true, ExtraExtensions: []string{}, ExtraInputs: []string{}},
+				Stylelint:              NodeLint{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{"**/*.min.css"}, DiscoverConfig: true, ExtraExtensions: []string{}, ExtraInputs: []string{}},
+				JSCPD:                  JSCPD{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 300, Exclude: []string{"**/*.min.js", "**/*.min.css"}, DiscoverConfig: true, MinTokens: 70, MinLines: 6, Mode: "mild"},
+				ComposerValidate:       ComposerValidate{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}},
 				ComposerAudit: ComposerAudit{Enabled: true, Required: false, FailOn: "error", TimeoutSeconds: 120, Abandoned: "report",
 					MaxAgeHours: 24, MaxStaleHours: 168, Ignore: []ComposerAuditIgnore{}},
 				TwigCSFixer: TwigCSFixer{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
@@ -298,7 +475,7 @@ func Parse(data []byte) (Effective, error) {
 				Whitespace: Whitespace{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{},
 					TrailingWhitespace: true, ConflictMarkers: true, TrailingWhitespaceExclude: []string{"**/*.md", "**/*.patch", "**/*.diff"}, ConflictMarkersExclude: []string{}},
 				YAML: YAML{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}},
-				Syntax: Syntax{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120,
+				Syntax: Syntax{Backend: "php", ParallelJobs: 4, Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120,
 					Exclude: []string{}, ExtraExtensions: []string{}}, Debug: Debug{
 					Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120,
 					Exclude: []string{}, Functions: defaults.DebugFunctions, JSFunctions: defaults.DebugJSFunctions, TwigFunctions: defaults.DebugTwigFunctions,
@@ -311,6 +488,7 @@ func Parse(data []byte) (Effective, error) {
 			"tools.debug.required": "core_default", "tools.debug.fail_on": "core_default",
 			"tools.debug.timeout_seconds": "core_default", "tools.debug.exclude": "core_default",
 			"tools.debug.functions": "profile_default", "tools.debug.js_functions": "profile_default", "tools.debug.twig_functions": "profile_default",
+			"tools.syntax.backend": "core_default", "tools.syntax.parallel_jobs": "core_default",
 			"tools.syntax.enabled": "profile_default", "tools.syntax.required": "core_default",
 			"tools.syntax.fail_on": "core_default", "tools.syntax.timeout_seconds": "core_default",
 			"tools.syntax.exclude": "core_default", "tools.syntax.extra_extensions": "core_default",
@@ -345,6 +523,51 @@ func Parse(data []byte) (Effective, error) {
 	}
 	result.Provenance["tools.phpmd.enabled"], result.Provenance["tools.phpmd.rulesets"], result.Provenance["tools.phpmd.exclude_rules"] = "profile_default", "profile_default", "profile_default"
 	result.Provenance["tools.twig-cs-fixer.enabled"] = "profile_default"
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "memory_limit_mb"} {
+		result.Provenance["tools.dead-code."+field] = "core_default"
+	}
+	for _, field := range []string{"enabled", "all", "rules"} {
+		result.Provenance["tools.phpstan.strict_rules."+field] = "core_default"
+	}
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "target_php", "target_drupal", "sets", "rules", "skip_rules", "extra_inputs", "extra_extensions", "memory_limit_mb", "dry_run"} {
+		result.Provenance["tools.rector."+field] = "core_default"
+	}
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "extra_inputs", "report_uncovered", "fail_on_uncovered", "report_skipped", "memory_limit_mb"} {
+		result.Provenance["tools.deptrac."+field] = "core_default"
+	}
+	for _, id := range []string{"composer-require-checker", "composer-unused"} {
+		for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "composer_root", "config", "discover_config", "extra_inputs", "memory_limit_mb"} {
+			result.Provenance["tools."+id+"."+field] = "core_default"
+		}
+	}
+	for _, field := range []string{"scan_files", "allowed_symbols"} {
+		result.Provenance["tools.composer-require-checker."+field] = "core_default"
+	}
+	for _, field := range []string{"exclude_packages", "exclude_directories"} {
+		result.Provenance["tools.composer-unused."+field] = "core_default"
+	}
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "caching", "config_sync", "exclude_rules"} {
+		result.Provenance["tools.eventhorizon."+field] = "core_default"
+	}
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "use_defaults", "rulesets", "rules", "exclude_rules", "severities", "baseline", "extra_inputs", "extra_extensions", "rule_timeout_seconds", "memory_limit_mb"} {
+		result.Provenance["tools.semgrep."+field] = "core_default"
+	}
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "baseline", "ignore_file", "rules", "extra_inputs"} {
+		result.Provenance["tools.gitleaks."+field] = "core_default"
+	}
+	for _, id := range []string{"eslint", "stylelint", "jscpd"} {
+		for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config"} {
+			result.Provenance["tools."+id+"."+field] = "core_default"
+		}
+	}
+	for _, id := range []string{"eslint", "stylelint"} {
+		for _, field := range []string{"extra_extensions", "extra_inputs"} {
+			result.Provenance["tools."+id+"."+field] = "core_default"
+		}
+	}
+	for _, field := range []string{"min_tokens", "min_lines", "mode"} {
+		result.Provenance["tools.jscpd."+field] = "core_default"
+	}
 	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "strict"} {
 		result.Provenance["tools.composer-validate."+field] = "core_default"
 	}
@@ -448,11 +671,30 @@ func markProvenance(values map[string]any, prefix string, sources map[string]str
 }
 
 func validateValues(cfg Config) error {
+	if cfg.Tools.Deptrac.Config != "" && !strings.HasSuffix(cfg.Tools.Deptrac.Config, ".yaml") && !strings.HasSuffix(cfg.Tools.Deptrac.Config, ".yml") && !strings.HasSuffix(cfg.Tools.Deptrac.Config, ".yaml.dist") && !strings.HasSuffix(cfg.Tools.Deptrac.Config, ".yml.dist") {
+		return fmt.Errorf("Deptrac config must be a local YAML file")
+	}
+	if cfg.Tools.Rector.Config != "" && path.Ext(cfg.Tools.Rector.Config) != ".php" {
+		return fmt.Errorf("Rector config must be a local PHP file")
+	}
+
+	for _, name := range append(append([]string{cfg.Tools.Semgrep.Config}, cfg.Tools.Semgrep.Rulesets...), cfg.Tools.Semgrep.Baseline) {
+		if strings.Contains(name, "://") || name == "auto" {
+			return fmt.Errorf("Semgrep accepts local project rules and baselines only")
+		}
+	}
+	for _, name := range append([]string{cfg.Tools.Semgrep.Config}, cfg.Tools.Semgrep.Rulesets...) {
+		if name != "" && !slices.Contains([]string{".yml", ".yaml", ".json"}, strings.ToLower(path.Ext(name))) {
+			return fmt.Errorf("Semgrep rulesets must be local YAML or JSON files")
+		}
+	}
 	for _, values := range [][]string{cfg.Scope.Include, cfg.Tools.Debug.Include, cfg.Tools.Syntax.Include, cfg.Tools.YAML.Include, cfg.Tools.Whitespace.Include,
 		cfg.Tools.DrupalConfig.Include, cfg.Tools.DrupalConfig.Directories, cfg.Tools.DrupalConfig.ModuleRoots,
 		cfg.Tools.PHPCS.Include, cfg.Tools.PHPCS.StandardPaths, cfg.Tools.PHPCS.ExtraInputs,
 		cfg.Tools.PHPStan.Include, cfg.Tools.PHPStan.Includes, cfg.Tools.PHPStan.BootstrapFiles, cfg.Tools.PHPStan.ScanDirectories, cfg.Tools.PHPStan.StubFiles,
-		cfg.Tools.TwigCSFixer.Include, cfg.Tools.TwigCSFixer.ExtraInputs, cfg.Tools.ComposerValidate.Include, cfg.Tools.PHPMD.Include, cfg.Tools.PHPMD.ExtraInputs} {
+		cfg.Tools.TwigCSFixer.Include, cfg.Tools.TwigCSFixer.ExtraInputs, cfg.Tools.ComposerValidate.Include, cfg.Tools.PHPMD.Include, cfg.Tools.PHPMD.ExtraInputs, cfg.Tools.DeadCode.Include,
+		cfg.Tools.ESLint.Include, cfg.Tools.ESLint.ExtraInputs, cfg.Tools.Stylelint.Include, cfg.Tools.Stylelint.ExtraInputs, cfg.Tools.JSCPD.Include,
+		cfg.Tools.Gitleaks.Include, cfg.Tools.Gitleaks.ExtraInputs, cfg.Tools.EventHorizon.Include, cfg.Tools.EventHorizon.ConfigSync, cfg.Tools.Semgrep.Include, cfg.Tools.Semgrep.Rulesets, cfg.Tools.Semgrep.ExtraInputs, cfg.Tools.Rector.Include, cfg.Tools.Rector.Sets, cfg.Tools.Rector.ExtraInputs, cfg.Tools.Deptrac.Include, cfg.Tools.Deptrac.ExtraInputs, cfg.Tools.ComposerRequireChecker.ExtraInputs, cfg.Tools.ComposerRequireChecker.ScanFiles, cfg.Tools.ComposerUnused.ExtraInputs, cfg.Tools.ComposerUnused.ExcludeDirectories} {
 		for _, value := range values {
 			if err := projectpath.Validate(value); err != nil {
 				return err
@@ -462,11 +704,17 @@ func validateValues(cfg Config) error {
 	if err := projectpath.Validate(cfg.ComposerRoot); err != nil {
 		return fmt.Errorf("composer_root: %w", err)
 	}
-	for _, name := range []string{cfg.Tools.PHPStan.Config, cfg.Tools.PHPStan.Baseline, cfg.Tools.PHPStan.Autoload, cfg.Tools.TwigCSFixer.Config, cfg.Tools.PHPMD.Config} {
+	for _, name := range []string{cfg.Tools.PHPStan.Config, cfg.Tools.PHPStan.Baseline, cfg.Tools.PHPStan.Autoload, cfg.Tools.TwigCSFixer.Config, cfg.Tools.PHPMD.Config, cfg.Tools.ESLint.Config, cfg.Tools.Stylelint.Config, cfg.Tools.JSCPD.Config,
+		cfg.Tools.Gitleaks.Config, cfg.Tools.Gitleaks.Baseline, cfg.Tools.Gitleaks.IgnoreFile, cfg.Tools.Semgrep.Config, cfg.Tools.Semgrep.Baseline, cfg.Tools.Rector.Config, cfg.Tools.Deptrac.Config, cfg.Tools.ComposerRequireChecker.Config, cfg.Tools.ComposerRequireChecker.ComposerRoot, cfg.Tools.ComposerUnused.Config, cfg.Tools.ComposerUnused.ComposerRoot} {
 		if name != "" && name != "auto" {
 			if err := projectpath.Validate(name); err != nil {
 				return err
 			}
+		}
+	}
+	for _, item := range []struct{ name, value, suffix string }{{"composer-require-checker", cfg.Tools.ComposerRequireChecker.Config, ".json"}, {"composer-unused", cfg.Tools.ComposerUnused.Config, ".php"}} {
+		if item.value != "" && !strings.HasSuffix(item.value, item.suffix) {
+			return fmt.Errorf("tools.%s.config must be a %s file", item.name, item.suffix)
 		}
 	}
 	if cfg.Tools.PHPCS.Config != "" {
@@ -511,7 +759,8 @@ func validateValues(cfg Config) error {
 		}
 	}
 	for _, values := range [][]string{cfg.Scope.Exclude, cfg.Tools.Debug.Exclude, cfg.Tools.Syntax.Exclude, cfg.Tools.YAML.Exclude,
-		cfg.Tools.Whitespace.Exclude, cfg.Tools.Whitespace.TrailingWhitespaceExclude, cfg.Tools.Whitespace.ConflictMarkersExclude, cfg.Tools.DrupalConfig.Exclude, cfg.Tools.PHPCS.Exclude, cfg.Tools.PHPStan.Exclude, cfg.Tools.TwigCSFixer.Exclude, cfg.Tools.ComposerValidate.Exclude} {
+		cfg.Tools.Whitespace.Exclude, cfg.Tools.Whitespace.TrailingWhitespaceExclude, cfg.Tools.Whitespace.ConflictMarkersExclude, cfg.Tools.DrupalConfig.Exclude, cfg.Tools.PHPCS.Exclude, cfg.Tools.PHPStan.Exclude, cfg.Tools.TwigCSFixer.Exclude, cfg.Tools.ComposerValidate.Exclude,
+		cfg.Tools.ESLint.Exclude, cfg.Tools.Stylelint.Exclude, cfg.Tools.JSCPD.Exclude, cfg.Tools.Gitleaks.Exclude, cfg.Tools.EventHorizon.Exclude, cfg.Tools.Semgrep.Exclude, cfg.Tools.Rector.Exclude, cfg.Tools.Deptrac.Exclude} {
 		if err := validatePatterns(values); err != nil {
 			return err
 		}

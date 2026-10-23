@@ -1,0 +1,16 @@
+{
+  "name": "phpwarden/composer-require-checker-tools",
+  "type": "project",
+  "license": "MIT",
+  "require": {
+    "php": ">=8.4 <8.5",
+    "maglnet/composer-require-checker": "4.16.1"
+  },
+  "config": {
+    "allow-plugins": false,
+    "platform": {
+      "php": "8.4.26"
+    },
+    "sort-packages": true
+  }
+}

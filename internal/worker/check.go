@@ -13,10 +13,17 @@ import (
 	"github.com/rchehd/phpwarden/internal/checker/composeraudit"
 	"github.com/rchehd/phpwarden/internal/checker/composervalidate"
 	"github.com/rchehd/phpwarden/internal/checker/debug"
+	"github.com/rchehd/phpwarden/internal/checker/deptrac"
 	"github.com/rchehd/phpwarden/internal/checker/drupalconfig"
+	"github.com/rchehd/phpwarden/internal/checker/eventhorizon"
+	"github.com/rchehd/phpwarden/internal/checker/gitleaks"
+	"github.com/rchehd/phpwarden/internal/checker/nodecheck"
+	"github.com/rchehd/phpwarden/internal/checker/packagecheck"
 	"github.com/rchehd/phpwarden/internal/checker/phpcs"
 	"github.com/rchehd/phpwarden/internal/checker/phpmd"
 	"github.com/rchehd/phpwarden/internal/checker/phpstan"
+	"github.com/rchehd/phpwarden/internal/checker/rector"
+	"github.com/rchehd/phpwarden/internal/checker/semgrep"
 	"github.com/rchehd/phpwarden/internal/checker/syntax"
 	"github.com/rchehd/phpwarden/internal/checker/twigcsfixer"
 	"github.com/rchehd/phpwarden/internal/checker/whitespace"
@@ -118,6 +125,55 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 				dependencies = *project.Installed.Error
 			}
 			outcome = phpstan.Run(ctx, location.Root, cfg.ComposerRoot, phpstan.Select(selection, settings, cfg.Profile), settings, cfg.PHP.Target, dependencies, process)
+		} else if id == "eslint" || id == "stylelint" || id == "jscpd" {
+			settings := nodecheck.Settings(cfg, id)
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			current := cfg
+			switch id {
+			case "eslint":
+				current.Tools.ESLint = settings
+			case "stylelint":
+				current.Tools.Stylelint = settings
+			case "jscpd":
+				current.Tools.JSCPD.Enabled = settings.Enabled
+			}
+			outcome = nodecheck.Run(ctx, location.Root, selection, current, id, process)
+		} else if id == "composer-require-checker" || id == "composer-unused" {
+			current := cfg
+			if id == "composer-require-checker" {
+				current.Tools.ComposerRequireChecker.Enabled = checker.Enabled(id, cfg.Tools.ComposerRequireChecker.Enabled, only)
+			} else {
+				current.Tools.ComposerUnused.Enabled = checker.Enabled(id, cfg.Tools.ComposerUnused.Enabled, only)
+			}
+			outcome = packagecheck.Run(ctx, location.Root, selection, current, id, process)
+		} else if id == "deptrac" {
+			settings := cfg.Tools.Deptrac
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			outcome = deptrac.Run(ctx, location.Root, cfg.ComposerRoot, selection, settings, process)
+		} else if id == "rector" {
+			settings := cfg.Tools.Rector
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			outcome = rector.Run(ctx, location.Root, cfg.ComposerRoot, cfg.PHP.Target.Max, selection, settings, process)
+		} else if id == "semgrep" {
+			settings := cfg.Tools.Semgrep
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			outcome = semgrep.Run(ctx, location.Root, cfg.ComposerRoot, selection, settings, process)
+		} else if id == "eventhorizon" {
+			settings := cfg.Tools.EventHorizon
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			outcome = eventhorizon.Run(ctx, location.Root, selection, settings, process)
+		} else if id == "gitleaks" {
+			settings := cfg.Tools.Gitleaks
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			outcome = gitleaks.Run(ctx, location.Root, cfg.ComposerRoot, selection, settings, process)
+		} else if id == "dead-code" {
+			cfg := cfg
+			cfg.Tools.DeadCode.Enabled = checker.Enabled(id, cfg.Tools.DeadCode.Enabled, only)
+			dependencies := ""
+			if project != nil && project.Installed != nil && project.Installed.Error != nil {
+				dependencies = *project.Installed.Error
+			}
+			outcome = phpstan.RunDeadCode(ctx, location.Root, selection, cfg, dependencies, process)
 		} else if id == "composer-audit" {
 			settings := cfg.Tools.ComposerAudit
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)

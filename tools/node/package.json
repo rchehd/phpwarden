@@ -1,0 +1,12 @@
+{
+  "name": "phpwarden-node-tools",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {"node": ">=22.13.0"},
+  "dependencies": {
+    "eslint": "9.39.5",
+    "jscpd": "4.3.0",
+    "picomatch": "4.0.3",
+    "stylelint": "17.16.0"
+  }
+}

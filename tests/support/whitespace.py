@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from tests.support.phpmd import TOOLS
 from tests.support.scenarios import materialize
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "whitespace"
@@ -37,19 +38,7 @@ def check_whitespace_fixtures(test, configure, run):
                 test.assertEqual(result["diagnostics"], [])
                 test.assertEqual(
                     [row["id"] for row in result["checks"]],
-                    [
-                        "composer-audit",
-                        "composer-validate",
-                        "debug",
-                        "drupal-config",
-                        "phpcs",
-                        "phpmd",
-                        "phpstan",
-                        "syntax",
-                        "twig-cs-fixer",
-                        "whitespace",
-                        "yaml",
-                    ],
+                    list(TOOLS),
                 )
                 for row in result["findings"]:
                     test.assertEqual(row["checker"], "whitespace")
@@ -65,22 +54,7 @@ def check_whitespace_settings(test, configure, run):
         configure(scenario)
         filename = scenario.root / ".phpwarden.yaml"
         config = json.loads(filename.read_text())
-        config["tools"] = {
-            name: {"enabled": False}
-            for name in (
-                "composer-audit",
-                "composer-validate",
-                "debug",
-                "drupal-config",
-                "phpcs",
-                "phpmd",
-                "phpstan",
-                "syntax",
-                "twig-cs-fixer",
-                "whitespace",
-                "yaml",
-            )
-        }
+        config["tools"] = {name: {"enabled": False} for name in TOOLS}
         filename.write_text(json.dumps(config))
         test.assertEqual(run(scenario, [])["exit_code"], 0)
         result = run(scenario, ["--only", "whitespace"])

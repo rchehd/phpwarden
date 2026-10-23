@@ -1,0 +1,19 @@
+{
+  "version": "1.182.0",
+  "rules_version": "1.0.0",
+  "source": {
+    "url": "https://codeload.github.com/semgrep/semgrep/tar.gz/240da9f30cd06fb4ee00c2c31c114c1c1f5ee0f4",
+    "sha256": "780047c94f5cb5ee7b6093484e232cf2dc5106cc6b01a0609a2d15d5b7518c85",
+    "revision": "240da9f30cd06fb4ee00c2c31c114c1c1f5ee0f4"
+  },
+  "wheels": {
+    "manylinux_2_34_x86_64": {
+      "url": "https://files.pythonhosted.org/packages/62/85/2e4bd385c4cd55d3ec293a328ffb98115277fb08b8b98be5848ec035e9fd/semgrep-1.182.0-cp310.cp311.cp312.cp313.cp314.py310.py311.py312.py313.py314-none-manylinux_2_34_x86_64.whl",
+      "sha256": "19a82868830389c039bb71bfc0aeebb28385e5b65740120710eff050324ad14f"
+    },
+    "musllinux_1_2_x86_64": {
+      "url": "https://files.pythonhosted.org/packages/7d/3e/52c40aacf843d10820525b78dfe57af1bac936ab63b38cbf79dda4632b8a/semgrep-1.182.0-cp310.cp311.cp312.cp313.cp314.py310.py311.py312.py313.py314-none-musllinux_1_2_x86_64.whl",
+      "sha256": "6263233c3f2e7b05c2d89b1de7408e91c0238014ab67bb68746c0c452d33b828"
+    }
+  }
+}

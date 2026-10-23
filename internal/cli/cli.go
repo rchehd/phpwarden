@@ -35,6 +35,7 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
        phpwarden scope [PATH...] [options]
        phpwarden resolve [options]
        phpwarden check [PATH...] [options]
+       phpwarden fix [PATH...] [options]
        phpwarden worker check [PATH...] [options]
 
 Options:
@@ -55,7 +56,8 @@ Scope options:
   --base REF           Diff base ref
   --commits N          Diff against HEAD~N: the last N commits plus uncommitted changes
   --whole-files        Include all lines of selected diff files
-  --only ID[,ID...]    Select composer-audit, composer-validate, debug, drupal-config, phpcs, phpmd, phpstan, syntax, twig-cs-fixer, whitespace, yaml; enable selected checkers
+  --fix                Fix selected files with PHPCS/Twig CS Fixer, then check them again
+  --only ID[,ID...]    Select composer-audit, composer-require-checker, composer-unused, composer-validate, dead-code, debug, deptrac, drupal-config, eslint, eventhorizon, gitleaks, jscpd, phpcs, phpmd, phpstan, rector, semgrep, stylelint, syntax, twig-cs-fixer, whitespace, yaml; enable selected checkers
 
 Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
 Check uses local development Docker images (Linux amd64, PHP runtime 8.1–8.4, target from 8.1 up to the runtime).
@@ -81,6 +83,7 @@ type options struct {
 	phpTarget    string
 	composerRoot string
 	commits      int
+	fix          bool
 }
 
 type response struct {
@@ -122,7 +125,7 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		fmt.Fprintln(stdout, "phpwarden dev")
 		return 0
 	}
-	if len(args.command) == 2 && args.command[0] == "worker" && args.command[1] == "execute" {
+	if len(args.command) == 2 && args.command[0] == "worker" && (args.command[1] == "execute" || args.command[1] == "prepare-fix") {
 		if len(arguments) != 2 {
 			return writeReport(stdout, stderr, "json", "never", report.InputError("request", fmt.Errorf("worker execute accepts only its stdin request")))
 		}
@@ -136,12 +139,22 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		if err := decoder.Decode(&extra); err != io.EOF {
 			return writeReport(stdout, stderr, "json", "never", report.InputError("request", fmt.Errorf("expected one run request")))
 		}
+		if args.command[1] == "prepare-fix" {
+			prepared := worker.PrepareFix(ctx, cwd, request, runner.Exec{})
+			if err := writeJSON(stdout, prepared); err != nil {
+				fmt.Fprintln(stderr, err)
+				return 3
+			}
+			return prepared.Report.ExitCode
+		}
 		return writeReport(stdout, stderr, "json", "never", worker.Execute(ctx, cwd, request, runner.Exec{}))
 	}
 	isInit := len(args.command) == 1 && args.command[0] == "init"
 	isScope := len(args.command) > 0 && args.command[0] == "scope"
 	isWorker := workerCommand(args)
-	isCheck := len(args.command) > 0 && args.command[0] == "check"
+	isFix := len(args.command) > 0 && args.command[0] == "fix"
+	isCheck := len(args.command) > 0 && args.command[0] == "check" || isFix
+	args.fix = args.fix || isFix
 	isResolve := len(args.command) == 1 && args.command[0] == "resolve"
 	isConfig := len(args.command) == 2 && args.command[0] == "config" &&
 		(args.command[1] == "validate" || args.command[1] == "show")
@@ -149,7 +162,7 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--format compact applies only to check and worker check"))
 	}
 	if !isInit && !isScope && !isConfig && !isWorker && !isCheck && !isResolve {
-		return fail(stdout, stderr, args, "usage", fmt.Errorf("expected init, config validate/show, resolve, scope, check, or worker check; use --help"))
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("expected init, config validate/show, resolve, scope, check, fix, or worker check; use --help"))
 	}
 	if !isInit && (args.phpRuntime != "" || args.phpTarget != "" || args.composerRoot != "") {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--composer-root, --php-runtime and --php-target require the init command"))
@@ -166,6 +179,9 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	}
 	if args.only != "" && !isWorker && !isCheck {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--only requires check or worker check"))
+	}
+	if args.fix && !isCheck && !isWorker {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("--fix requires check, fix or worker check"))
 	}
 	if isInit {
 		return initProject(ctx, args, cwd, stdout, stderr)
@@ -197,7 +213,11 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 			return fail(stdout, stderr, args, "usage", err)
 		}
 		var result report.Report
-		if isCheck {
+		if args.fix && isCheck {
+			result = launcher.Fix(ctx, location, effective, options, only, runner.Exec{})
+		} else if args.fix {
+			result = worker.Fix(ctx, location, effective, options, only, runner.Exec{})
+		} else if isCheck {
 			result = launcher.Check(ctx, location, effective, options, only, runner.Exec{})
 		} else {
 			result = worker.Check(ctx, location, effective, options, only, runner.Exec{})
@@ -260,6 +280,13 @@ func parse(arguments []string) (options, error) {
 				return result, fmt.Errorf("duplicate option --whole-files")
 			}
 			result.wholeFiles = true
+			continue
+		}
+		if argument == "--fix" {
+			if result.fix {
+				return result, fmt.Errorf("duplicate option --fix")
+			}
+			result.fix = true
 			continue
 		}
 		if !strings.HasPrefix(argument, "-") {
@@ -327,7 +354,7 @@ func parse(arguments []string) (options, error) {
 			result.color = value
 		}
 	}
-	if result.version && (len(result.command) != 0 || len(seen) != 0 || result.help || result.wholeFiles) {
+	if result.version && (len(result.command) != 0 || len(seen) != 0 || result.help || result.wholeFiles || result.fix) {
 		return result, fmt.Errorf("--version cannot be combined with a command or options")
 	}
 	return result, nil
@@ -431,7 +458,7 @@ func writeScope(args options, location config.Location, selection scope.Selectio
 }
 
 func fail(stdout, stderr io.Writer, args options, stage string, err error) int {
-	if workerCommand(args) || len(args.command) > 0 && args.command[0] == "check" {
+	if workerCommand(args) || len(args.command) > 0 && (args.command[0] == "check" || args.command[0] == "fix") {
 		return writeReport(stdout, stderr, args.format, args.color, report.InputError(stage, err))
 	}
 	if args.format == "json" {

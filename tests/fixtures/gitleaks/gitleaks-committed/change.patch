@@ -1,0 +1,7 @@
+diff --git a/web/modules/custom/demo/demo.module b/web/modules/custom/demo/demo.module
+--- a/web/modules/custom/demo/demo.module
++++ b/web/modules/custom/demo/demo.module
+@@ -1,2 +1,3 @@
+ <?php
+ $legacy = "PHPWARDEN_TEST_AAAAAAAAAAAAAAAA";
++$fresh = "PHPWARDEN_TEST_BBBBBBBBBBBBBBBB";

@@ -7,6 +7,7 @@ use TwigCsFixer\Config\Config;
 use TwigCsFixer\Environment\StubbedEnvironment;
 use TwigCsFixer\Ruleset\Ruleset;
 use TwigCsFixer\Runner\Linter;
+use TwigCsFixer\Runner\Fixer;
 use TwigCsFixer\Standard\TwigCsFixer;
 use TwigCsFixer\Token\Tokenizer;
 
@@ -31,6 +32,16 @@ try {
     $ruleset = $config->getRuleset()->allowNonFixableRules($config->areNonFixableRulesAllowed());
     $twig = new StubbedEnvironment($config->getTwigExtensions(), $config->getTokenParsers(), $config->getNodeVisitors());
     $report = (new Linter($twig, new Tokenizer($twig)))->run(array_map(static fn (string $path): SplFileInfo => new SplFileInfo($path), $request['files']), $ruleset);
+    $edits = [];
+    if ($request['fix'] ?? false) {
+        foreach ($request['files'] as $path) {
+            $before = file_get_contents($path);
+            $after = (new Fixer(new Tokenizer($twig)))->fixFile($before, $ruleset);
+            if ($before !== $after) {
+                $edits[] = ['path' => $path, 'before' => hash('sha256', $before), 'after' => base64_encode($after)];
+            }
+        }
+    }
     if ('' !== ob_get_clean()) {
         throw new RuntimeException('Twig CS Fixer produced unexpected output');
     }
@@ -57,6 +68,7 @@ try {
             'twig/twig' => ltrim(InstalledVersions::getPrettyVersion('twig/twig'), 'v'),
         ],
         'files' => (object) $files,
+        'edits' => $edits,
     ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE), "\n";
 } catch (Throwable $error) {
     while (ob_get_level() > 0) {

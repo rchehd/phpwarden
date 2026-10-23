@@ -26,7 +26,7 @@ func fakeBundle(t *testing.T) string {
 }
 
 func metadataResponse() []byte {
-	return []byte(`{"version":1,"runtime":"8.4","php_version":"8.4.26","tools":{"phpstan/phpstan":"` + Version + `","mglaman/phpstan-drupal":"` + DrupalVersion + `","phpstan/phpstan-deprecation-rules":"` + DeprecationVersion + `"}}`)
+	return []byte(`{"version":1,"runtime":"8.4","php_version":"8.4.26","tools":{"phpstan/phpstan":"` + Version + `","mglaman/phpstan-drupal":"` + DrupalVersion + `","phpstan/phpstan-deprecation-rules":"` + DeprecationVersion + `","shipmonk/dead-code-detector":"` + DeadCodeVersion + `","phpstan/phpstan-strict-rules":"` + StrictRulesVersion + `"}}`)
 }
 
 func analysisResponse(name string) []byte {

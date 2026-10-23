@@ -21,6 +21,7 @@ class ScenarioFixturesTest(unittest.TestCase):
                 FIXTURES.parent / "twig-cs-fixer",
                 FIXTURES.parent / "composer-validate",
                 FIXTURES.parent / "phpmd",
+                FIXTURES.parent / "gitleaks",
             )
             for path in group.iterdir()
             if path.is_dir()

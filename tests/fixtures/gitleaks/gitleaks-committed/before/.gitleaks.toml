@@ -1,0 +1,4 @@
+[[rules]]
+id = 'phpwarden-test'
+description = 'Synthetic fixture'
+regex = '''PHPWARDEN_TEST_[A-Z0-9]{16}'''

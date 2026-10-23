@@ -11,9 +11,15 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/rchehd/phpwarden/internal/checker/deptrac"
+	"github.com/rchehd/phpwarden/internal/checker/gitleaks"
+	"github.com/rchehd/phpwarden/internal/checker/nodecheck"
+	"github.com/rchehd/phpwarden/internal/checker/packagecheck"
 	"github.com/rchehd/phpwarden/internal/checker/phpcs"
 	"github.com/rchehd/phpwarden/internal/checker/phpmd"
 	"github.com/rchehd/phpwarden/internal/checker/phpstan"
+	"github.com/rchehd/phpwarden/internal/checker/rector"
+	"github.com/rchehd/phpwarden/internal/checker/semgrep"
 	"github.com/rchehd/phpwarden/internal/checker/twigcsfixer"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
@@ -105,13 +111,21 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	for _, tool := range []struct {
 		checker    string
 		candidates []string
-	}{{"phpcs", phpcs.ConfigCandidates}, {"phpmd", phpmd.ConfigCandidates}, {"phpstan", phpstan.ConfigCandidates}, {"twig-cs-fixer", twigcsfixer.ConfigCandidates}} {
+	}{{"phpcs", phpcs.ConfigCandidates}, {"phpmd", phpmd.ConfigCandidates}, {"phpstan", phpstan.ConfigCandidates}, {"twig-cs-fixer", twigcsfixer.ConfigCandidates}, {"semgrep", semgrep.ConfigCandidates}, {"rector", rector.ConfigCandidates}, {"deptrac", deptrac.ConfigCandidates}, {"composer-require-checker", packagecheck.Candidates("composer-require-checker")}, {"composer-unused", packagecheck.Candidates("composer-unused")}} {
 		for _, name := range append(slices.Clone(tool.candidates), prefixed(composerRoot, tool.candidates)...) {
 			if info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(name))); err == nil && info.Mode().IsRegular() {
 				result.NativeConfigs = append(result.NativeConfigs, NativeConfig{Checker: tool.checker, Path: name})
 				break
 			}
 		}
+	}
+	for _, id := range []string{"eslint", "stylelint", "jscpd"} {
+		if name, err := nodecheck.DiscoverConfig(root, composerRoot, id); err == nil && name != "" {
+			result.NativeConfigs = append(result.NativeConfigs, NativeConfig{Checker: id, Path: name})
+		}
+	}
+	if name, err := gitleaks.DiscoverConfig(root, composerRoot); err == nil && name != "" {
+		result.NativeConfigs = append(result.NativeConfigs, NativeConfig{Checker: "gitleaks", Path: name})
 	}
 	return result, nil
 }

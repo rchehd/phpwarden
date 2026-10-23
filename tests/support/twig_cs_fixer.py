@@ -1,22 +1,10 @@
 import json
 from pathlib import Path
 
+from tests.support.phpmd import TOOLS
 from tests.support.scenarios import materialize
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "twig-cs-fixer"
-TOOLS = (
-    "composer-audit",
-    "composer-validate",
-    "debug",
-    "drupal-config",
-    "phpcs",
-    "phpmd",
-    "phpstan",
-    "syntax",
-    "twig-cs-fixer",
-    "whitespace",
-    "yaml",
-)
 TEMPLATES = "web/modules/custom/demo/templates"
 CONFIG_HEAD = "<?php\n\n$ruleset = new TwigCsFixer\\Ruleset\\Ruleset();\n"
 CONFIG_TAIL = (
