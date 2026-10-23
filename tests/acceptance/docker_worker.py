@@ -16,6 +16,11 @@ from tests.support.drupal_config import (
     check_drupal_config_fixtures,
     check_drupal_config_settings,
 )
+from tests.support.phpcs import (
+    check_phpcs_fixtures,
+    check_phpcs_project_rules,
+    check_phpcs_settings,
+)
 from tests.support.scenarios import materialize
 from tests.support.syntax import check_syntax_fixtures
 from tests.support.whitespace import check_whitespace_fixtures, check_whitespace_settings
@@ -52,6 +57,7 @@ class DockerWorkerTest(unittest.TestCase):
             "profile": "drupal",
             "php": {"runtime": runtime, "target": {"min": runtime, "max": runtime}},
             "scope": {"include": ["web/modules/custom"], "base": scenario.base},
+            "tools": {"phpcs": {"enabled": False}},
         }
         (scenario.root / ".phpwarden.yaml").write_text(json.dumps(config))
 
@@ -137,7 +143,7 @@ class DockerWorkerTest(unittest.TestCase):
         self.assertEqual(self.metadata["Config"]["User"], "10001:10001")
         self.assertEqual(
             self.metadata["Config"]["Labels"]["io.phpwarden.checkers"],
-            "debug,drupal-config,syntax,whitespace,yaml",
+            "debug,drupal-config,phpcs,syntax,whitespace,yaml",
         )
         with materialize(FIXTURES / "clean-debug") as scenario:
             self.configure(scenario)
@@ -211,6 +217,15 @@ class DockerWorkerTest(unittest.TestCase):
     def test_drupal_config_custom_layout(self):
         check_drupal_config_custom_layout(self, self.configure, self.run_check)
 
+    def test_phpcs_fixtures(self):
+        check_phpcs_fixtures(self, self.configure, self.run_check)
+
+    def test_phpcs_settings(self):
+        check_phpcs_settings(self, self.configure, self.run_check)
+
+    def test_phpcs_project_rules(self):
+        check_phpcs_project_rules(self, self.configure, self.run_check)
+
     def test_no_host_php_or_go_and_no_runtime_build_tools(self):
         with materialize(FIXTURES / "added-debug") as scenario:
             self.configure(scenario)
@@ -268,6 +283,7 @@ class DockerWorkerTest(unittest.TestCase):
                 "profile": "drupal",
                 "php": {"runtime": "8.4", "target": {"min": "8.4", "max": "8.4"}},
                 "scope": {"mode": "full", "include": ["."]},
+                "tools": {"phpcs": {"enabled": False}},
             }
             (project / ".phpwarden.yaml").write_text(json.dumps(config))
             result = self.report(

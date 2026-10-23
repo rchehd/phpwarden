@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/rchehd/phpwarden/internal/checker"
+	"github.com/rchehd/phpwarden/internal/checker/phpcs"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/phpconstraint"
 	"github.com/rchehd/phpwarden/internal/profile"
@@ -40,7 +41,7 @@ var imageID = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 var runID = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
 
 func Build(location config.Location, effective config.Effective, selection scope.Selection, only []string, image, toolset string) (Request, error) {
-	fingerprint, err := Snapshot(location, selection)
+	fingerprint, err := Snapshot(location, selection, only)
 	if err != nil {
 		return Request{}, err
 	}
@@ -74,10 +75,14 @@ func (request Request) Validate() error {
 	if err := ValidateSelection(request.Selection); err != nil {
 		return err
 	}
-	if len(request.Fingerprint) != len(request.Selection.Files)+1 {
+	keys := append([]string{"config"}, fileKeys(request.Selection.Files)...)
+	if phpcs.InputRequired(request.Config, request.Selection, request.Only) {
+		keys = append(keys, "phpcs")
+	}
+	if len(request.Fingerprint) != len(keys) {
 		return fmt.Errorf("fingerprint does not match selected inputs")
 	}
-	for _, key := range append([]string{"config"}, fileKeys(request.Selection.Files)...) {
+	for _, key := range keys {
 		value := request.Fingerprint[key]
 		if decoded, err := hex.DecodeString(value); err != nil || len(decoded) != sha256.Size {
 			return fmt.Errorf("invalid fingerprint for %q", key)
@@ -124,7 +129,7 @@ func ValidateSelection(selection scope.Selection) error {
 	return nil
 }
 
-func Snapshot(location config.Location, selection scope.Selection) (map[string]string, error) {
+func Snapshot(location config.Location, selection scope.Selection, only []string) (map[string]string, error) {
 	if err := ValidateSelection(selection); err != nil {
 		return nil, err
 	}
@@ -159,11 +164,18 @@ func Snapshot(location config.Location, selection scope.Selection) (map[string]s
 		}
 		result[key] = fmt.Sprintf("%x", sha256.Sum256(data))
 	}
+	effective, err := config.Load(location)
+	if err != nil {
+		return nil, err
+	}
+	if phpcs.InputRequired(effective.Config, selection, only) {
+		result["phpcs"] = phpcs.ContextHash(location.Root, selection, effective.Config)
+	}
 	return result, nil
 }
 
 func (request Request) Matches(location config.Location) error {
-	actual, err := Snapshot(location, request.Selection)
+	actual, err := Snapshot(location, request.Selection, request.Only)
 	if err != nil {
 		return err
 	}

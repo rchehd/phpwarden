@@ -1,0 +1,7 @@
+--- a/web/modules/custom/demo/demo.module
++++ b/web/modules/custom/demo/demo.module
+@@ -13,3 +13,4 @@
+ $value_7 = true;
+ $value_8 = true;
+ $value_9 = true;
++$new_value = true;

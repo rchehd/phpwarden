@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "id": "phpcs-old-outside-diff",
+  "state": "committed",
+  "changed_files": [
+    "web/modules/custom/demo/demo.module"
+  ],
+  "settings": {
+    "sniffs": [
+      "Drupal.ControlStructures.ControlSignature"
+    ]
+  },
+  "verdicts": {
+    "diff": "pass",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "phpcs",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 2,
+      "contains": "if(true)",
+      "modes": [
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

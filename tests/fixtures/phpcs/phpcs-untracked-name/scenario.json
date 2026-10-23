@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "id": "phpcs-untracked-name",
+  "state": "untracked",
+  "untracked_renames": {
+    "web/modules/custom/demo/new-file.module": "web/modules/custom/demo/new \nfile.module"
+  },
+  "changed_files": [
+    "web/modules/custom/demo/new \nfile.module"
+  ],
+  "settings": {
+    "sniffs": [
+      "Drupal.ControlStructures.ControlSignature"
+    ]
+  },
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "phpcs",
+      "path": "web/modules/custom/demo/new \nfile.module",
+      "line": 2,
+      "contains": "if(true)",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

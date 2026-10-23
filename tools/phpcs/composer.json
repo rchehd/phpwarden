@@ -1,0 +1,17 @@
+{
+  "name": "phpwarden/phpcs-tools",
+  "description": "Isolated PHPCS standards for PHPWarden",
+  "type": "project",
+  "require": {
+    "php": ">=8.4 <8.5",
+    "drupal/coder": "9.0.1",
+    "phpcompatibility/php-compatibility": "10.0.0-alpha2",
+    "squizlabs/php_codesniffer": "4.0.4",
+    "symfony/yaml": "7.4.21"
+  },
+  "config": {
+    "allow-plugins": false,
+    "platform": {"php": "8.4.26"},
+    "sort-packages": true
+  }
+}

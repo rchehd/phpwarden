@@ -13,4 +13,7 @@
 !tools/yaml/
 !tools/yaml/composer.json
 !tools/yaml/composer.lock
+!tools/phpcs/
+!tools/phpcs/composer.json
+!tools/phpcs/composer.lock
 **/*_test.go

@@ -56,6 +56,11 @@ func TestDefaultsAndProvenance(t *testing.T) {
 		result.Provenance["tools.drupal-config.forbidden_keys"] != "profile_default" {
 		t.Fatalf("unexpected Drupal config defaults: %+v", drupal)
 	}
+	phpcs := result.Config.Tools.PHPCS
+	if !phpcs.Enabled || !phpcs.Required || phpcs.FailOn != "error" || !phpcs.DiscoverConfig || phpcs.Compatibility.Enabled ||
+		!slices.Equal(phpcs.Standards, []string{"Drupal", "DrupalPractice"}) || phpcs.ErrorSeverity != 5 || phpcs.Sniffs == nil || result.Provenance["tools.phpcs.standards"] != "profile_default" {
+		t.Fatalf("unexpected PHPCS defaults: %+v", phpcs)
+	}
 	if result.Provenance["php.runtime"] != "project_config" ||
 		result.Provenance["tools.debug.functions"] != "profile_default" ||
 		result.Provenance["scope.mode"] != "core_default" {
@@ -190,6 +195,18 @@ func TestInvalidConfigurations(t *testing.T) {
 		"drupal module parent":  minimal + "tools: {drupal-config: {module_roots: [../outside]}}\n",
 		"drupal duplicate":      minimal + "tools: {drupal-config: {forbidden_keys: [uuid, uuid]}}\n",
 		"drupal bad key":        minimal + "tools: {drupal-config: {forbidden_keys: ['']}}\n",
+		"phpcs unknown":         minimal + "tools: {phpcs: {args: []}}\n",
+		"phpcs timeout":         minimal + "tools: {phpcs: {timeout_seconds: 0}}\n",
+		"phpcs config path":     minimal + "tools: {phpcs: {config: ../outside.xml}}\n",
+		"phpcs config null":     minimal + "tools: {phpcs: {config: null}}\n",
+		"phpcs standards":       minimal + "tools: {phpcs: {standards: []}}\n",
+		"phpcs standard path":   minimal + "tools: {phpcs: {standard_paths: [../outside]}}\n",
+		"phpcs comma path":      minimal + "tools: {phpcs: {standard_paths: ['code,standard']}}\n",
+		"phpcs extra input":     minimal + "tools: {phpcs: {extra_inputs: [/outside]}}\n",
+		"phpcs severity":        minimal + "tools: {phpcs: {error_severity: 11}}\n",
+		"phpcs sniff":           minimal + "tools: {phpcs: {sniffs: ['../file.php']}}\n",
+		"phpcs target":          minimal + "tools: {phpcs: {compatibility: {test_version: '8.4-8.3'}}}\n",
+		"phpcs target format":   minimal + "tools: {phpcs: {compatibility: {test_version: '8.4-'}}}\n",
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {

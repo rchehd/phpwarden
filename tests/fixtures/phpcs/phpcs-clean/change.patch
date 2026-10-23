@@ -1,0 +1,7 @@
+--- a/web/modules/custom/demo/demo.module
++++ b/web/modules/custom/demo/demo.module
+@@ -2,3 +2,4 @@
+ if (true) {
+   echo 1;
+ }
++require 'MUST_NOT_EXECUTE.php';

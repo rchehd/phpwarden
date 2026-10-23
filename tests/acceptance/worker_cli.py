@@ -10,6 +10,11 @@ from tests.support.drupal_config import (
     check_drupal_config_fixtures,
     check_drupal_config_settings,
 )
+from tests.support.phpcs import (
+    check_phpcs_fixtures,
+    check_phpcs_project_rules,
+    check_phpcs_settings,
+)
 from tests.support.scenarios import materialize
 from tests.support.syntax import check_syntax_fixtures, check_syntax_settings
 from tests.support.whitespace import check_whitespace_fixtures, check_whitespace_settings
@@ -30,6 +35,7 @@ class WorkerCLITest(unittest.TestCase):
         tools = Path(cls.temporary.name) / "lib" / "phpwarden" / "yaml"
         tools.parent.mkdir(parents=True)
         tools.symlink_to(ROOT / "tools" / "yaml", target_is_directory=True)
+        (tools.parent / "phpcs").symlink_to(ROOT / "tools" / "phpcs", target_is_directory=True)
         subprocess.run(
             ["go", "build", "-o", str(cls.binary), "./cmd/phpwarden"],
             cwd=ROOT,
@@ -54,7 +60,7 @@ class WorkerCLITest(unittest.TestCase):
                 "target": {"min": self.runtime, "max": self.runtime},
             },
             "scope": {"include": ["web/modules/custom"], "base": scenario.base},
-            "tools": {"debug": debug},
+            "tools": {"debug": debug, "phpcs": {"enabled": False}},
         }
         (scenario.root / ".phpwarden.yaml").write_text(json.dumps(config))
 
@@ -130,6 +136,15 @@ class WorkerCLITest(unittest.TestCase):
 
     def test_drupal_config_custom_layout(self):
         check_drupal_config_custom_layout(self, self.configure, self.run_worker)
+
+    def test_phpcs_fixtures(self):
+        check_phpcs_fixtures(self, self.configure, self.run_worker)
+
+    def test_phpcs_settings(self):
+        check_phpcs_settings(self, self.configure, self.run_worker)
+
+    def test_phpcs_project_rules(self):
+        check_phpcs_project_rules(self, self.configure, self.run_worker)
 
     def test_missing_yaml_bundle_never_loads_project_autoload(self):
         with materialize(YAML_FIXTURES / "yaml-duplicate-key") as scenario:

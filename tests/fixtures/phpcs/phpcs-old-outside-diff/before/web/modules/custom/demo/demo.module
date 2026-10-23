@@ -1,0 +1,15 @@
+<?php
+if(true) {
+  echo 1;
+}
+
+$value_0 = true;
+$value_1 = true;
+$value_2 = true;
+$value_3 = true;
+$value_4 = true;
+$value_5 = true;
+$value_6 = true;
+$value_7 = true;
+$value_8 = true;
+$value_9 = true;

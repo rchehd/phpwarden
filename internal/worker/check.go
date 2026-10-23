@@ -12,6 +12,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/checker/debug"
 	"github.com/rchehd/phpwarden/internal/checker/drupalconfig"
+	"github.com/rchehd/phpwarden/internal/checker/phpcs"
 	"github.com/rchehd/phpwarden/internal/checker/syntax"
 	"github.com/rchehd/phpwarden/internal/checker/whitespace"
 	yamlcheck "github.com/rchehd/phpwarden/internal/checker/yaml"
@@ -47,7 +48,7 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 		result.Finalize()
 		return result
 	}
-	before, err := runrequest.Snapshot(location, selection)
+	before, err := runrequest.Snapshot(location, selection, only)
 	if err != nil {
 		return failure("input_read", err)
 	}
@@ -59,7 +60,7 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 	}
 	result = analyze(ctx, location, cfg, selection, only, process)
 	validateRuntime(&result, effective)
-	after, err := runrequest.Snapshot(location, selection)
+	after, err := runrequest.Snapshot(location, selection, only)
 	if err != nil {
 		return failure("stale", err)
 	}
@@ -97,7 +98,11 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, s
 	}
 	for _, id := range checker.Requested(only) {
 		var outcome checker.Outcome
-		if id == "drupal-config" {
+		if id == "phpcs" {
+			settings := cfg.Tools.PHPCS
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			outcome = phpcs.Run(ctx, location.Root, phpcs.Select(selection, settings, cfg.Profile), settings, cfg.PHP.Target, process)
+		} else if id == "drupal-config" {
 			settings := cfg.Tools.DrupalConfig
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
 			selected := selection.Filter(settings.Include, settings.Exclude, func(filename string) bool {

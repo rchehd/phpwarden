@@ -1,0 +1,17 @@
+--- a/web/modules/custom/demo/parent.php
++++ b/web/modules/custom/demo/parent.php
+@@ -1,4 +1,4 @@
+ <?php
+-if (true) {
++if(true) {
+   echo 1;
+ }
+--- a/web/modules/custom/demo/nested/child.php
++++ b/web/modules/custom/demo/nested/child.php
+@@ -1,4 +1,4 @@
+ <?php
+-if (true) {
+-  echo 1;
++if(true) {
++	echo 1;
+ }

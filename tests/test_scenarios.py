@@ -16,6 +16,7 @@ class ScenarioFixturesTest(unittest.TestCase):
                 FIXTURES.parent / "yaml",
                 FIXTURES.parent / "whitespace",
                 FIXTURES.parent / "drupal-config",
+                FIXTURES.parent / "phpcs",
             )
             for path in group.iterdir()
             if path.is_dir()
@@ -80,6 +81,22 @@ class ScenarioFixturesTest(unittest.TestCase):
             roots = (first.root, second.root)
         for root in roots:
             self.assertFalse(root.exists())
+
+    def test_unusual_filename_is_created_only_in_temporary_repository(self):
+        directory = FIXTURES.parent / "phpcs" / "phpcs-untracked-name"
+        portable = "web/modules/custom/demo/new-file.module"
+        unusual = "web/modules/custom/demo/new \nfile.module"
+        self.assertTrue((directory / "untracked" / portable).is_file())
+        self.assertFalse((directory / "untracked" / unusual).exists())
+        with materialize(directory) as scenario:
+            self.assertFalse((scenario.root / portable).exists())
+            self.assertEqual(
+                (scenario.root / unusual).read_bytes(),
+                (directory / "untracked" / portable).read_bytes(),
+            )
+            self.assertEqual(scenario.changed_files(), [unusual])
+            root = scenario.root
+        self.assertFalse(root.exists())
 
 
 if __name__ == "__main__":

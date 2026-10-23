@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "id": "phpcs-drupal-added",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/demo.module"
+  ],
+  "settings": {
+    "sniffs": [
+      "Drupal.ControlStructures.ControlSignature"
+    ]
+  },
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "phpcs",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 2,
+      "contains": "if(true)",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

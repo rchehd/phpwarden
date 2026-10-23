@@ -1,0 +1,8 @@
+--- a/web/modules/custom/demo/demo.module
++++ b/web/modules/custom/demo/demo.module
+@@ -1,4 +1,4 @@
+ <?php
+-if (true) {
++if(true) {
+   echo 1;
+ }

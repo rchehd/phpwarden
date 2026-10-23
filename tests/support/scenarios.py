@@ -73,6 +73,17 @@ def materialize(directory):
         scenario.git("switch", "--quiet", "-c", "scenario")
         if spec["state"] == "untracked":
             shutil.copytree(directory / "untracked", root, dirs_exist_ok=True)
+            for source, target in spec.get("untracked_renames", {}).items():
+                source_path = (root / source).resolve()
+                target_path = (root / target).resolve()
+                if (
+                    not source_path.is_relative_to(root)
+                    or not target_path.is_relative_to(root)
+                    or target_path.exists()
+                ):
+                    raise ValueError(f"Invalid untracked rename: {source!r} -> {target!r}")
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                source_path.rename(target_path)
         else:
             scenario.git("apply", "--check", str(directory / spec["patch"]))
             scenario.git("apply", str(directory / spec["patch"]))

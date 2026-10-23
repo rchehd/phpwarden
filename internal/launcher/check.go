@@ -170,6 +170,11 @@ func inspect(ctx context.Context, selection toolset.Selection, process runner.Pr
 	if version, ok := selection.Tools["symfony-yaml"]; ok && image.Config.Labels["io.phpwarden.symfony-yaml-version"] != version {
 		return "", fmt.Errorf("local image Symfony YAML version label does not match the selected toolset")
 	}
+	for tool, label := range map[string]string{"squizlabs-php_codesniffer": "phpcs", "drupal-coder": "coder", "phpcompatibility-php-compatibility": "phpcompatibility"} {
+		if version, ok := selection.Tools[tool]; ok && image.Config.Labels["io.phpwarden."+label+"-version"] != version {
+			return "", fmt.Errorf("local image %s version label does not match the selected toolset", label)
+		}
+	}
 	if !selection.Development && !slices.Contains(image.RepoDigests, selection.Image) {
 		return "", fmt.Errorf("local image repository digest does not match the selected manifest image")
 	}
@@ -220,6 +225,8 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 				required, failOn = request.Config.Tools.Whitespace.Required, request.Config.Tools.Whitespace.FailOn
 			} else if check.ID == "drupal-config" {
 				required, failOn = request.Config.Tools.DrupalConfig.Required, request.Config.Tools.DrupalConfig.FailOn
+			} else if check.ID == "phpcs" {
+				required, failOn = request.Config.Tools.PHPCS.Required, request.Config.Tools.PHPCS.FailOn
 			}
 			if !slices.Contains(checker.Requested(request.Only), check.ID) || seen[check.ID] || check.Required != required || check.FailOn != failOn {
 				return result, fmt.Errorf("worker checker selection or policy does not match the request")
@@ -256,7 +263,7 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 			return result, fmt.Errorf("worker finding is outside the requested scope")
 		}
 		if _, exists := request.Selection.LineMap[*finding.Path]; !exists ||
-			(finding.Checker == "debug" || finding.Checker == "whitespace") && (finding.Kind != "code" || !request.Selection.Contains(*finding.Path, *finding.Line)) ||
+			(finding.Checker == "debug" || finding.Checker == "whitespace" || finding.Checker == "phpcs") && (finding.Kind != "code" || !request.Selection.Contains(*finding.Path, *finding.Line)) ||
 			finding.Checker == "drupal-config" && finding.Kind != "code" ||
 			(finding.Checker == "syntax" || finding.Checker == "yaml") && finding.Kind != "syntax" {
 			return result, fmt.Errorf("worker finding is outside the requested scope")

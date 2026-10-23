@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "id": "phpcs-project-ruleset",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/demo.module"
+  ],
+  "settings": {
+    "sniffs": []
+  },
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "phpcs",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 3,
+      "contains": "\techo",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

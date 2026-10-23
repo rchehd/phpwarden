@@ -11,6 +11,14 @@ scope:
   mode: diff
   base: origin/main
 tools:
+  phpcs:
+    enabled: true
+    required: true
+    fail_on: error
+    discover_config: true
+    standards: [Drupal, DrupalPractice]
+    compatibility:
+      enabled: false
   drupal-config:
     enabled: true
     required: true

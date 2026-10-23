@@ -38,7 +38,7 @@ Scope options:
   --mode diff|full     Override configured mode
   --base REF           Diff base ref
   --whole-files        Include all lines of selected diff files
-  --only ID[,ID...]    Select debug, drupal-config, syntax, whitespace, yaml; enable selected checkers
+  --only ID[,ID...]    Select debug, drupal-config, phpcs, syntax, whitespace, yaml; enable selected checkers
 
 Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
 Check uses the local development Docker image (Linux amd64, PHP runtime/target 8.4).

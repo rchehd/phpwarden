@@ -1,0 +1,5 @@
+--- a/web/modules/custom/demo/compat.php
++++ b/web/modules/custom/demo/compat.php
+@@ -1 +1,2 @@
+ <?php
++array_find([], fn ($value) => true);

@@ -31,6 +31,7 @@ type Defaults struct {
 	PHPExtensions             []string
 	ModuleConfigDirectories   []string
 	ModuleConfigForbiddenKeys []string
+	PHPCSStandards            []string
 }
 
 func Lookup(id string) (Defaults, bool) {
@@ -42,5 +43,6 @@ func Lookup(id string) (Defaults, bool) {
 		PHPExtensions:             []string{".php", ".module", ".inc", ".install", ".theme", ".profile", ".engine", ".test"},
 		ModuleConfigDirectories:   []string{"config/install", "config/optional", "config/schema"},
 		ModuleConfigForbiddenKeys: []string{"uuid", "_core"},
+		PHPCSStandards:            []string{"Drupal", "DrupalPractice"},
 	}, true
 }

@@ -14,7 +14,7 @@ PHPWarden is being designed as a standalone CLI with Docker-based tools and adap
 
 ## Development status
 
-The project is in early development. The Go CLI validates configuration, discovers Drupal layout and locked versions, inspects Git scope, selects a development toolset, and runs PHP debug, PHP syntax, YAML syntax, Drupal module config, whitespace, and conflict marker checks through Docker. A local development image contains PHP 8.4, Git, and isolated Symfony YAML dependencies. Published images, automatic pulls, and agent integrations are not available yet.
+The project is in early development. The Go CLI validates configuration, discovers Drupal layout and locked versions, inspects Git scope, selects a development toolset, and runs PHPCS/Drupal Coder, PHP debug, PHP syntax, YAML syntax, Drupal module config, whitespace, and conflict marker checks through Docker. A local development image contains PHP 8.4, Git, and isolated Symfony YAML dependencies. Published images, automatic pulls, and agent integrations are not available yet.
 
 ## Build and try the CLI
 
@@ -28,7 +28,7 @@ bin/phpwarden config show --config examples/drupal.phpwarden.yaml --format json
 
 For a project, save its configuration as `.phpwarden.yaml` in the project root. The CLI finds the nearest configuration from the current directory up to the Git worktree root, or accepts an explicit `--project` or `--config` path. Explicit paths also allow configuration validation outside Git. Relative command-line paths are resolved from the caller's directory.
 
-Validation checks YAML structure, the [v1 schema](schemas/config-v1.schema.json), PHP target ranges, and path boundaries. It rejects unknown fields and checker IDs, duplicate keys, aliases, and numeric PHP versions. The implemented checkers are `debug`, `drupal-config`, `syntax`, `whitespace`, and `yaml`, all enabled by default for the Drupal profile.
+Validation checks YAML structure, the [v1 schema](schemas/config-v1.schema.json), PHP target ranges, and path boundaries. It rejects unknown fields and checker IDs, duplicate keys, aliases, and numeric PHP versions. The implemented checkers are `debug`, `drupal-config`, `phpcs`, `syntax`, `whitespace`, and `yaml`, all enabled by default for the Drupal profile. PHPCompatibility is an opt-in PHPCS setting.
 
 `config show` includes discovered project facts, core and Drupal defaults, explicit project overrides, and their provenance. Its `pending` list identifies unresolved values. `config validate` checks configuration syntax/schema and path boundaries without inspecting Composer metadata. Discovery validates Composer PHP requirements and compares installed Drupal version metadata when available. Full dependency integrity and release image compatibility remain future work. The development launcher currently requires PHP runtime and target `"8.4"`.
 
@@ -158,6 +158,27 @@ The checker uses the Go worker's existing YAML parser (`go.yaml.in/yaml/v3`) to 
 
 Findings use `drupal.config.forbidden_key` with `kind: code` and parser line/column positions. All top-level key checks apply to the complete selected file. Public `check` runs this native checker inside the selected image; it applies no fixes.
 
+## Check PHPCS, Drupal Coder, and PHP compatibility
+
+`phpcs` uses PHP_CodeSniffer 4.0.4 and Drupal Coder 9.0.1 from an isolated tool bundle. The Drupal fallback selects `Drupal` and `DrupalPractice`. Files are analyzed in full, then code findings are filtered through the shared added-line map; full/paths/whole-files expose existing style issues too. Sniff exceptions, tokenizer failures, missing packages, invalid rulesets, and malformed reports are execution errors, including when the failure occurs outside a diff hunk. Native warning/error severity and sniff source IDs are preserved.
+
+```sh
+phpwarden check --only phpcs
+phpwarden check --only phpcs --mode full
+```
+
+Use `tools.phpcs.config` for an explicit project-relative ruleset. Otherwise `discover_config: true` chooses the nearest `.phpcs.xml`, `phpcs.xml`, `.phpcs.xml.dist`, or `phpcs.xml.dist`, in that order, from each source directory up to the project root. Files with different rulesets run in separate processes. Project rulesets replace the fallback standards; PHPWarden does not append Drupal rules to them. Set `discover_config: false` to use fallback standards regardless of nearby configuration. No native config file is generated in the project.
+
+Settings include the shared `enabled`, `required`, `fail_on`, `timeout_seconds`, `include`, and `exclude`, plus `standards`, `sniffs`, `exclude_sniffs`, `extra_extensions`, `error_severity`, and `warning_severity`. Standard names are identifiers such as `Drupal` or `PSR12`. Sniff lists select/exclude installed rules; they apply to project rulesets as well as fallback. Severity thresholds range from 0 to 10; defaults are 5, and 0 disables that message type. PHP/Drupal extensions are selected by default; extra extensions add to this set. An unknown standard or an empty effective sniff selection is an execution error, rather than a clean scan.
+
+`standard_paths` adds project-relative directories containing custom standards; referenced PHP sniffs must be installed there or accessible through the ruleset. Paths containing commas are unsupported for this native option. XML ruleset file/standard references and `<autoload>` paths must resolve within the project, without symlinks; XML directives such as DTDs and dynamic/variable-expanded XML file references are unsupported. Relative XML references may traverse to sibling directories inside the project. Custom sniffs and explicitly declared ruleset autoloaders are executable lint code. The project Composer autoloader and application sources are not loaded automatically; PHPCS source tokenization does not execute the files being checked. Public check uses the same read-only, offline container protections as the other checkers.
+
+PHPCS context fingerprints cover discovered ruleset candidates, including absent candidates, transitive XML/file references, declared autoload files, and all files/directory listings in `standard_paths` and `extra_inputs`. Changes invalidate the result before or after execution. Use `extra_inputs` for additional project-relative files/directories that custom code or native options read indirectly. Arbitrary dynamic PHP dependencies are not inferred, and this does not verify all project dependency integrity. Context preparation errors remain checker errors and preserve required/optional policy.
+
+`tools.phpcs.compatibility.enabled: true` appends PHPCompatibility to the selected ruleset in the same PHPCS invocation. The bundled version is [10.0.0-alpha2](https://github.com/PHPCompatibility/PHPCompatibility/tree/10.0.0-alpha2), so it remains opt-in. `testVersion` is always set from the shared PHP target range, including when a project ruleset selects PHPCompatibility itself. `compatibility.test_version`, such as `"8.3"` or `"8.3-8.4"`, is an explicit override. The PHP container runtime does not replace the target. These sniffs cover their implemented rules, not every possible runtime incompatibility. A project ruleset can select PHPCompatibility independently of the append switch.
+
+Dependencies and all transitive versions are locked in [tools/phpcs/composer.lock](tools/phpcs/composer.lock), installed with Composer scripts/plugins disabled, and registered at runtime without modifying PHPCS configuration. The helper checks pinned PHPCS/Coder/PHPCompatibility versions. Native worker development needs its bundle at `../lib/phpwarden/phpcs` beside the binary plus PHP tokenizer, mbstring, SimpleXML, and XMLWriter extensions. Public `check` requires none of these on the host. Fixing through PHPCBF is not implemented in this step.
+
 ## Check through Docker
 
 After building the Go CLI and development image, run these commands in your configured Git project:
@@ -182,7 +203,7 @@ The launcher requires host Git and a local Docker Unix socket, with no host PHP,
 
 The development image must already exist under `phpwarden:static-php8.4-dev`; a missing image returns an error with build instructions. There is no registry fallback or pull for this unpublished tag. Remote Docker contexts and other platforms are currently rejected. The worker protocol is now v2, carrying a checker selection list instead of the previous debug-only flag. Rebuild the CLI and image together; old debug images cannot satisfy the new toolset/protocol/capability checks. The report format remains v1, with `environment.protocol: 2`.
 
-The current toolset is `static-dev-v4-php8.4`, with `debug,drupal-config,syntax,whitespace,yaml` capabilities and preset `drupal-static` 1.3.0. Rebuild the existing development tag after adding Drupal config checks; earlier images are rejected. The static development entry remains independent of Drupal runtime APIs; it does not advertise a tested framework version matrix.
+The current toolset is `static-dev-v5-php8.4`, with `debug,drupal-config,phpcs,syntax,whitespace,yaml` capabilities and preset `drupal-static` 1.4.0. Rebuild the existing development tag after adding PHPCS; earlier images are rejected. The static development entry does not bootstrap Drupal or advertise a tested framework version matrix.
 
 ## Run the development Docker image
 
@@ -205,7 +226,7 @@ docker run --rm --pull=never --network=none --read-only \
 
 Set PHP runtime/target to `"8.4"` and configure an available diff base. Source roots can be discovered or supplied through `scope.include`. Append `--mode full` for a full scan or `--base origin/main` to override the diff base. The command returns the worker's exit code and JSON report.
 
-This image contains the debug, Drupal config, syntax, whitespace, and YAML checkers, PHP 8.4.26, Git, and the locked Symfony YAML tool bundle. It requires no host PHP, Composer, or Go, and no project `vendor` directory. The image defaults to UID/GID 10001; the command above uses your UID/GID to read private project directories. Check mode mounts the project read-only and uses a private temporary filesystem. Git trusts only the known `/workspace` mount through the image's system configuration.
+This image contains PHPCS/Drupal Coder/PHPCompatibility, debug, Drupal config, syntax, whitespace, and YAML checkers, PHP 8.4.26, Git, and the locked Symfony YAML tool bundle. It requires no host PHP, Composer, or Go, and no project `vendor` directory. The image defaults to UID/GID 10001; the command above uses your UID/GID to read private project directories. Check mode mounts the project read-only and uses a private temporary filesystem. Git trusts only the known `/workspace` mount through the image's system configuration.
 
 Use a local Docker daemon with access to the source directory. Mount the entire Git repository for monorepos and pass `--project /workspace/path/to/project`. Linked worktrees or separate Git directories whose metadata lives outside the mount need additional path mapping; the launcher will handle those separately. Container paths in findings remain relative to the configured project.
 
@@ -213,11 +234,12 @@ The tag is local and unpublished. Base images are pinned by digest, while Alpine
 
 ## Repository checks
 
-Native repository tests require Go 1.26.5, PHP 8.4 with tokenizer, Composer 2.10.3, Python 3.12, and Git. Composer installs only the repository's isolated test tool dependencies. From the repository root:
+Native repository tests require Go 1.26.5, PHP 8.4 with tokenizer, mbstring, SimpleXML and XMLWriter, Composer 2.10.3, Python 3.12, and Git. Composer installs only the repository's isolated test tool dependencies. From the repository root:
 
 ```sh
 python3 -m venv .venv
 composer install --working-dir tools/yaml --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
+composer install --working-dir tools/phpcs --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
 .venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python -m ruff check tests
 .venv/bin/python -m ruff format --check tests
@@ -226,6 +248,7 @@ go vet ./...
 go test -race ./...
 php -l internal/checker/debug/helper.php
 php -l internal/checker/yaml/helper.php
+php -l internal/checker/phpcs/helper.php
 .venv/bin/python -m unittest tests.acceptance.worker_cli -v
 ```
 
@@ -250,6 +273,8 @@ Six YAML fixtures add another 24 combinations per suite: duplicate keys, old err
 Six whitespace fixtures add 24 combinations per suite: added spaces/tabs, old violations outside hunks, deletion-only changes, Markdown conflicts, untracked CRLF/EOF content with a spaced filename and binary data, and marker lookalikes. Shared settings tests cover independent rule toggles/exclusions, explicit selection, include/exclude, and nonblocking findings. Go tests also cover long lines, invalid UTF-8 text, late NUL bytes, cancellation, and partial read failures. Intentional fixture whitespace is exempted from repository `git diff --check` via a scoped attribute.
 
 Eight Drupal config fixtures add 32 combinations per suite: new keys, old keys outside hunks, deletion-only changes, quoted/flow YAML, inherited keys, clean nested schema keys, files outside module config directories, and an explicit custom module root. Shared settings tests cover only/disabled, custom keys and directories, include/exclude, nonblocking findings, malformed YAML required/optional policies, custom/standalone module roots, site-export exclusion, and autoload isolation. Go tests also cover escaped keys, BOM/CRLF, merge precedence/positions, invalid aliases, nesting limits, cancellation, and partial read failures.
+
+Eight PHPCS fixtures add 32 combinations per suite: Drupal style issues, old issues outside diff, deletion-only changes, untracked newline/spaced paths, clean source that must not execute, PHPCompatibility target checks, project ruleset priority, and nearest ruleset grouping. Shared settings tests exercise disabled/only, severity/exclusions, warning policy, optional configuration failures, compatibility overrides, and a real project custom sniff without loading the project Composer autoloader. Request tests reject changed/new/transitive rulesets and changed/new custom standard files. Older checker fixture configurations explicitly disable PHPCS to keep their expected findings focused on their own rules.
 
 Drupal discovery acceptance covers root/web/docroot/custom web roots, multisite custom directories, automatic source roots, explicit broad roots with profile exclusions, locked version reporting, malformed metadata, and version conflicts. These are small synthetic Git projects; they do not establish compatibility with a full installed Drupal application.
 

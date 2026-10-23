@@ -192,7 +192,7 @@ func TestInvalidManifests(t *testing.T) {
 		strings.Replace(string(bundledManifest), `"php": "8.4.26"`, `"php": "8.4.26", "php": "8.4.26"`, 1),
 		strings.Replace(string(bundledManifest), `"version": 1`, `"version": 1, "unexpected": true`, 1),
 		strings.Replace(string(bundledManifest), `"runtime": "8.4"`, `"runtime": "8.4", "typo": true`, 1),
-		strings.Replace(string(bundledManifest), `"version": "1.3.0"`, `"version": null`, 1),
+		strings.Replace(string(bundledManifest), `"version": "1.4.0"`, `"version": null`, 1),
 		strings.Replace(string(bundledManifest), `"framework": null`, `"framework": "^11"`, 1),
 		strings.Replace(string(bundledManifest), `"debug"`, `"phpstan"`, 1),
 		strings.Replace(string(bundledManifest), `"linux/amd64"`, `"linux/arm64"`, 1),
@@ -246,22 +246,24 @@ func TestBundledYAMLVersionsMatchDependencyLock(t *testing.T) {
 	if selected.Tools["symfony-yaml"] != yamlcheck.Version {
 		t.Fatal("YAML checker and manifest versions differ")
 	}
-	data, err := os.ReadFile("../../tools/yaml/composer.lock")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var lock struct {
-		Packages []struct {
-			Name    string
-			Version string
+	for _, name := range []string{"yaml", "phpcs"} {
+		data, err := os.ReadFile("../../tools/" + name + "/composer.lock")
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	if err := json.Unmarshal(data, &lock); err != nil {
-		t.Fatal(err)
-	}
-	for _, pkg := range lock.Packages {
-		if selected.Tools[strings.ReplaceAll(pkg.Name, "/", "-")] != strings.TrimPrefix(pkg.Version, "v") {
-			t.Fatalf("manifest version differs from lock for %s", pkg.Name)
+		var lock struct {
+			Packages []struct {
+				Name    string
+				Version string
+			}
+		}
+		if err := json.Unmarshal(data, &lock); err != nil {
+			t.Fatal(err)
+		}
+		for _, pkg := range lock.Packages {
+			if selected.Tools[strings.ReplaceAll(pkg.Name, "/", "-")] != strings.TrimPrefix(pkg.Version, "v") {
+				t.Fatalf("manifest version differs from lock for %s", pkg.Name)
+			}
 		}
 	}
 }

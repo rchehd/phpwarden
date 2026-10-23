@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "id": "phpcs-clean",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/demo.module"
+  ],
+  "settings": {
+    "sniffs": [
+      "Drupal.ControlStructures.ControlSignature"
+    ]
+  },
+  "verdicts": {
+    "diff": "pass",
+    "full": "pass"
+  },
+  "findings": [],
+  "patch": "change.patch"
+}

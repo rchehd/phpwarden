@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "id": "phpcs-nearest-rulesets",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/nested/child.php",
+    "web/modules/custom/demo/parent.php"
+  ],
+  "settings": {
+    "sniffs": []
+  },
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "phpcs",
+      "path": "web/modules/custom/demo/parent.php",
+      "line": 2,
+      "contains": "if(true)",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    },
+    {
+      "checker": "phpcs",
+      "path": "web/modules/custom/demo/nested/child.php",
+      "line": 3,
+      "contains": "\techo",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

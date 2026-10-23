@@ -52,11 +52,37 @@ type Runner struct {
 }
 
 type Tools struct {
+	PHPCS        PHPCS        `json:"phpcs"`
 	DrupalConfig DrupalConfig `json:"drupal-config"`
 	Debug        Debug        `json:"debug"`
 	Syntax       Syntax       `json:"syntax"`
 	YAML         YAML         `json:"yaml"`
 	Whitespace   Whitespace   `json:"whitespace"`
+}
+
+type PHPCS struct {
+	Enabled         bool               `json:"enabled"`
+	Required        bool               `json:"required"`
+	FailOn          string             `json:"fail_on"`
+	TimeoutSeconds  int                `json:"timeout_seconds"`
+	Include         []string           `json:"include,omitempty"`
+	Exclude         []string           `json:"exclude"`
+	Config          string             `json:"config"`
+	DiscoverConfig  bool               `json:"discover_config"`
+	Standards       []string           `json:"standards"`
+	Sniffs          []string           `json:"sniffs"`
+	ExcludeSniffs   []string           `json:"exclude_sniffs"`
+	StandardPaths   []string           `json:"standard_paths"`
+	ExtraInputs     []string           `json:"extra_inputs"`
+	ExtraExtensions []string           `json:"extra_extensions"`
+	ErrorSeverity   int                `json:"error_severity"`
+	WarningSeverity int                `json:"warning_severity"`
+	Compatibility   PHPCSCompatibility `json:"compatibility"`
+}
+
+type PHPCSCompatibility struct {
+	Enabled     bool   `json:"enabled"`
+	TestVersion string `json:"test_version"`
 }
 
 type DrupalConfig struct {
@@ -164,8 +190,10 @@ func Parse(data []byte) (Effective, error) {
 			Framework: Framework{Version: "auto"},
 			Scope:     Scope{Mode: "diff", Exclude: []string{}},
 			Runner:    Runner{TimeoutSeconds: 300},
-			Tools: Tools{DrupalConfig: DrupalConfig{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{},
-				Directories: defaults.ModuleConfigDirectories, ForbiddenKeys: defaults.ModuleConfigForbiddenKeys, ModuleRoots: []string{}},
+			Tools: Tools{PHPCS: PHPCS{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
+				Standards: defaults.PHPCSStandards, Sniffs: []string{}, ExcludeSniffs: []string{}, StandardPaths: []string{}, ExtraInputs: []string{}, ExtraExtensions: []string{}, ErrorSeverity: 5, WarningSeverity: 5},
+				DrupalConfig: DrupalConfig{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{},
+					Directories: defaults.ModuleConfigDirectories, ForbiddenKeys: defaults.ModuleConfigForbiddenKeys, ModuleRoots: []string{}},
 				Whitespace: Whitespace{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{},
 					TrailingWhitespace: true, ConflictMarkers: true, TrailingWhitespaceExclude: []string{"**/*.md", "**/*.patch", "**/*.diff"}, ConflictMarkersExclude: []string{}},
 				YAML: YAML{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}},
@@ -200,6 +228,10 @@ func Parse(data []byte) (Effective, error) {
 		},
 		Pending: []string{},
 	}
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "standards", "sniffs", "exclude_sniffs", "standard_paths", "extra_inputs", "extra_extensions", "error_severity", "warning_severity", "compatibility.enabled", "compatibility.test_version"} {
+		result.Provenance["tools.phpcs."+field] = "core_default"
+	}
+	result.Provenance["tools.phpcs.enabled"], result.Provenance["tools.phpcs.standards"] = "profile_default", "profile_default"
 	encoded, err := json.Marshal(input)
 	if err != nil {
 		return Effective{}, err
@@ -297,10 +329,37 @@ func markProvenance(values map[string]any, prefix string, sources map[string]str
 
 func validateValues(cfg Config) error {
 	for _, values := range [][]string{cfg.Scope.Include, cfg.Tools.Debug.Include, cfg.Tools.Syntax.Include, cfg.Tools.YAML.Include, cfg.Tools.Whitespace.Include,
-		cfg.Tools.DrupalConfig.Include, cfg.Tools.DrupalConfig.Directories, cfg.Tools.DrupalConfig.ModuleRoots} {
+		cfg.Tools.DrupalConfig.Include, cfg.Tools.DrupalConfig.Directories, cfg.Tools.DrupalConfig.ModuleRoots,
+		cfg.Tools.PHPCS.Include, cfg.Tools.PHPCS.StandardPaths, cfg.Tools.PHPCS.ExtraInputs} {
 		for _, value := range values {
 			if err := projectpath.Validate(value); err != nil {
 				return err
+			}
+		}
+	}
+	if cfg.Tools.PHPCS.Config != "" {
+		if err := projectpath.Validate(cfg.Tools.PHPCS.Config); err != nil {
+			return err
+		}
+	}
+	for _, name := range cfg.Tools.PHPCS.StandardPaths {
+		if strings.Contains(name, ",") {
+			return fmt.Errorf("PHPCS standard_paths cannot contain commas")
+		}
+	}
+	if cfg.Tools.PHPCS.Compatibility.TestVersion != "" {
+		parts := strings.Split(cfg.Tools.PHPCS.Compatibility.TestVersion, "-")
+		min, err := parseVersion(parts[0])
+		if err != nil {
+			return err
+		}
+		if len(parts) == 2 {
+			max, err := parseVersion(parts[1])
+			if err != nil {
+				return err
+			}
+			if min[0] > max[0] || min[0] == max[0] && min[1] > max[1] {
+				return fmt.Errorf("PHPCS compatibility test_version range is reversed")
 			}
 		}
 	}
@@ -310,7 +369,7 @@ func validateValues(cfg Config) error {
 		}
 	}
 	for _, values := range [][]string{cfg.Scope.Exclude, cfg.Tools.Debug.Exclude, cfg.Tools.Syntax.Exclude, cfg.Tools.YAML.Exclude,
-		cfg.Tools.Whitespace.Exclude, cfg.Tools.Whitespace.TrailingWhitespaceExclude, cfg.Tools.Whitespace.ConflictMarkersExclude, cfg.Tools.DrupalConfig.Exclude} {
+		cfg.Tools.Whitespace.Exclude, cfg.Tools.Whitespace.TrailingWhitespaceExclude, cfg.Tools.Whitespace.ConflictMarkersExclude, cfg.Tools.DrupalConfig.Exclude, cfg.Tools.PHPCS.Exclude} {
 		if err := validatePatterns(values); err != nil {
 			return err
 		}
