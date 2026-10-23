@@ -12,20 +12,37 @@ jobs:
   docker:
     name: Docker static worker integration
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Build development worker image
-        run: docker build --platform linux/amd64 -f docker/Dockerfile -t phpwarden:static-php8.4-dev .
+      - name: Build development worker images
+        run: docker buildx bake
       - name: Run real Docker fixture tests
-        run: python -m unittest tests.acceptance.docker_worker -v
-        env:
-          PHPWARDEN_TEST_IMAGE: phpwarden:static-php8.4-dev
+        run: |
+          for runtime in 8.1 8.2 8.3 8.4; do
+            PHPWARDEN_TEST_IMAGE="phpwarden:static-php$runtime-dev" python -m unittest tests.acceptance.docker_worker -v
+          done
       - name: Run public launcher fixture tests
         run: python -m unittest tests.acceptance.launcher_cli -v
+      - name: Publish tested images
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          repository="ghcr.io/${GITHUB_REPOSITORY,,}"
+          for runtime in 8.1 8.2 8.3 8.4; do
+            for tag in "static-php$runtime-dev" "static-php$runtime-dev-${GITHUB_SHA::7}"; do
+              docker tag "phpwarden:static-php$runtime-dev" "$repository:$tag"
+              docker push "$repository:$tag"
+            done
+          done
 
   go:
     name: Go CLI and configuration

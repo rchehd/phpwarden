@@ -48,7 +48,7 @@ func TestPHPCSRequestRejectsChangedRulesetsAndStandards(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			request, err := runrequest.Build(location, effective, selection, []string{"phpcs"}, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID)
+			request, err := runrequest.Build(location, effective, selection, []string{"phpcs"}, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID("8.4"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -109,7 +109,7 @@ func TestPHPStanRequestRejectsChangedAnalysisContext(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			request, err := runrequest.Build(location, effective, selection, []string{"phpstan"}, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID)
+			request, err := runrequest.Build(location, effective, selection, []string{"phpstan"}, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID("8.4"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -179,7 +179,7 @@ func TestTwigCSFixerRequestRejectsChangedConfigAndInputs(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			request, err := runrequest.Build(location, effective, selection, []string{"twig-cs-fixer"}, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID)
+			request, err := runrequest.Build(location, effective, selection, []string{"twig-cs-fixer"}, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID("8.4"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -225,7 +225,7 @@ func TestRequestWorkerDoesNotNeedGitAndRejectsChangedInputs(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			request, err := runrequest.Build(location, effective, selection, nil, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID)
+			request, err := runrequest.Build(location, effective, selection, nil, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID("8.4"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -320,7 +320,7 @@ func TestComposerChangesDuringWorkerExecutionAreStale(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			request, err := runrequest.Build(location, effective, selection, nil, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID)
+			request, err := runrequest.Build(location, effective, selection, nil, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID("8.4"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -358,7 +358,7 @@ func TestRequestWorkerDelegatesComposerAudit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, err := runrequest.Build(location, effective, selection, []string{"composer-audit"}, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID)
+	request, err := runrequest.Build(location, effective, selection, []string{"composer-audit"}, "sha256:"+strings.Repeat("a", 64), toolset.DevelopmentID("8.4"))
 	if err != nil {
 		t.Fatal(err)
 	}

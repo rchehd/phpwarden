@@ -3,14 +3,14 @@
   "description": "Isolated Twig CS Fixer for PHPWarden",
   "type": "project",
   "require": {
-    "php": ">=8.4 <8.5",
-    "symfony/finder": "7.4.14",
+    "php": ">=8.1 <8.5",
+    "symfony/finder": "6.4.47",
     "twig/twig": "3.30.0",
     "vincentlanglet/twig-cs-fixer": "4.1.1"
   },
   "config": {
     "allow-plugins": false,
-    "platform": {"php": "8.4.26"},
+    "platform": {"php": "8.1.34"},
     "sort-packages": true
   }
 }

@@ -32,7 +32,7 @@ func Execute(ctx context.Context, root string, request runrequest.Request, proce
 	if err := request.Validate(); err != nil {
 		return failure("request_invalid", err)
 	}
-	if request.Toolset != toolset.DevelopmentID {
+	if request.Toolset != toolset.DevelopmentID(request.Config.PHP.Runtime) {
 		return failure("toolset_mismatch", fmt.Errorf("worker does not support requested toolset %q", request.Toolset))
 	}
 	location := config.Location{Root: root, Path: filepath.Join(root, request.ConfigFile)}

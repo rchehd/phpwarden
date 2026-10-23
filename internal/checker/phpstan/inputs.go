@@ -18,6 +18,8 @@ import (
 	"github.com/rchehd/phpwarden/internal/scope"
 )
 
+var ConfigCandidates = []string{"phpstan.neon", "phpstan.neon.dist", "phpstan.dist.neon"}
+
 func Select(selection scope.Selection, cfg config.PHPStan, profileID string) scope.Selection {
 	defaults, _ := profile.Lookup(profileID)
 	extensions := append(slices.Clone(defaults.PHPExtensions), cfg.ExtraExtensions...)
@@ -91,7 +93,7 @@ func prepare(root string, cfg config.PHPStan) (string, string, error) {
 	}
 	selected := cfg.Config
 	if selected == "" && cfg.DiscoverConfig {
-		for _, candidate := range []string{"phpstan.neon", "phpstan.neon.dist", "phpstan.dist.neon"} {
+		for _, candidate := range ConfigCandidates {
 			if _, err := os.Lstat(filepath.Join(root, candidate)); os.IsNotExist(err) {
 				continue
 			}

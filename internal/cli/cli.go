@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/rchehd/phpwarden/internal/checker"
@@ -15,6 +17,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/launcher"
 	"github.com/rchehd/phpwarden/internal/profile"
+	"github.com/rchehd/phpwarden/internal/projectinit"
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/runner"
 	"github.com/rchehd/phpwarden/internal/runrequest"
@@ -25,7 +28,8 @@ import (
 	"github.com/rchehd/phpwarden/schemas"
 )
 
-const usage = `Usage: phpwarden config <validate|show> [options]
+const usage = `Usage: phpwarden init [--php-runtime X.Y] [--php-target X.Y] [options]
+       phpwarden config <validate|show> [options]
        phpwarden scope [PATH...] [options]
        phpwarden resolve [options]
        phpwarden check [PATH...] [options]
@@ -39,6 +43,10 @@ Options:
   --help               Show help
   --version            Show version
 
+Init options:
+  --php-runtime X.Y    PHP the project runs on; selects the image (default: .ddev, Composer platform, composer.lock)
+  --php-target X.Y     PHP the code must support (default: Composer platform, else the runtime)
+
 Scope options:
   --mode diff|full     Override configured mode
   --base REF           Diff base ref
@@ -46,9 +54,12 @@ Scope options:
   --only ID[,ID...]    Select composer-audit, composer-validate, debug, drupal-config, phpcs, phpstan, syntax, twig-cs-fixer, whitespace, yaml; enable selected checkers
 
 Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
-Check uses the local development Docker image (Linux amd64, PHP runtime/target 8.4).
-Worker check requires PHP in its execution environment. Published images and init are not available yet.
+Check uses local development Docker images (Linux amd64, PHP runtime 8.1–8.4, target from 8.1 up to the runtime).
+Init writes .phpwarden.yaml next to composer.json and never overwrites an existing file.
+Worker check requires PHP in its execution environment. Published images are not available yet.
 `
+
+var minorVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
 
 type options struct {
 	project    string
@@ -62,18 +73,21 @@ type options struct {
 	base       string
 	wholeFiles bool
 	only       string
+	phpRuntime string
+	phpTarget  string
 }
 
 type response struct {
-	Version     int                `json:"version"`
-	Command     string             `json:"command"`
-	Valid       bool               `json:"valid"`
-	ExitCode    int                `json:"exit_code"`
-	Location    *config.Location   `json:"location,omitempty"`
-	Effective   *config.Effective  `json:"effective,omitempty"`
-	Scope       *scope.Selection   `json:"scope,omitempty"`
-	Selection   *toolset.Selection `json:"selection,omitempty"`
-	Diagnostics []diagnostic       `json:"diagnostics"`
+	Version     int                 `json:"version"`
+	Command     string              `json:"command"`
+	Valid       bool                `json:"valid"`
+	ExitCode    int                 `json:"exit_code"`
+	Location    *config.Location    `json:"location,omitempty"`
+	Effective   *config.Effective   `json:"effective,omitempty"`
+	Scope       *scope.Selection    `json:"scope,omitempty"`
+	Selection   *toolset.Selection  `json:"selection,omitempty"`
+	Init        *projectinit.Result `json:"init,omitempty"`
+	Diagnostics []diagnostic        `json:"diagnostics"`
 }
 
 type diagnostic struct {
@@ -118,6 +132,7 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		}
 		return writeReport(stdout, stderr, "json", "never", worker.Execute(ctx, cwd, request, runner.Exec{}))
 	}
+	isInit := len(args.command) == 1 && args.command[0] == "init"
 	isScope := len(args.command) > 0 && args.command[0] == "scope"
 	isWorker := workerCommand(args)
 	isCheck := len(args.command) > 0 && args.command[0] == "check"
@@ -127,8 +142,14 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	if args.format == "compact" && !isWorker && !isCheck {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--format compact applies only to check and worker check"))
 	}
-	if !isScope && !isConfig && !isWorker && !isCheck && !isResolve {
-		return fail(stdout, stderr, args, "usage", fmt.Errorf("expected config validate/show, resolve, scope, check, or worker check; use --help"))
+	if !isInit && !isScope && !isConfig && !isWorker && !isCheck && !isResolve {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("expected init, config validate/show, resolve, scope, check, or worker check; use --help"))
+	}
+	if !isInit && (args.phpRuntime != "" || args.phpTarget != "") {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("--php-runtime and --php-target require the init command"))
+	}
+	if isInit && args.config != "" {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("init always writes %s in the project root; use --project", config.Filename))
 	}
 	if !isScope && !isWorker && !isCheck && (args.mode != "" || args.base != "" || args.wholeFiles) {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("scope options require the scope command"))
@@ -139,6 +160,9 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	}
 	if args.only != "" && !isWorker && !isCheck {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--only requires check or worker check"))
+	}
+	if isInit {
+		return initProject(ctx, args, cwd, stdout, stderr)
 	}
 	location, err := config.Resolve(config.LocationOptions{CWD: cwd, Project: args.project, Config: args.config})
 	if err != nil {
@@ -237,7 +261,7 @@ func parse(arguments []string) (options, error) {
 			continue
 		}
 		name, value, inline := strings.Cut(argument, "=")
-		if name != "--project" && name != "--config" && name != "--format" && name != "--mode" && name != "--base" && name != "--only" && name != "--color" {
+		if !slices.Contains([]string{"--project", "--config", "--format", "--mode", "--base", "--only", "--color", "--php-runtime", "--php-target"}, name) {
 			return result, fmt.Errorf("unknown option %q", name)
 		}
 		if seen[name] {
@@ -264,6 +288,15 @@ func parse(arguments []string) (options, error) {
 			result.mode = value
 		case "--base":
 			result.base = value
+		case "--php-runtime", "--php-target":
+			if !minorVersion.MatchString(value) {
+				return result, fmt.Errorf("%s must be MAJOR.MINOR, such as 8.3", name)
+			}
+			if name == "--php-runtime" {
+				result.phpRuntime = value
+			} else {
+				result.phpTarget = value
+			}
 		case "--project":
 			result.project = value
 		case "--config":

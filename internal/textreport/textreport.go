@@ -28,11 +28,11 @@ type hint struct {
 }
 
 var hints = map[string]hint{
-	"compatibility_invalid":  {"Check php.runtime and php.target in .phpwarden.yaml; the development image supports PHP 8.4.", ""},
+	"compatibility_invalid":  {"Check php.runtime and php.target in .phpwarden.yaml; development images support runtime 8.1–8.4 and targets from 8.1 up to the runtime.", ""},
 	"config_invalid":         {"Fix the configuration; phpwarden config validate shows the details.", ""},
 	"discovery_invalid":      {"Fix the project metadata named above; phpwarden config show lists what discovery found.", ""},
 	"docker_unavailable":     {"Start the local Docker daemon or check DOCKER_HOST.", ""},
-	"image_unavailable":      {"Build the image: docker build -f docker/Dockerfile -t phpwarden:static-php8.4-dev .", "docker build"},
+	"image_unavailable":      {"Build the development images: docker buildx bake", "docker buildx bake"},
 	"stale":                  {"Run the check again once the files stop changing.", ""},
 	"checker_timeout":        {"Raise the checker's timeout_seconds or runner.timeout_seconds.", ""},
 	"advisories_unavailable": {"Connect to the network, or raise tools.composer-audit.max_stale_hours to accept an older cache.", ""},

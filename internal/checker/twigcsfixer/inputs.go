@@ -19,7 +19,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/scope"
 )
 
-var candidates = []string{".twig-cs-fixer.php", ".twig-cs-fixer.dist.php"}
+var ConfigCandidates = []string{".twig-cs-fixer.php", ".twig-cs-fixer.dist.php"}
 
 func Select(selection scope.Selection, cfg config.TwigCSFixer, profileID string) scope.Selection {
 	defaults, _ := profile.Lookup(profileID)
@@ -109,7 +109,7 @@ func prepare(root string, cfg config.TwigCSFixer) (string, map[string]string, er
 		}
 		selected = cfg.Config
 	} else if cfg.DiscoverConfig {
-		for _, name := range candidates {
+		for _, name := range ConfigCandidates {
 			err := record(name)
 			if errors.Is(err, fs.ErrNotExist) {
 				continue

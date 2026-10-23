@@ -21,6 +21,8 @@ import (
 	"github.com/rchehd/phpwarden/internal/scope"
 )
 
+var ConfigCandidates = []string{".phpcs.xml", "phpcs.xml", ".phpcs.xml.dist", "phpcs.xml.dist"}
+
 type group struct {
 	Config string   `json:"config"`
 	Files  []string `json:"files"`
@@ -205,7 +207,7 @@ func prepare(root string, selection scope.Selection, cfg config.PHPCS) (plan, er
 		selected := cfg.Config
 		if selected == "" && cfg.DiscoverConfig {
 			for directory := path.Dir(filename); ; directory = path.Dir(directory) {
-				for _, candidate := range []string{".phpcs.xml", "phpcs.xml", ".phpcs.xml.dist", "phpcs.xml.dist"} {
+				for _, candidate := range ConfigCandidates {
 					name := path.Join(directory, candidate)
 					_, err := read(name)
 					if os.IsNotExist(err) {

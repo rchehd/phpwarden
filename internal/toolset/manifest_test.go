@@ -216,7 +216,7 @@ func TestBundledDevelopmentAndConcurrentSelections(t *testing.T) {
 	for range 20 {
 		group.Go(func() {
 			selected, err := catalog.Resolve(effective, "linux/amd64")
-			if err != nil || !selected.Development || selected.Release != "development" || selected.ID != DevelopmentID || selected.PHPVersion != DevelopmentPHPVersion || selected.FrameworkVersion != nil {
+			if err != nil || !selected.Development || selected.Release != "development" || selected.ID != DevelopmentID("8.4") || selected.PHPVersion != "8.4.26" || selected.FrameworkVersion != nil {
 				t.Errorf("wrong bundled selection: %+v %v", selected, err)
 				return
 			}
@@ -264,6 +264,25 @@ func TestBundledYAMLVersionsMatchDependencyLock(t *testing.T) {
 			if selected.Tools[strings.ReplaceAll(pkg.Name, "/", "-")] != strings.TrimPrefix(pkg.Version, "v") {
 				t.Fatalf("manifest version differs from lock for %s", pkg.Name)
 			}
+		}
+	}
+}
+
+func TestBundledRuntimesSelectTheirImages(t *testing.T) {
+	catalog, err := bundled()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, runtime := range []string{"8.1", "8.2", "8.3", "8.4"} {
+		selected, err := catalog.Resolve(effectiveVersion("auto", runtime, "8.1", runtime), "linux/amd64")
+		if err != nil || selected.Image != "phpwarden:static-php"+runtime+"-dev" || selected.ID != DevelopmentID(runtime) ||
+			!strings.HasPrefix(selected.PHPVersion, runtime+".") {
+			t.Fatalf("runtime %s: wrong selection %+v %v", runtime, selected, err)
+		}
+	}
+	for _, versions := range [][3]string{{"8.1", "8.1", "8.2"}, {"8.3", "8.0", "8.3"}, {"8.5", "8.1", "8.5"}} {
+		if selected, err := catalog.Resolve(effectiveVersion("auto", versions[0], versions[1], versions[2]), "linux/amd64"); err == nil {
+			t.Fatalf("unsupported runtime %s target %s..%s selected %s", versions[0], versions[1], versions[2], selected.Image)
 		}
 	}
 }

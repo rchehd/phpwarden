@@ -68,11 +68,11 @@ class LauncherCLITest(unittest.TestCase):
             subprocess.run(["docker", "rm", "--force", container], capture_output=True, timeout=15)
         cls.binary.chmod(0o755)
 
-    def configure(self, root, base, *, include=None, **debug):
+    def configure(self, root, base, *, include=None, runtime="8.4", **debug):
         config = {
             "version": 1,
             "profile": "drupal",
-            "php": {"runtime": "8.4", "target": {"min": "8.4", "max": "8.4"}},
+            "php": {"runtime": runtime, "target": {"min": runtime, "max": runtime}},
             "scope": {"include": include or ["web/modules/custom"], "base": base},
             "tools": {
                 "debug": debug,
@@ -290,7 +290,7 @@ class LauncherCLITest(unittest.TestCase):
                         self.assertEqual(result["exit_code"], 1 if verdict == "fail" else 0)
                         self.assertTrue(result["complete"])
                         self.assertTrue(result["environment"]["image"].startswith("sha256:"))
-                        self.assertEqual(result["environment"]["toolset"], "static-dev-v8-php8.4")
+                        self.assertEqual(result["environment"]["toolset"], "static-dev-v9-php8.4")
                         expected = sorted(
                             (row["checker"], row["path"], row["line"])
                             for row in scenario.spec["findings"]
@@ -344,6 +344,20 @@ class LauncherCLITest(unittest.TestCase):
             self.assertEqual(result["exit_code"], 1, result)
             self.assertEqual(result["findings"][0]["path"], "src/demo.module")
 
+    def test_each_runtime_selects_its_own_image(self):
+        versions = {"8.1": "8.1.34", "8.2": "8.2.35", "8.3": "8.3.36", "8.4": "8.4.26"}
+        with materialize(FIXTURES / "added-debug") as scenario:
+            for runtime, version in versions.items():
+                with self.subTest(runtime=runtime):
+                    self.configure(scenario.root, scenario.base, runtime=runtime)
+                    result = self.run_cli(scenario.root, ["resolve"], scenario.env)
+                    self.assertEqual(
+                        result["selection"]["image"], f"phpwarden:static-php{runtime}-dev"
+                    )
+                    result = self.run_cli(scenario.root, ["check", "--only", "debug"], scenario.env)
+                    self.assertEqual(result["exit_code"], 1, result)
+                    self.assertEqual(result["environment"]["php_version"], version)
+
     def test_resolve_is_offline_and_settings_are_shared(self):
         with materialize(FIXTURES / "added-debug") as scenario:
             self.configure(scenario.root, scenario.base, enabled=False)
@@ -366,7 +380,7 @@ class LauncherCLITest(unittest.TestCase):
             self.assertEqual(result["exit_code"], 2)
             filename = scenario.root / ".phpwarden.yaml"
             config = json.loads(filename.read_text())
-            config["php"] = {"runtime": "8.3", "target": {"min": "8.3", "max": "8.3"}}
+            config["php"] = {"runtime": "8.5", "target": {"min": "8.5", "max": "8.5"}}
             filename.write_text(json.dumps(config))
             result = self.run_cli(scenario.root, ["check"], scenario.env)
             self.assertEqual(result["exit_code"], 2)

@@ -206,7 +206,8 @@ func inspect(ctx context.Context, selection toolset.Selection, process runner.Pr
 		if !selection.Development {
 			return "", fmt.Errorf("selected release image %s is unavailable locally; registry pull is not implemented yet: %s %v", selection.Image, strings.TrimSpace(string(result.Stderr)), result.Err)
 		}
-		return "", fmt.Errorf("development image %s is unavailable; build it with docker build -f docker/Dockerfile -t %s .: %s %v", selection.Image, selection.Image, strings.TrimSpace(string(result.Stderr)), result.Err)
+		target := "php" + strings.Join(strings.SplitN(selection.PHPVersion, ".", 3)[:2], "")
+		return "", fmt.Errorf("development image %s is unavailable; build it with docker buildx bake %s: %s %v", selection.Image, target, strings.TrimSpace(string(result.Stderr)), result.Err)
 	}
 	var images []struct {
 		ID           string   `json:"Id"`

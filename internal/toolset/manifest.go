@@ -160,8 +160,8 @@ func compileEntry(release string, item entry) (candidate, error) {
 	} else if !item.Development {
 		return result, fmt.Errorf("release entries require an explicit framework constraint")
 	}
-	if item.Development && (release != "development" || item.Framework != nil || item.Toolset != DevelopmentID ||
-		item.PHP.Version != DevelopmentPHPVersion || item.PHP.Runtime != "8.4" || item.PHP.Targets.Min != "8.4" || item.PHP.Targets.Max != "8.4" ||
+	if item.Development && (release != "development" || item.Framework != nil || item.Toolset != DevelopmentID(item.PHP.Runtime) ||
+		item.PHP.Targets.Min != minimumPHP || item.PHP.Targets.Max != item.PHP.Runtime ||
 		!slices.Equal(item.Capabilities, []string{"composer-audit", "composer-validate", "debug", "drupal-config", "phpcs", "phpstan", "syntax", "twig-cs-fixer", "whitespace", "yaml"})) {
 		return result, fmt.Errorf("only the bundled framework-independent static development toolset is supported")
 	}
@@ -172,7 +172,7 @@ func compileEntry(release string, item entry) (candidate, error) {
 		}
 		platforms[image.Platform] = true
 		if item.Development {
-			if image.Platform != "linux/amd64" || image.Reference != "phpwarden:static-php8.4-dev" {
+			if image.Platform != "linux/amd64" || image.Reference != "phpwarden:static-php"+item.PHP.Runtime+"-dev" {
 				return result, fmt.Errorf("unsupported development image or platform")
 			}
 		} else if !publishedImage.MatchString(image.Reference) {

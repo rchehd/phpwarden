@@ -57,7 +57,7 @@ func TestReleaseImageInspectionVerifiesDigestAndManifestLabels(t *testing.T) {
 			if calls != 1 || which == "matching" && (err != nil || image != testImage) || which != "matching" && err == nil {
 				t.Fatalf("incorrect image validation: %s %v (%d calls)", image, err, calls)
 			}
-			if which == "missing image" && (strings.Contains(err.Error(), "docker build") || !strings.Contains(err.Error(), "registry pull is not implemented")) {
+			if which == "missing image" && (strings.Contains(err.Error(), "docker buildx bake") || !strings.Contains(err.Error(), "registry pull is not implemented")) {
 				t.Fatalf("release image got development build instructions: %v", err)
 			}
 		})

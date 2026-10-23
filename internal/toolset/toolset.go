@@ -12,8 +12,9 @@ import (
 	"github.com/rchehd/phpwarden/internal/phpconstraint"
 )
 
-const DevelopmentID = "static-dev-v8-php8.4"
-const DevelopmentPHPVersion = "8.4.26"
+const minimumPHP = "8.1"
+
+func DevelopmentID(runtime string) string { return "static-dev-v9-php" + runtime }
 
 type Selection struct {
 	Release          string            `json:"release"`
@@ -28,6 +29,27 @@ type Selection struct {
 	Capabilities     []string          `json:"capabilities"`
 	Development      bool              `json:"development"`
 	PHPVersion       string            `json:"php_version"`
+}
+
+// Runtimes lists the PHP runtimes the bundled manifest provides for a profile, lowest first.
+func Runtimes(profile string) ([]string, error) {
+	catalog, err := bundled()
+	if err != nil {
+		return nil, err
+	}
+	result := []string{}
+	for _, item := range catalog.entries {
+		if item.Profile == profile {
+			result = append(result, item.PHP.Runtime)
+		}
+	}
+	slices.SortFunc(result, func(a, b string) int {
+		var left, right [2]int
+		fmt.Sscanf(a, "%d.%d", &left[0], &left[1])
+		fmt.Sscanf(b, "%d.%d", &right[0], &right[1])
+		return slices.Compare(left[:], right[:])
+	})
+	return slices.Compact(result), nil
 }
 
 func Resolve(effective config.Effective) (Selection, error) {

@@ -35,7 +35,7 @@ func fakeAutoload(t *testing.T) string {
 }
 
 func response(findings string) []byte {
-	return []byte(`{"version":1,"runtime":"8.4","php_version":"8.4.26","yaml_version":"7.4.21","findings":` + findings + `}`)
+	return []byte(`{"version":1,"runtime":"8.4","php_version":"8.4.26","yaml_version":"6.4.48","findings":` + findings + `}`)
 }
 
 func TestYAMLFindingsIncludeUnchangedLinesAndMissingPositions(t *testing.T) {

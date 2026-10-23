@@ -53,7 +53,9 @@ func TestUsageErrorsNeverReturnSuccess(t *testing.T) {
 		{"config", "show", "--config", "--help"}, {"config", "show", "--only", "phpstna"},
 		{"config", "show", "--format", "xml"}, {"config", "show", "--format", "json", "--format", "text"},
 		{"--version", "config", "show"}, {"check", "--color", "purple"}, {"config", "show", "--format", "compact"},
-		{"scope", "--format", "compact"},
+		{"scope", "--format", "compact"}, {"init", "--only", "debug"}, {"init", "--mode", "full"}, {"init", "--config", "x.yaml"},
+		{"init", "--format", "compact"}, {"init", "--php-runtime", "8"}, {"init", "--php-target", "8.3.1"}, {"check", "--php-runtime", "8.3"},
+		{"init", "extra"},
 	}
 	for _, args := range cases {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
@@ -152,5 +154,44 @@ func TestGlobalYAMLFailureIsVisibleInText(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if code := writeReport(&stdout, &stderr, "text", "never", result); code != 1 || !strings.Contains(stdout.String(), "  config.yml\n") || !strings.Contains(stdout.String(), "invalid UTF-8") || stderr.Len() != 0 {
 		t.Fatalf("global finding is not visible: exit=%d %s %s", code, &stdout, &stderr)
+	}
+}
+
+func TestInitWritesConfigurationOnce(t *testing.T) {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		t.Skip("development images exist only for linux/amd64")
+	}
+	root := t.TempDir()
+	for name, data := range map[string]string{
+		"composer.json":           `{"require":{"drupal/core":"^11"},"config":{"platform":{"php":"8.2.0"}}}`,
+		"composer.lock":           `{"packages":[{"name":"drupal/core","version":"11.3.16","require":{"php":">=8.1"}}]}`,
+		".ddev/config.yaml":       "php_version: \"8.3\"\n",
+		"web/core/lib/Drupal.php": "<?php\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, name), []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"init", "--project", root, "--format", "json"}, t.TempDir(), &stdout, &stderr); code != 0 || stderr.Len() != 0 {
+		t.Fatalf("init failed: exit=%d %s %s", code, &stdout, &stderr)
+	}
+	var value response
+	if err := json.Unmarshal(stdout.Bytes(), &value); err != nil {
+		t.Fatal(err)
+	}
+	if !value.Valid || value.Init == nil || !value.Init.Created || value.Init.Runtime.Version != "8.3" || value.Init.Target.Version != "8.2" {
+		t.Fatalf("wrong init response: %s", &stdout)
+	}
+	stdout.Reset()
+	if code := Run([]string{"init"}, root, &stdout, &stderr); code != 0 || !strings.Contains(stdout.String(), "already exists") {
+		t.Fatalf("second init: exit=%d %s %s", code, &stdout, &stderr)
+	}
+	stdout.Reset()
+	if code := Run([]string{"config", "validate", "--project", root}, root, &stdout, &stderr); code != 0 {
+		t.Fatalf("generated configuration is invalid: %s %s", &stdout, &stderr)
 	}
 }

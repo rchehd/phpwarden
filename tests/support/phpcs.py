@@ -128,7 +128,8 @@ def check_phpcs_settings(test, configure, run):
             test.assertFalse(result["complete"])
         source = scenario.root / scenario.spec["changed_files"][0]
         source.write_text("<?php\narray_find([], fn ($value) => true);\n")
-        for version, count in (("", 0), ("8.3", 1)):
+        default = 0 if config["php"]["target"]["min"] == "8.4" else 1
+        for version, count in (("", default), ("8.4", 0), ("8.3", 1)):
             config["tools"]["phpcs"] = {
                 "standards": ["PHPCompatibility"],
                 "compatibility": {"enabled": True, "test_version": version},

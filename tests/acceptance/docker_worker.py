@@ -66,8 +66,11 @@ class DockerWorkerTest(unittest.TestCase):
             timeout=15,
         )
         cls.metadata = json.loads(result.stdout)[0]
+        version = cls.metadata["Config"]["Labels"]["io.phpwarden.php-version"]
+        cls.runtime = ".".join(version.split(".")[:2])
 
-    def configure(self, scenario, runtime="8.4"):
+    def configure(self, scenario, runtime=None):
+        runtime = runtime or self.runtime
         config = {
             "version": 1,
             "profile": "drupal",
@@ -149,7 +152,7 @@ class DockerWorkerTest(unittest.TestCase):
                         self.assertEqual(result["verdict"], verdict)
                         self.assertEqual(result["exit_code"], 1 if verdict == "fail" else 0)
                         self.assertTrue(result["complete"])
-                        self.assertEqual(result["environment"]["php_runtime"], "8.4")
+                        self.assertEqual(result["environment"]["php_runtime"], self.runtime)
                         actual = sorted(
                             (row["checker"], row["path"], row["line"]) for row in result["findings"]
                         )
@@ -301,7 +304,7 @@ class DockerWorkerTest(unittest.TestCase):
 
     def test_runtime_mismatch_is_not_clean(self):
         with materialize(FIXTURES / "added-debug") as scenario:
-            self.configure(scenario, runtime="8.3")
+            self.configure(scenario, runtime="8.3" if self.runtime == "8.4" else "8.4")
             result = self.report(
                 self.run_container(scenario.root, ["worker", "check", "--format", "json"])
             )
@@ -333,7 +336,10 @@ class DockerWorkerTest(unittest.TestCase):
             config = {
                 "version": 1,
                 "profile": "drupal",
-                "php": {"runtime": "8.4", "target": {"min": "8.4", "max": "8.4"}},
+                "php": {
+                    "runtime": self.runtime,
+                    "target": {"min": self.runtime, "max": self.runtime},
+                },
                 "scope": {"mode": "full", "include": ["."]},
                 "tools": {
                     "composer-audit": {"enabled": False},

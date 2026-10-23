@@ -20,7 +20,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/scope"
 )
 
-const Version = "7.4.21"
+const Version = "6.4.48"
 
 //go:embed helper.php
 var helper []byte
