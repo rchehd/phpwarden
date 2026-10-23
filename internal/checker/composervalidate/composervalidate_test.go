@@ -46,17 +46,17 @@ func rules(findings []report.Finding) []string {
 
 func TestSelectRootAndModuleComposerFiles(t *testing.T) {
 	selection := scope.Selection{Files: []string{"web/modules/custom/demo/composer.json", "web/modules/custom/demo/demo.module"}, ProjectFiles: []string{"composer.lock"}}
-	targets := Select(selection, settings(t))
+	targets := Select(selection, settings(t), ".")
 	if !slices.Equal(targets, []Target{{Path: "composer.json", Lock: true}, {Path: "web/modules/custom/demo/composer.json"}}) {
 		t.Fatalf("unexpected targets: %+v", targets)
 	}
 	cfg := settings(t)
 	cfg.Exclude = []string{"composer.json"}
-	if targets := Select(selection, cfg); !slices.Equal(targets, []Target{{Path: "web/modules/custom/demo/composer.json"}}) {
+	if targets := Select(selection, cfg, "."); !slices.Equal(targets, []Target{{Path: "web/modules/custom/demo/composer.json"}}) {
 		t.Fatalf("exclusion ignored: %+v", targets)
 	}
 	selection.ProjectFiles = []string{}
-	if targets := Select(selection, settings(t)); len(targets) != 1 || targets[0].Lock {
+	if targets := Select(selection, settings(t), "."); len(targets) != 1 || targets[0].Lock {
 		t.Fatalf("unchanged root validated: %+v", targets)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -29,7 +30,7 @@ import (
 	"github.com/rchehd/phpwarden/schemas"
 )
 
-const usage = `Usage: phpwarden init [--php-runtime X.Y] [--php-target X.Y] [options]
+const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [--php-target X.Y] [options]
        phpwarden config <validate|show> [options]
        phpwarden scope [PATH...] [options]
        phpwarden resolve [options]
@@ -45,6 +46,7 @@ Options:
   --version            Show version
 
 Init options:
+  --composer-root DIR  Directory with composer.json inside the project (default: detected)
   --php-runtime X.Y    PHP the project runs on; selects the image (default: .ddev, Composer platform, composer.lock)
   --php-target X.Y     PHP the code must support (default: Composer platform, else the runtime)
 
@@ -53,31 +55,32 @@ Scope options:
   --base REF           Diff base ref
   --commits N          Diff against HEAD~N: the last N commits plus uncommitted changes
   --whole-files        Include all lines of selected diff files
-  --only ID[,ID...]    Select composer-audit, composer-validate, debug, drupal-config, phpcs, phpstan, syntax, twig-cs-fixer, whitespace, yaml; enable selected checkers
+  --only ID[,ID...]    Select composer-audit, composer-validate, debug, drupal-config, phpcs, phpmd, phpstan, syntax, twig-cs-fixer, whitespace, yaml; enable selected checkers
 
 Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
 Check uses local development Docker images (Linux amd64, PHP runtime 8.1–8.4, target from 8.1 up to the runtime).
-Init writes .phpwarden.yaml next to composer.json and never overwrites an existing file.
+Init writes .phpwarden.yaml at the Git root and never overwrites an existing file.
 Worker check requires PHP in its execution environment. Published images are not available yet.
 `
 
 var minorVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
 
 type options struct {
-	project    string
-	config     string
-	format     string
-	color      string
-	help       bool
-	version    bool
-	command    []string
-	mode       string
-	base       string
-	wholeFiles bool
-	only       string
-	phpRuntime string
-	phpTarget  string
-	commits    int
+	project      string
+	config       string
+	format       string
+	color        string
+	help         bool
+	version      bool
+	command      []string
+	mode         string
+	base         string
+	wholeFiles   bool
+	only         string
+	phpRuntime   string
+	phpTarget    string
+	composerRoot string
+	commits      int
 }
 
 type response struct {
@@ -148,8 +151,8 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	if !isInit && !isScope && !isConfig && !isWorker && !isCheck && !isResolve {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("expected init, config validate/show, resolve, scope, check, or worker check; use --help"))
 	}
-	if !isInit && (args.phpRuntime != "" || args.phpTarget != "") {
-		return fail(stdout, stderr, args, "usage", fmt.Errorf("--php-runtime and --php-target require the init command"))
+	if !isInit && (args.phpRuntime != "" || args.phpTarget != "" || args.composerRoot != "") {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("--composer-root, --php-runtime and --php-target require the init command"))
 	}
 	if isInit && args.config != "" {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("init always writes %s in the project root; use --project", config.Filename))
@@ -264,7 +267,7 @@ func parse(arguments []string) (options, error) {
 			continue
 		}
 		name, value, inline := strings.Cut(argument, "=")
-		if !slices.Contains([]string{"--project", "--config", "--format", "--mode", "--base", "--only", "--color", "--php-runtime", "--php-target", "--commits"}, name) {
+		if !slices.Contains([]string{"--project", "--config", "--format", "--mode", "--base", "--only", "--color", "--php-runtime", "--php-target", "--commits", "--composer-root"}, name) {
 			return result, fmt.Errorf("unknown option %q", name)
 		}
 		if seen[name] {
@@ -297,6 +300,8 @@ func parse(arguments []string) (options, error) {
 				return result, fmt.Errorf("--commits must be a number from 1 to 1000")
 			}
 			result.commits = count
+		case "--composer-root":
+			result.composerRoot = value
 		case "--php-runtime", "--php-target":
 			if !minorVersion.MatchString(value) {
 				return result, fmt.Errorf("%s must be MAJOR.MINOR, such as 8.3", name)
@@ -383,6 +388,10 @@ func scopeOptions(args options, cwd string, location config.Location, cfg config
 		return scope.Options{}, fmt.Errorf("--commits and --base cannot be combined")
 	}
 	defaults, _ := profile.Lookup(cfg.Profile)
+	projectFiles := make([]string, len(defaults.ProjectFiles))
+	for i, name := range defaults.ProjectFiles {
+		projectFiles[i] = path.Join(cfg.ComposerRoot, name)
+	}
 	base, wholeFiles := "", false
 	if mode == "diff" {
 		base, wholeFiles = cfg.Scope.Base, cfg.Scope.WholeFiles
@@ -396,7 +405,7 @@ func scopeOptions(args options, cwd string, location config.Location, cfg config
 	}
 	return scope.Options{
 		Root: location.Root, CWD: cwd, Mode: mode, Base: base, WholeFiles: wholeFiles, Commits: args.commits,
-		Include: cfg.Scope.Include, Exclude: cfg.Scope.Exclude, Paths: paths, ProjectFiles: defaults.ProjectFiles,
+		Include: cfg.Scope.Include, Exclude: cfg.Scope.Exclude, Paths: paths, ProjectFiles: projectFiles,
 	}, nil
 }
 

@@ -17,13 +17,15 @@ import (
 )
 
 type Config struct {
-	Version   int       `json:"version"`
-	Profile   string    `json:"profile"`
-	Framework Framework `json:"framework"`
-	PHP       PHP       `json:"php"`
-	Scope     Scope     `json:"scope"`
-	Runner    Runner    `json:"runner"`
-	Tools     Tools     `json:"tools"`
+	Version int    `json:"version"`
+	Profile string `json:"profile"`
+	// Directory with composer.json, composer.lock and vendor, relative to the project root.
+	ComposerRoot string    `json:"composer_root"`
+	Framework    Framework `json:"framework"`
+	PHP          PHP       `json:"php"`
+	Scope        Scope     `json:"scope"`
+	Runner       Runner    `json:"runner"`
+	Tools        Tools     `json:"tools"`
 }
 
 type Framework struct {
@@ -58,6 +60,7 @@ type Tools struct {
 	ComposerValidate ComposerValidate `json:"composer-validate"`
 	ComposerAudit    ComposerAudit    `json:"composer-audit"`
 	PHPCS            PHPCS            `json:"phpcs"`
+	PHPMD            PHPMD            `json:"phpmd"`
 	DrupalConfig     DrupalConfig     `json:"drupal-config"`
 	Debug            Debug            `json:"debug"`
 	Syntax           Syntax           `json:"syntax"`
@@ -147,6 +150,22 @@ type PHPCS struct {
 	ErrorSeverity   int                `json:"error_severity"`
 	WarningSeverity int                `json:"warning_severity"`
 	Compatibility   PHPCSCompatibility `json:"compatibility"`
+}
+
+type PHPMD struct {
+	Enabled         bool     `json:"enabled"`
+	Required        bool     `json:"required"`
+	FailOn          string   `json:"fail_on"`
+	TimeoutSeconds  int      `json:"timeout_seconds"`
+	Include         []string `json:"include,omitempty"`
+	Exclude         []string `json:"exclude"`
+	Config          string   `json:"config"`
+	DiscoverConfig  bool     `json:"discover_config"`
+	Rulesets        []string `json:"rulesets"`
+	ExcludeRules    []string `json:"exclude_rules"`
+	ExtraInputs     []string `json:"extra_inputs"`
+	ExtraExtensions []string `json:"extra_extensions"`
+	MemoryLimitMB   int      `json:"memory_limit_mb"`
 }
 
 type PHPCSCompatibility struct {
@@ -258,9 +277,10 @@ func Parse(data []byte) (Effective, error) {
 	}
 	result := Effective{
 		Config: Config{
-			Framework: Framework{Version: "auto"},
-			Scope:     Scope{Mode: "diff", Exclude: []string{}},
-			Runner:    Runner{TimeoutSeconds: 300},
+			ComposerRoot: ".",
+			Framework:    Framework{Version: "auto"},
+			Scope:        Scope{Mode: "diff", Exclude: []string{}},
+			Runner:       Runner{TimeoutSeconds: 300},
 			Tools: Tools{PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
 				Includes: []string{}, BootstrapFiles: []string{}, ScanDirectories: []string{}, StubFiles: []string{}, Autoload: "auto",
 				Drupal: defaults.PHPStanDrupal, Deprecations: true, MemoryLimitMB: 512, ExtraExtensions: []string{}},
@@ -271,6 +291,8 @@ func Parse(data []byte) (Effective, error) {
 					ExtraExtensions: []string{}, ExtraInputs: []string{}},
 				PHPCS: PHPCS{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
 					Standards: defaults.PHPCSStandards, Sniffs: []string{}, ExcludeSniffs: []string{}, StandardPaths: []string{}, ExtraInputs: []string{}, ExtraExtensions: []string{}, ErrorSeverity: 5, WarningSeverity: 5},
+				PHPMD: PHPMD{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
+					Rulesets: defaults.PHPMDRulesets, ExcludeRules: defaults.PHPMDExcludeRules, ExtraInputs: []string{}, ExtraExtensions: []string{}, MemoryLimitMB: 512},
 				DrupalConfig: DrupalConfig{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{},
 					Directories: defaults.ModuleConfigDirectories, ForbiddenKeys: defaults.ModuleConfigForbiddenKeys, ModuleRoots: []string{}},
 				Whitespace: Whitespace{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{},
@@ -283,7 +305,7 @@ func Parse(data []byte) (Effective, error) {
 				}},
 		},
 		Provenance: map[string]string{
-			"framework.version": "core_default", "scope.mode": "core_default",
+			"framework.version": "core_default", "composer_root": "core_default", "scope.mode": "core_default",
 			"scope.exclude": "core_default", "scope.whole_files": "core_default",
 			"runner.timeout_seconds": "core_default", "tools.debug.enabled": "profile_default",
 			"tools.debug.required": "core_default", "tools.debug.fail_on": "core_default",
@@ -318,6 +340,10 @@ func Parse(data []byte) (Effective, error) {
 	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "extra_extensions", "extra_inputs"} {
 		result.Provenance["tools.twig-cs-fixer."+field] = "core_default"
 	}
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "rulesets", "exclude_rules", "extra_inputs", "extra_extensions", "memory_limit_mb"} {
+		result.Provenance["tools.phpmd."+field] = "core_default"
+	}
+	result.Provenance["tools.phpmd.enabled"], result.Provenance["tools.phpmd.rulesets"], result.Provenance["tools.phpmd.exclude_rules"] = "profile_default", "profile_default", "profile_default"
 	result.Provenance["tools.twig-cs-fixer.enabled"] = "profile_default"
 	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "strict"} {
 		result.Provenance["tools.composer-validate."+field] = "core_default"
@@ -339,6 +365,7 @@ func Parse(data []byte) (Effective, error) {
 		result.Provenance["scope.exclude"] = "core_default"
 	}
 	result.Config.Scope.Exclude = append(append([]string{}, coreExcludes...), result.Config.Scope.Exclude...)
+	result.Config.ComposerRoot = path.Clean(result.Config.ComposerRoot)
 	if err := validateValues(result.Config); err != nil {
 		return Effective{}, err
 	}
@@ -425,14 +452,17 @@ func validateValues(cfg Config) error {
 		cfg.Tools.DrupalConfig.Include, cfg.Tools.DrupalConfig.Directories, cfg.Tools.DrupalConfig.ModuleRoots,
 		cfg.Tools.PHPCS.Include, cfg.Tools.PHPCS.StandardPaths, cfg.Tools.PHPCS.ExtraInputs,
 		cfg.Tools.PHPStan.Include, cfg.Tools.PHPStan.Includes, cfg.Tools.PHPStan.BootstrapFiles, cfg.Tools.PHPStan.ScanDirectories, cfg.Tools.PHPStan.StubFiles,
-		cfg.Tools.TwigCSFixer.Include, cfg.Tools.TwigCSFixer.ExtraInputs, cfg.Tools.ComposerValidate.Include} {
+		cfg.Tools.TwigCSFixer.Include, cfg.Tools.TwigCSFixer.ExtraInputs, cfg.Tools.ComposerValidate.Include, cfg.Tools.PHPMD.Include, cfg.Tools.PHPMD.ExtraInputs} {
 		for _, value := range values {
 			if err := projectpath.Validate(value); err != nil {
 				return err
 			}
 		}
 	}
-	for _, name := range []string{cfg.Tools.PHPStan.Config, cfg.Tools.PHPStan.Baseline, cfg.Tools.PHPStan.Autoload, cfg.Tools.TwigCSFixer.Config} {
+	if err := projectpath.Validate(cfg.ComposerRoot); err != nil {
+		return fmt.Errorf("composer_root: %w", err)
+	}
+	for _, name := range []string{cfg.Tools.PHPStan.Config, cfg.Tools.PHPStan.Baseline, cfg.Tools.PHPStan.Autoload, cfg.Tools.TwigCSFixer.Config, cfg.Tools.PHPMD.Config} {
 		if name != "" && name != "auto" {
 			if err := projectpath.Validate(name); err != nil {
 				return err

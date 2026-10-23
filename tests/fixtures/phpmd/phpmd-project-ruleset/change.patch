@@ -1,0 +1,11 @@
+diff --git a/web/modules/custom/demo/demo.module b/web/modules/custom/demo/demo.module
+index b3d9bbc..a9807c6 100644
+--- a/web/modules/custom/demo/demo.module
++++ b/web/modules/custom/demo/demo.module
+@@ -1 +1,6 @@
+ <?php
++
++function demo_label($label, $unused) {
++  $local = 1;
++  return $label;
++}

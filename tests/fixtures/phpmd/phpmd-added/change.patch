@@ -1,0 +1,13 @@
+diff --git a/web/modules/custom/demo/demo.module b/web/modules/custom/demo/demo.module
+index 0bc7832..e8b02a0 100644
+--- a/web/modules/custom/demo/demo.module
++++ b/web/modules/custom/demo/demo.module
+@@ -6,3 +6,8 @@
+ function demo_help($route_name, $route_match) {
+   return $route_name;
+ }
++
++function demo_total(array $items) {
++  $unused = count($items);
++  return $items;
++}

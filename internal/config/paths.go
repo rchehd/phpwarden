@@ -83,6 +83,11 @@ func Resolve(options LocationOptions) (Location, error) {
 	return Location{}, fmt.Errorf("no %s found inside Git worktree; create a project configuration", Filename)
 }
 
+// ComposerDir is the absolute directory with composer.json, composer.lock and vendor.
+func ComposerDir(root string, cfg Config) string {
+	return filepath.Join(root, filepath.FromSlash(cfg.ComposerRoot))
+}
+
 func Load(location Location) (Effective, error) {
 	data, err := os.ReadFile(location.Path)
 	if err != nil {

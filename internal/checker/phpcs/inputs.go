@@ -44,7 +44,7 @@ func InputRequired(cfg config.Config, selection scope.Selection, only []string) 
 }
 
 func ContextHash(root string, selection scope.Selection, cfg config.Config) string {
-	prepared, err := prepare(root, Select(selection, cfg.Tools.PHPCS, cfg.Profile), cfg.Tools.PHPCS)
+	prepared, err := prepare(root, cfg.ComposerRoot, Select(selection, cfg.Tools.PHPCS, cfg.Profile), cfg.Tools.PHPCS)
 	message := ""
 	if err != nil {
 		message = err.Error()
@@ -56,7 +56,7 @@ func ContextHash(root string, selection scope.Selection, cfg config.Config) stri
 	return fmt.Sprintf("%x", sha256.Sum256(data))
 }
 
-func prepare(root string, selection scope.Selection, cfg config.PHPCS) (plan, error) {
+func prepare(root, composerRoot string, selection scope.Selection, cfg config.PHPCS) (plan, error) {
 	result := plan{Inputs: map[string]string{}, Groups: []group{}}
 	visited := map[string]bool{}
 	var record func(string, bool) error
@@ -222,6 +222,18 @@ func prepare(root string, selection scope.Selection, cfg config.PHPCS) (plan, er
 				}
 				if directory == "." {
 					break
+				}
+			}
+			// Code outside the Composer project, as in a monorepo, falls back to its config.
+			for _, candidate := range ConfigCandidates {
+				if selected != "" || composerRoot == "." {
+					break
+				}
+				name := path.Join(composerRoot, candidate)
+				if _, err := read(name); err == nil {
+					selected = name
+				} else if !os.IsNotExist(err) {
+					return result, err
 				}
 			}
 		}

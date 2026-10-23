@@ -22,6 +22,7 @@ from tests.support.phpcs import (
     check_phpcs_project_rules,
     check_phpcs_settings,
 )
+from tests.support.phpmd import check_phpmd_fixtures
 from tests.support.phpstan import (
     check_phpstan_dependency_mismatch,
     check_phpstan_fixtures,
@@ -79,6 +80,7 @@ class LauncherCLITest(unittest.TestCase):
                 "composer-audit": {"enabled": False},
                 "composer-validate": {"enabled": False},
                 "phpcs": {"enabled": False},
+                "phpmd": {"enabled": False},
                 "phpstan": {"enabled": False},
                 "twig-cs-fixer": {"enabled": False},
             },
@@ -251,6 +253,11 @@ class LauncherCLITest(unittest.TestCase):
             self, lambda scenario: self.configure(scenario.root, scenario.base), self.run_check
         )
 
+    def test_phpmd_fixtures(self):
+        check_phpmd_fixtures(
+            self, lambda scenario: self.configure(scenario.root, scenario.base), self.run_check
+        )
+
     def test_composer_validate_fixtures(self):
         check_composer_validate_fixtures(
             self, lambda scenario: self.configure(scenario.root, scenario.base), self.run_check
@@ -290,7 +297,7 @@ class LauncherCLITest(unittest.TestCase):
                         self.assertEqual(result["exit_code"], 1 if verdict == "fail" else 0)
                         self.assertTrue(result["complete"])
                         self.assertTrue(result["environment"]["image"].startswith("sha256:"))
-                        self.assertEqual(result["environment"]["toolset"], "static-dev-v9-php8.4")
+                        self.assertEqual(result["environment"]["toolset"], "static-dev-v10-php8.4")
                         expected = sorted(
                             (row["checker"], row["path"], row["line"])
                             for row in scenario.spec["findings"]

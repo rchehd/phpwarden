@@ -66,7 +66,7 @@ func fixture(t *testing.T) (config.Location, config.Effective, scope.Options) {
 		t.Fatal(err)
 	}
 	filename := filepath.Join(root, ".phpwarden.yaml")
-	data := `{"version":1,"profile":"drupal","php":{"runtime":"8.4","target":{"min":"8.4","max":"8.4"}},"scope":{"mode":"full","include":["src"]},"tools":{"syntax":{"enabled":false},"phpcs":{"enabled":false},"phpstan":{"enabled":false},"twig-cs-fixer":{"enabled":false}}}`
+	data := `{"version":1,"profile":"drupal","php":{"runtime":"8.4","target":{"min":"8.4","max":"8.4"}},"scope":{"mode":"full","include":["src"]},"tools":{"syntax":{"enabled":false},"phpcs":{"enabled":false},"phpmd":{"enabled":false},"phpstan":{"enabled":false},"twig-cs-fixer":{"enabled":false}}}`
 	if err := os.WriteFile(filename, []byte(data), 0o644); err != nil {
 		t.Fatal(err)
 	}

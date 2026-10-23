@@ -26,6 +26,7 @@ from tests.support.phpcs import (
     check_phpcs_project_rules,
     check_phpcs_settings,
 )
+from tests.support.phpmd import check_phpmd_fixtures, check_phpmd_settings
 from tests.support.phpstan import (
     check_phpstan_dependency_mismatch,
     check_phpstan_fixtures,
@@ -80,6 +81,7 @@ class DockerWorkerTest(unittest.TestCase):
                 "composer-audit": {"enabled": False},
                 "composer-validate": {"enabled": False},
                 "phpcs": {"enabled": False},
+                "phpmd": {"enabled": False},
                 "phpstan": {"enabled": False},
                 "twig-cs-fixer": {"enabled": False},
             },
@@ -169,7 +171,7 @@ class DockerWorkerTest(unittest.TestCase):
         self.assertEqual(self.metadata["Config"]["User"], "10001:10001")
         self.assertEqual(
             self.metadata["Config"]["Labels"]["io.phpwarden.checkers"],
-            "composer-audit,composer-validate,debug,drupal-config,phpcs,phpstan,syntax,twig-cs-fixer,whitespace,yaml",
+            "composer-audit,composer-validate,debug,drupal-config,phpcs,phpmd,phpstan,syntax,twig-cs-fixer,whitespace,yaml",
         )
         with materialize(FIXTURES / "clean-debug") as scenario:
             self.configure(scenario)
@@ -273,6 +275,12 @@ class DockerWorkerTest(unittest.TestCase):
     def test_twig_cs_fixer_project_config(self):
         check_twig_cs_fixer_project_config(self, self.configure, self.run_check)
 
+    def test_phpmd_fixtures(self):
+        check_phpmd_fixtures(self, self.configure, self.run_check)
+
+    def test_phpmd_settings(self):
+        check_phpmd_settings(self, self.configure, self.run_check)
+
     def test_composer_validate_fixtures(self):
         check_composer_validate_fixtures(self, self.configure, self.run_check)
 
@@ -346,6 +354,7 @@ class DockerWorkerTest(unittest.TestCase):
                     "composer-audit": {"enabled": False},
                     "composer-validate": {"enabled": False},
                     "phpcs": {"enabled": False},
+                    "phpmd": {"enabled": False},
                     "phpstan": {"enabled": False},
                     "twig-cs-fixer": {"enabled": False},
                 },

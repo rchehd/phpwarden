@@ -1,0 +1,12 @@
+diff --git a/web/modules/custom/demo/src/DemoLegacy.php b/web/modules/custom/demo/src/DemoLegacy.php
+index ef893e8..ba3ae69 100644
+--- a/web/modules/custom/demo/src/DemoLegacy.php
++++ b/web/modules/custom/demo/src/DemoLegacy.php
+@@ -4,6 +4,6 @@ class DemoLegacy {
+   private $never;
+ 
+   public function name() {
+-    return 'demo';
++    return 'demo-name';
+   }
+ }

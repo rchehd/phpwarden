@@ -192,7 +192,7 @@ func TestInvalidManifests(t *testing.T) {
 		strings.Replace(string(bundledManifest), `"php": "8.4.26"`, `"php": "8.4.26", "php": "8.4.26"`, 1),
 		strings.Replace(string(bundledManifest), `"version": 1`, `"version": 1, "unexpected": true`, 1),
 		strings.Replace(string(bundledManifest), `"runtime": "8.4"`, `"runtime": "8.4", "typo": true`, 1),
-		strings.Replace(string(bundledManifest), `"version": "1.7.0"`, `"version": null`, 1),
+		strings.Replace(string(bundledManifest), `"version": "1.8.0"`, `"version": null`, 1),
 		strings.Replace(string(bundledManifest), `"framework": null`, `"framework": "^11"`, 1),
 		strings.Replace(string(bundledManifest), `"debug"`, `"phpstan"`, 1),
 		strings.Replace(string(bundledManifest), `"linux/amd64"`, `"linux/arm64"`, 1),

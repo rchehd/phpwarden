@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -19,6 +20,22 @@ import (
 var exactVersion = regexp.MustCompile(`^v?([0-9]+\.[0-9]+\.[0-9]+)$`)
 
 func Discover(root string) (profile.Facts, error) {
+	return DiscoverIn(root, ".")
+}
+
+// DiscoverIn reads the Composer project in composerRoot and reports every path relative to root.
+func DiscoverIn(root, composerRoot string) (profile.Facts, error) {
+	facts, err := discover(filepath.Join(root, filepath.FromSlash(composerRoot)))
+	if err != nil {
+		return facts, err
+	}
+	if composerRoot != "." {
+		relocate(&facts, composerRoot)
+	}
+	return facts, pathRepositories(root, composerRoot, &facts)
+}
+
+func discover(root string) (profile.Facts, error) {
 	facts := profile.Facts{SourceRoots: []string{}, Exclusions: []string{}, Inputs: map[string]string{}, Warnings: []string{}}
 	reader := reader{root: root, inputs: facts.Inputs, warnings: &facts.Warnings}
 	composer, err := reader.object("composer.json")
@@ -316,5 +333,103 @@ func safePath(name string) error {
 	if strings.ContainsAny(name, "{}$") {
 		return fmt.Errorf("unsupported variable in discovery path %q", name)
 	}
+	return nil
+}
+
+// relocate prefixes the paths a Composer project in a subdirectory reports.
+func relocate(facts *profile.Facts, composerRoot string) {
+	prefix := func(value string) string { return path.Join(composerRoot, value) }
+	described := func(value *string) {
+		if value != nil && strings.HasPrefix(*value, "composer.") {
+			*value = prefix(*value)
+		}
+	}
+	if facts.WebRoot != nil {
+		facts.WebRoot = new(prefix(*facts.WebRoot))
+	}
+	described(facts.RootSource)
+	described(facts.VersionSource)
+	for i, name := range facts.SourceRoots {
+		facts.SourceRoots[i] = prefix(name)
+	}
+	escaped := strings.NewReplacer("[", "[[]", "*", "[*]", "?", "[?]").Replace(composerRoot)
+	for i, pattern := range facts.Exclusions {
+		facts.Exclusions[i] = escaped + "/" + pattern
+	}
+	inputs := map[string]string{}
+	for name, value := range facts.Inputs {
+		inputs[prefix(name)] = value
+	}
+	facts.Inputs = inputs
+	if facts.Installed != nil {
+		facts.Installed.Path = prefix(facts.Installed.Path)
+	}
+	for i := range facts.PHP {
+		described(&facts.PHP[i].Source)
+	}
+	for i := range facts.Warnings {
+		described(&facts.Warnings[i])
+	}
+}
+
+// pathRepositories adds Drupal packages from Composer path repositories as custom code at their real location in the project.
+func pathRepositories(root, composerRoot string, facts *profile.Facts) error {
+	root, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return err
+	}
+	// composer.json was already read, so its duplicate-key warnings are not repeated.
+	reader := reader{root: root, inputs: facts.Inputs, warnings: new([]string)}
+	composer, err := reader.object(path.Join(composerRoot, "composer.json"))
+	if err != nil || composer == nil {
+		return err
+	}
+	var repositories []any
+	switch value := composer["repositories"].(type) {
+	case []any:
+		repositories = value
+	case map[string]any:
+		for _, name := range slices.Sorted(maps.Keys(value)) {
+			repositories = append(repositories, value[name])
+		}
+	}
+	for _, value := range repositories {
+		repository, _ := value.(map[string]any)
+		url, _ := repository["url"].(string)
+		if repository["type"] != "path" || url == "" {
+			continue
+		}
+		matches, err := filepath.Glob(filepath.Join(root, filepath.FromSlash(composerRoot), filepath.FromSlash(url)))
+		if err != nil || filepath.IsAbs(url) {
+			facts.Warnings = append(facts.Warnings, fmt.Sprintf("Composer path repository %q is not a project-relative path; its code is not checked", url))
+			continue
+		}
+		slices.Sort(matches)
+		for _, match := range matches {
+			real, err := filepath.EvalSymlinks(match)
+			if err != nil {
+				continue
+			}
+			name, err := filepath.Rel(root, real)
+			if err != nil || name == ".." || strings.HasPrefix(name, ".."+string(filepath.Separator)) {
+				facts.Warnings = append(facts.Warnings, fmt.Sprintf("Composer path repository %q is outside the project root; its code is not checked", url))
+				continue
+			}
+			name = filepath.ToSlash(name)
+			if name == "." {
+				continue
+			}
+			pkg, err := reader.object(path.Join(name, "composer.json"))
+			if err != nil {
+				facts.Warnings = append(facts.Warnings, fmt.Sprintf("Composer path repository %q: %v", url, err))
+				continue
+			}
+			kind, _ := pkg["type"].(string)
+			if strings.HasPrefix(kind, "drupal-") && kind != "drupal-core" && kind != "drupal-library" && !slices.Contains(facts.SourceRoots, name) {
+				facts.SourceRoots = append(facts.SourceRoots, name)
+			}
+		}
+	}
+	sort.Strings(facts.SourceRoots)
 	return nil
 }

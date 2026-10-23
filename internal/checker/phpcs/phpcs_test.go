@@ -41,12 +41,12 @@ func TestActualPHPCSStandardsAndCompatibility(t *testing.T) {
 	cfg := settings(t)
 	cfg.Standards = []string{"PSR12"}
 	cfg.Sniffs = []string{"Generic.WhiteSpace.DisallowTabIndent"}
-	result := run(context.Background(), root, selection, cfg, config.Target{Min: "8.4", Max: "8.4"}, bundle, runner.Exec{})
+	result := run(context.Background(), root, ".", selection, cfg, config.Target{Min: "8.4", Max: "8.4"}, bundle, runner.Exec{})
 	if result.Check.Status != "failed" || len(result.Findings) != 1 || !strings.HasPrefix(result.Findings[0].Rule, "Generic.WhiteSpace.DisallowTabIndent") {
 		t.Fatalf("actual PHPCS failed: %+v", result)
 	}
 	selection.LineMap[name] = []scope.Range{{Start: 4, End: 4}}
-	if result = run(context.Background(), root, selection, cfg, config.Target{Min: "8.4", Max: "8.4"}, bundle, runner.Exec{}); result.Check.Status != "passed" || len(result.Findings) != 0 {
+	if result = run(context.Background(), root, ".", selection, cfg, config.Target{Min: "8.4", Max: "8.4"}, bundle, runner.Exec{}); result.Check.Status != "passed" || len(result.Findings) != 0 {
 		t.Fatalf("old style issue leaked into diff: %+v", result)
 	}
 	selection.LineMap[name] = nil
@@ -55,20 +55,20 @@ func TestActualPHPCSStandardsAndCompatibility(t *testing.T) {
 	cfg.Sniffs = []string{}
 	cfg.Compatibility.Enabled = true
 	for _, target := range []string{"8.3", "8.4"} {
-		result = run(context.Background(), root, selection, cfg, config.Target{Min: target, Max: target}, bundle, runner.Exec{})
+		result = run(context.Background(), root, ".", selection, cfg, config.Target{Min: target, Max: target}, bundle, runner.Exec{})
 		if len(result.Diagnostics) > 0 || (len(result.Findings) > 0) != (target == "8.3") {
 			t.Fatalf("compatibility target %s: %+v", target, result)
 		}
 	}
 	cfg.Compatibility.Enabled = false
-	result = run(context.Background(), root, selection, cfg, config.Target{Min: "8.3", Max: "8.3"}, bundle, runner.Exec{})
+	result = run(context.Background(), root, ".", selection, cfg, config.Target{Min: "8.3", Max: "8.3"}, bundle, runner.Exec{})
 	if len(result.Diagnostics) > 0 || len(result.Findings) != 1 {
 		t.Fatalf("project-selected PHPCompatibility lost the shared target: %+v", result)
 	}
 	cfg = settings(t)
 	cfg.Sniffs = []string{"Drupal.ControlStructures.ControlSignature"}
 	write(t, root, name, "<?php\nif(true) {\n  echo 1;\n}\n")
-	result = run(context.Background(), root, selection, cfg, config.Target{Min: "8.4", Max: "8.4"}, bundle, runner.Exec{})
+	result = run(context.Background(), root, ".", selection, cfg, config.Target{Min: "8.4", Max: "8.4"}, bundle, runner.Exec{})
 	if len(result.Diagnostics) > 0 || len(result.Findings) == 0 || !strings.HasPrefix(result.Findings[0].Rule, "Drupal.") {
 		t.Fatalf("actual Drupal Coder failed: %+v", result)
 	}
@@ -87,7 +87,7 @@ func TestRulesetContextTracksMissingConfigsAndCustomInputs(t *testing.T) {
 	}
 	write(t, root, "src/.phpcs.xml", "<ruleset><rule ref=\"../standards/base.xml\"/></ruleset>")
 	write(t, root, "standards/base.xml", "<ruleset><rule ref=\"PSR12\"/></ruleset>")
-	prepared, err := prepare(root, selection, cfg.Tools.PHPCS)
+	prepared, err := prepare(root, ".", selection, cfg.Tools.PHPCS)
 	if err != nil || prepared.Groups[0].Config != "src/.phpcs.xml" {
 		t.Fatalf("nearest ruleset: %+v %v", prepared, err)
 	}
@@ -98,7 +98,7 @@ func TestRulesetContextTracksMissingConfigsAndCustomInputs(t *testing.T) {
 	}
 	cfg.Tools.PHPCS.ExtraInputs = []string{"standards"}
 	write(t, root, "standards/fixture.xml", "broken fixture XML <")
-	if _, err := prepare(root, selection, cfg.Tools.PHPCS); err != nil {
+	if _, err := prepare(root, ".", selection, cfg.Tools.PHPCS); err != nil {
 		t.Fatalf("arbitrary extra input XML must only be fingerprinted: %v", err)
 	}
 	before = ContextHash(root, selection, cfg)
@@ -107,7 +107,7 @@ func TestRulesetContextTracksMissingConfigsAndCustomInputs(t *testing.T) {
 		t.Fatal("new custom input was not fingerprinted")
 	}
 	write(t, root, "src/.phpcs.xml", "<ruleset><autoload>../../outside.php</autoload></ruleset>")
-	if _, err = prepare(root, selection, cfg.Tools.PHPCS); err == nil {
+	if _, err = prepare(root, ".", selection, cfg.Tools.PHPCS); err == nil {
 		t.Fatal("outside input reference accepted")
 	}
 	if err := os.Remove(filepath.Join(root, "src/.phpcs.xml")); err != nil {
@@ -116,7 +116,7 @@ func TestRulesetContextTracksMissingConfigsAndCustomInputs(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(root, "src/.phpcs.xml"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = prepare(root, selection, cfg.Tools.PHPCS); err == nil {
+	if _, err = prepare(root, ".", selection, cfg.Tools.PHPCS); err == nil {
 		t.Fatal("nonregular ruleset candidate accepted")
 	}
 }

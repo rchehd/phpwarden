@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "id": "phpmd-project-ruleset",
+  "state": "staged",
+  "patch": "change.patch",
+  "changed_files": [
+    "web/modules/custom/demo/demo.module"
+  ],
+  "settings": {
+    "fail_on": "warning"
+  },
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "phpmd",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 3,
+      "contains": "function demo_label($label, $unused)",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

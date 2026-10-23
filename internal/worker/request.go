@@ -60,7 +60,7 @@ func Execute(ctx context.Context, root string, request runrequest.Request, proce
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(effective.Config.Runner.TimeoutSeconds)*time.Second)
 	defer cancel()
 	delegate := func(_ context.Context, settings config.ComposerAudit) checker.Outcome {
-		return composeraudit.Delegated(location.Root, settings)
+		return composeraudit.Delegated(config.ComposerDir(location.Root, effective.Config), settings)
 	}
 	result := analyze(ctx, location, effective.Config, effective.Project, request.Selection, request.Only, delegate, process)
 	validateRuntime(&result, effective)

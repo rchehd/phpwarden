@@ -1,0 +1,15 @@
+{
+  "name": "phpwarden/phpmd-tools",
+  "description": "Isolated PHPMD for PHPWarden",
+  "type": "project",
+  "require": {
+    "php": ">=8.1 <8.5",
+    "phpmd/phpmd": "3.0.0",
+    "pdepend/pdepend": "3.0.0"
+  },
+  "config": {
+    "allow-plugins": false,
+    "platform": {"php": "8.1.34"},
+    "sort-packages": true
+  }
+}

@@ -43,13 +43,13 @@ type helperReport struct {
 	Files      map[string][]violation `json:"files"`
 }
 
-func Run(ctx context.Context, root string, selection scope.Selection, cfg config.TwigCSFixer, profileID string, process runner.Process) checker.Outcome {
+func Run(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.TwigCSFixer, profileID string, process runner.Process) checker.Outcome {
 	executable, _ := os.Executable()
 	bundle := filepath.Clean(filepath.Join(filepath.Dir(executable), "..", "lib", "phpwarden", "twig-cs-fixer"))
-	return run(ctx, root, selection, cfg, profileID, bundle, process)
+	return run(ctx, root, composerRoot, selection, cfg, profileID, bundle, process)
 }
 
-func run(ctx context.Context, root string, selection scope.Selection, cfg config.TwigCSFixer, profileID, bundle string, process runner.Process) checker.Outcome {
+func run(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.TwigCSFixer, profileID, bundle string, process runner.Process) checker.Outcome {
 	result := checker.Outcome{Check: report.Check{ID: "twig-cs-fixer", Status: "passed", Required: cfg.Required, FailOn: cfg.FailOn}, Findings: []report.Finding{}, Diagnostics: []report.Diagnostic{}}
 	if !cfg.Enabled || len(selection.Files) == 0 {
 		reason := "no_files"
@@ -69,7 +69,7 @@ func run(ctx context.Context, root string, selection scope.Selection, cfg config
 	if ctx.Err() != nil {
 		return fail("error", "checker_timeout", "Twig CS Fixer did not complete within its execution context")
 	}
-	selected, _, err := prepare(root, cfg)
+	selected, _, err := prepare(root, composerRoot, cfg)
 	if err != nil {
 		return fail("error", "config_invalid", err.Error())
 	}

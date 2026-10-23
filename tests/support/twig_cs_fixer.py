@@ -10,6 +10,7 @@ TOOLS = (
     "debug",
     "drupal-config",
     "phpcs",
+    "phpmd",
     "phpstan",
     "syntax",
     "twig-cs-fixer",

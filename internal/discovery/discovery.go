@@ -16,7 +16,7 @@ func Apply(location config.Location, effective config.Effective) (config.Effecti
 	if effective.Config.Profile != "drupal" {
 		return effective, fmt.Errorf("unsupported discovery profile %q", effective.Config.Profile)
 	}
-	facts, err := drupal.Discover(location.Root)
+	facts, err := drupal.DiscoverIn(location.Root, effective.Config.ComposerRoot)
 	if err != nil {
 		return effective, err
 	}

@@ -83,7 +83,7 @@ func TestTwigCSFixerFailuresCannotPass(t *testing.T) {
 				}
 				return result
 			})
-			result := run(context.Background(), root, selection, settings(t), "drupal", fakeBundle(t), process)
+			result := run(context.Background(), root, ".", selection, settings(t), "drupal", fakeBundle(t), process)
 			switch name {
 			case "valid":
 				if result.Check.Status != "passed" || len(result.Diagnostics) != 0 || len(result.Findings) != 0 {
@@ -114,25 +114,25 @@ func TestMissingInputsAndCancellation(t *testing.T) {
 		t.Fatal("unexpected process")
 		return runner.Result{}
 	})
-	result := run(context.Background(), root, selection, settings(t), "drupal", "/nonexistent-phpwarden-bundle", unused)
+	result := run(context.Background(), root, ".", selection, settings(t), "drupal", "/nonexistent-phpwarden-bundle", unused)
 	if result.Check.Status != "unavailable" || result.Diagnostics[0].Code != "dependencies_missing" {
 		t.Fatalf("bundle failure hidden: %+v", result)
 	}
 	cfg := settings(t)
 	cfg.Config = "missing.php"
-	result = run(context.Background(), root, selection, cfg, "drupal", fakeBundle(t), unused)
+	result = run(context.Background(), root, ".", selection, cfg, "drupal", fakeBundle(t), unused)
 	if result.Check.Status != "error" || result.Diagnostics[0].Code != "config_invalid" {
 		t.Fatalf("missing config hidden: %+v", result)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	result = run(ctx, root, selection, settings(t), "drupal", fakeBundle(t), unused)
+	result = run(ctx, root, ".", selection, settings(t), "drupal", fakeBundle(t), unused)
 	if result.Check.Status != "error" || result.Diagnostics[0].Code != "checker_timeout" {
 		t.Fatalf("cancelled check passed: %+v", result)
 	}
 	cfg = settings(t)
 	cfg.Enabled = false
-	result = run(ctx, root, selection, cfg, "drupal", "", unused)
+	result = run(ctx, root, ".", selection, cfg, "drupal", "", unused)
 	if result.Check.Status != "skipped" || *result.Check.Reason != "disabled" {
 		t.Fatalf("disabled checker ran: %+v", result)
 	}

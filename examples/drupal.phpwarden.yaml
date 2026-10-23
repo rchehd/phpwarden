@@ -1,5 +1,6 @@
 version: 1
 profile: drupal
+composer_root: "."  # directory with composer.json, for example "platform" in a monorepo
 framework:
   version: auto
 php:
@@ -44,6 +45,13 @@ tools:
     standards: [Drupal, DrupalPractice]
     compatibility:
       enabled: false
+  phpmd:
+    enabled: true
+    required: true
+    fail_on: error
+    discover_config: true
+    rulesets: [unusedcode, codesize]
+    exclude_rules: [UnusedFormalParameter]
   drupal-config:
     enabled: true
     required: true

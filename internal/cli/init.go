@@ -10,7 +10,7 @@ import (
 )
 
 func initProject(ctx context.Context, args options, cwd string, stdout, stderr io.Writer) int {
-	result, err := projectinit.Run(ctx, projectinit.Options{CWD: cwd, Project: args.project, Runtime: args.phpRuntime, Target: args.phpTarget})
+	result, err := projectinit.Run(ctx, projectinit.Options{CWD: cwd, Project: args.project, ComposerRoot: args.composerRoot, Runtime: args.phpRuntime, Target: args.phpTarget})
 	if err != nil {
 		return fail(stdout, stderr, args, "init", err)
 	}
@@ -51,6 +51,9 @@ func initProject(ctx context.Context, args options, cwd string, stdout, stderr i
 		project = append(project, "no custom code found; set scope.include")
 	}
 	row("Project", strings.Join(project, " · "))
+	if result.ComposerRoot != "" {
+		row("Composer", result.ComposerRoot+"/composer.json")
+	}
 	row("PHP", fmt.Sprintf("runtime %s (%s) · target %s (%s)", result.Runtime.Version, result.Runtime.Source, result.Target.Version, result.Target.Source))
 	row("Image", result.Image)
 	if result.Base != nil {

@@ -15,7 +15,7 @@ func TestExplicitCheckerSelection(t *testing.T) {
 			t.Fatal("selection did not override defaults")
 		}
 	}
-	for _, value := range []string{"phpmd", "syntax,", ",debug", "debug,debug", "debug, syntax"} {
+	for _, value := range []string{"jscpd", "syntax,", ",debug", "debug,debug", "debug, syntax"} {
 		if _, err := ParseOnly(value); err == nil {
 			t.Fatalf("invalid selection accepted: %q", value)
 		}

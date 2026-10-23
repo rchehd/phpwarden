@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 /bin/
 /tools/yaml/vendor/
+/tools/phpmd/vendor/
 /tools/phpcs/vendor/
 /tools/phpstan/vendor/
 /tools/twig-cs-fixer/vendor/

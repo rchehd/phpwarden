@@ -62,13 +62,13 @@ type nativeReport struct {
 }
 
 // A nonempty dependencies error means installed packages do not match composer.lock.
-func Run(ctx context.Context, root string, selection scope.Selection, cfg config.PHPStan, target config.Target, dependencies string, process runner.Process) checker.Outcome {
+func Run(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.PHPStan, target config.Target, dependencies string, process runner.Process) checker.Outcome {
 	executable, _ := os.Executable()
 	bundle := filepath.Clean(filepath.Join(filepath.Dir(executable), "..", "lib", "phpwarden", "phpstan"))
-	return run(ctx, root, selection, cfg, target, dependencies, bundle, process)
+	return run(ctx, root, composerRoot, selection, cfg, target, dependencies, bundle, process)
 }
 
-func run(ctx context.Context, root string, selection scope.Selection, cfg config.PHPStan, target config.Target, dependencies, bundle string, process runner.Process) checker.Outcome {
+func run(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.PHPStan, target config.Target, dependencies, bundle string, process runner.Process) checker.Outcome {
 	result := checker.Outcome{Check: report.Check{ID: "phpstan", Status: "passed", Required: cfg.Required, FailOn: cfg.FailOn}, Findings: []report.Finding{}, Diagnostics: []report.Diagnostic{}}
 	if !cfg.Enabled || len(selection.Files) == 0 {
 		reason := "no_files"
@@ -91,7 +91,7 @@ func run(ctx context.Context, root string, selection scope.Selection, cfg config
 	if _, err := contextDigest(root); err != nil {
 		return fail("error", "context_invalid", err.Error())
 	}
-	selected, autoload, err := prepare(root, cfg)
+	selected, autoload, err := prepare(root, composerRoot, cfg)
 	if err != nil {
 		return fail("error", "config_invalid", err.Error())
 	}
@@ -196,7 +196,8 @@ func run(ctx context.Context, root string, selection scope.Selection, cfg config
 		name, _, _ := strings.Cut(variable, "=")
 		return slices.Contains(agentVariables, name)
 	})
-	execution = process.Run(ctx, runner.Command{Name: "php", Directory: root, Args: args, Env: environment})
+	// phpstan-drupal looks for the Drupal root from the working directory.
+	execution = process.Run(ctx, runner.Command{Name: "php", Directory: filepath.Join(root, filepath.FromSlash(composerRoot)), Args: args, Env: environment})
 	if execution.ExitCode == 1 && !execution.Unavailable && !execution.TimedOut {
 		execution.Err = nil
 	}

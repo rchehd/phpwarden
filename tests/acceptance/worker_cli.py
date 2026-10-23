@@ -20,6 +20,7 @@ from tests.support.phpcs import (
     check_phpcs_project_rules,
     check_phpcs_settings,
 )
+from tests.support.phpmd import check_phpmd_fixtures, check_phpmd_settings
 from tests.support.phpstan import (
     check_phpstan_dependency_mismatch,
     check_phpstan_fixtures,
@@ -52,6 +53,7 @@ class WorkerCLITest(unittest.TestCase):
         tools.parent.mkdir(parents=True)
         tools.symlink_to(ROOT / "tools" / "yaml", target_is_directory=True)
         (tools.parent / "phpcs").symlink_to(ROOT / "tools" / "phpcs", target_is_directory=True)
+        (tools.parent / "phpmd").symlink_to(ROOT / "tools" / "phpmd", target_is_directory=True)
         (tools.parent / "phpstan").symlink_to(ROOT / "tools" / "phpstan", target_is_directory=True)
         (tools.parent / "composer").symlink_to(
             ROOT / "tools" / "composer", target_is_directory=True
@@ -88,6 +90,7 @@ class WorkerCLITest(unittest.TestCase):
                 "composer-audit": {"enabled": False},
                 "composer-validate": {"enabled": False},
                 "phpcs": {"enabled": False},
+                "phpmd": {"enabled": False},
                 "phpstan": {"enabled": False},
                 "twig-cs-fixer": {"enabled": False},
             },
@@ -196,6 +199,12 @@ class WorkerCLITest(unittest.TestCase):
 
     def test_twig_cs_fixer_project_config(self):
         check_twig_cs_fixer_project_config(self, self.configure, self.run_worker)
+
+    def test_phpmd_fixtures(self):
+        check_phpmd_fixtures(self, self.configure, self.run_worker)
+
+    def test_phpmd_settings(self):
+        check_phpmd_settings(self, self.configure, self.run_worker)
 
     def test_composer_validate_fixtures(self):
         check_composer_validate_fixtures(self, self.configure, self.run_worker)

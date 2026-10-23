@@ -15,6 +15,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/checker/debug"
 	"github.com/rchehd/phpwarden/internal/checker/drupalconfig"
 	"github.com/rchehd/phpwarden/internal/checker/phpcs"
+	"github.com/rchehd/phpwarden/internal/checker/phpmd"
 	"github.com/rchehd/phpwarden/internal/checker/phpstan"
 	"github.com/rchehd/phpwarden/internal/checker/syntax"
 	"github.com/rchehd/phpwarden/internal/checker/twigcsfixer"
@@ -64,7 +65,7 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 	}
 	audit := func(ctx context.Context, settings config.ComposerAudit) checker.Outcome {
 		cacheDir, _ := composeraudit.CacheDir()
-		return composeraudit.Run(ctx, location.Root, settings, composeraudit.NativeFetcher(composeraudit.Bundle(), process), cacheDir, time.Now())
+		return composeraudit.Run(ctx, config.ComposerDir(location.Root, cfg), settings, composeraudit.NativeFetcher(composeraudit.Bundle(), process), cacheDir, time.Now())
 	}
 	result = analyze(ctx, location, cfg, effective.Project, selection, only, audit, process)
 	validateRuntime(&result, effective)
@@ -116,7 +117,7 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 			if project != nil && project.Installed != nil && project.Installed.Error != nil {
 				dependencies = *project.Installed.Error
 			}
-			outcome = phpstan.Run(ctx, location.Root, phpstan.Select(selection, settings, cfg.Profile), settings, cfg.PHP.Target, dependencies, process)
+			outcome = phpstan.Run(ctx, location.Root, cfg.ComposerRoot, phpstan.Select(selection, settings, cfg.Profile), settings, cfg.PHP.Target, dependencies, process)
 		} else if id == "composer-audit" {
 			settings := cfg.Tools.ComposerAudit
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
@@ -124,15 +125,19 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 		} else if id == "composer-validate" {
 			settings := cfg.Tools.ComposerValidate
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
-			outcome = composervalidate.Run(ctx, location.Root, composervalidate.Select(selection, settings), settings, process)
+			outcome = composervalidate.Run(ctx, location.Root, composervalidate.Select(selection, settings, cfg.ComposerRoot), settings, process)
 		} else if id == "twig-cs-fixer" {
 			settings := cfg.Tools.TwigCSFixer
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
-			outcome = twigcsfixer.Run(ctx, location.Root, twigcsfixer.Select(selection, settings, cfg.Profile), settings, cfg.Profile, process)
+			outcome = twigcsfixer.Run(ctx, location.Root, cfg.ComposerRoot, twigcsfixer.Select(selection, settings, cfg.Profile), settings, cfg.Profile, process)
 		} else if id == "phpcs" {
 			settings := cfg.Tools.PHPCS
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
-			outcome = phpcs.Run(ctx, location.Root, phpcs.Select(selection, settings, cfg.Profile), settings, cfg.PHP.Target, process)
+			outcome = phpcs.Run(ctx, location.Root, cfg.ComposerRoot, phpcs.Select(selection, settings, cfg.Profile), settings, cfg.PHP.Target, process)
+		} else if id == "phpmd" {
+			settings := cfg.Tools.PHPMD
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			outcome = phpmd.Run(ctx, location.Root, cfg.ComposerRoot, phpmd.Select(selection, settings, cfg.Profile), settings, process)
 		} else if id == "drupal-config" {
 			settings := cfg.Tools.DrupalConfig
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)

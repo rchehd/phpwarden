@@ -42,7 +42,7 @@ func TestActualPHPStanTypesDeprecationsAndLineFiltering(t *testing.T) {
 	cfg := settings(t)
 	check := func() {
 		t.Helper()
-		result := run(context.Background(), root, selection, cfg, config.Target{Min: "8.4", Max: "8.4"}, "", bundle, runner.Exec{})
+		result := run(context.Background(), root, ".", selection, cfg, config.Target{Min: "8.4", Max: "8.4"}, "", bundle, runner.Exec{})
 		want := 2
 		if !cfg.Deprecations {
 			want = 1
@@ -71,7 +71,7 @@ func TestNativeConfigIncludesBaselineAndContext(t *testing.T) {
 	selection := scope.Selection{Mode: "full", Files: []string{"src/demo.php"}, LineMap: map[string][]scope.Range{"src/demo.php": nil}}
 	cfg := settings(t)
 	cfg.Baseline = "quality/baseline.neon"
-	result := run(context.Background(), root, selection, cfg, config.Target{Min: "8.4", Max: "8.4"}, "", bundle, runner.Exec{})
+	result := run(context.Background(), root, ".", selection, cfg, config.Target{Min: "8.4", Max: "8.4"}, "", bundle, runner.Exec{})
 	if len(result.Diagnostics) > 0 || result.Check.Status != "passed" || len(result.Findings) > 0 {
 		t.Fatalf("native baseline failed: %+v", result)
 	}
@@ -100,7 +100,7 @@ func TestNativeConfigIncludesBaselineAndContext(t *testing.T) {
 	if _, err := contextDigest(root); err != nil {
 		t.Fatalf("symlinked dependency rejected: %v", err)
 	}
-	result = run(context.Background(), root, selection, cfg, config.Target{Min: "8.4", Max: "8.4"}, "", bundle, runner.Exec{})
+	result = run(context.Background(), root, ".", selection, cfg, config.Target{Min: "8.4", Max: "8.4"}, "", bundle, runner.Exec{})
 	if len(result.Diagnostics) > 0 || result.Check.Status != "passed" {
 		t.Fatalf("symlinked project failed: %+v", result)
 	}

@@ -47,7 +47,7 @@ func TestActualTwigCSFixerFallbackProjectConfigAndFilters(t *testing.T) {
 	selection := scope.Selection{Mode: "full", Files: []string{broken, name}, LineMap: map[string][]scope.Range{name: nil, broken: nil}}
 	check := func(cfg config.TwigCSFixer, want ...string) {
 		t.Helper()
-		result := run(context.Background(), root, selection, cfg, "drupal", bundle, runner.Exec{})
+		result := run(context.Background(), root, ".", selection, cfg, "drupal", bundle, runner.Exec{})
 		actual := []string{}
 		for _, finding := range result.Findings {
 			if finding.Kind == "global" {
@@ -77,7 +77,7 @@ func TestActualTwigCSFixerFallbackProjectConfigAndFilters(t *testing.T) {
 	check(cfg, "DelimiterSpacing.After", "DelimiterSpacing.Before", "IncludeFunction.Error", "File.Invalid")
 	write(t, root, "quality/bad.php", "<?php\necho 'noise';\nreturn [];\n")
 	cfg.Config = "quality/bad.php"
-	result := run(context.Background(), root, selection, cfg, "drupal", bundle, runner.Exec{})
+	result := run(context.Background(), root, ".", selection, cfg, "drupal", bundle, runner.Exec{})
 	if result.Check.Status != "error" || result.Diagnostics[0].Code != "process_failed" || !strings.Contains(result.Diagnostics[0].Message, "must return") {
 		t.Fatalf("invalid project config accepted: %+v", result)
 	}
@@ -87,7 +87,7 @@ func TestContextHashIsIndependentOfProjectLocation(t *testing.T) {
 	cfg := settings(t)
 	cfg.Config, cfg.ExtraInputs = "missing.php", []string{"quality"}
 	first, second := t.TempDir(), t.TempDir()
-	if ContextHash(first, cfg) != ContextHash(second, cfg) {
+	if ContextHash(first, ".", cfg) != ContextHash(second, ".", cfg) {
 		t.Fatal("Twig CS Fixer context depends on the absolute project path")
 	}
 }
@@ -97,7 +97,7 @@ func TestContextHashCoversConfigsAndExtraInputs(t *testing.T) {
 	cfg := settings(t)
 	cfg.ExtraInputs = []string{"quality"}
 	write(t, root, "quality/rules.php", "<?php\nreturn [];\n")
-	before := ContextHash(root, cfg)
+	before := ContextHash(root, ".", cfg)
 	for _, change := range []func(){
 		func() { write(t, root, ".twig-cs-fixer.dist.php", "<?php\n") },
 		func() { write(t, root, ".twig-cs-fixer.php", "<?php\n") },
@@ -106,20 +106,20 @@ func TestContextHashCoversConfigsAndExtraInputs(t *testing.T) {
 		func() { write(t, root, "quality/nested/added.php", "<?php\n") },
 	} {
 		change()
-		if after := ContextHash(root, cfg); after == before {
+		if after := ContextHash(root, ".", cfg); after == before {
 			t.Fatal("Twig CS Fixer input change was not fingerprinted")
 		} else {
 			before = after
 		}
 	}
 	write(t, root, "web/unrelated.php", "<?php\n")
-	if ContextHash(root, cfg) != before {
+	if ContextHash(root, ".", cfg) != before {
 		t.Fatal("unrelated project file changed the Twig CS Fixer context")
 	}
 	if err := os.Symlink("rules.php", filepath.Join(root, "quality/link.php")); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := prepare(root, cfg); err == nil {
+	if _, _, err := prepare(root, ".", cfg); err == nil {
 		t.Fatal("symlinked extra input accepted")
 	}
 }

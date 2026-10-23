@@ -62,13 +62,13 @@ type helperReport struct {
 	} `json:"report"`
 }
 
-func Run(ctx context.Context, root string, selection scope.Selection, cfg config.PHPCS, target config.Target, process runner.Process) checker.Outcome {
+func Run(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.PHPCS, target config.Target, process runner.Process) checker.Outcome {
 	executable, _ := os.Executable()
 	bundle := filepath.Clean(filepath.Join(filepath.Dir(executable), "..", "lib", "phpwarden", "phpcs"))
-	return run(ctx, root, selection, cfg, target, bundle, process)
+	return run(ctx, root, composerRoot, selection, cfg, target, bundle, process)
 }
 
-func run(ctx context.Context, root string, selection scope.Selection, cfg config.PHPCS, target config.Target, bundle string, process runner.Process) checker.Outcome {
+func run(ctx context.Context, root, composerRoot string, selection scope.Selection, cfg config.PHPCS, target config.Target, bundle string, process runner.Process) checker.Outcome {
 	result := checker.Outcome{Check: report.Check{ID: "phpcs", Status: "passed", Required: cfg.Required, FailOn: cfg.FailOn}, Findings: []report.Finding{}, Diagnostics: []report.Diagnostic{}}
 	if !cfg.Enabled || len(selection.Files) == 0 {
 		reason := "no_files"
@@ -88,7 +88,7 @@ func run(ctx context.Context, root string, selection scope.Selection, cfg config
 	if ctx.Err() != nil {
 		return fail("error", "checker_timeout", "PHPCS did not complete within its execution context")
 	}
-	prepared, err := prepare(root, selection, cfg)
+	prepared, err := prepare(root, composerRoot, selection, cfg)
 	if err != nil {
 		return fail("error", "config_invalid", err.Error())
 	}

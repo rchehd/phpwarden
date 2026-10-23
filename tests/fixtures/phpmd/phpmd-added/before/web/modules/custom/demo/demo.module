@@ -1,0 +1,8 @@
+<?php
+
+/**
+ * Implements hook_help().
+ */
+function demo_help($route_name, $route_match) {
+  return $route_name;
+}

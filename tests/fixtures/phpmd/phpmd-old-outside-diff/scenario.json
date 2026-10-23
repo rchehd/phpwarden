@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "phpmd-old-outside-diff",
+  "state": "unstaged",
+  "patch": "change.patch",
+  "changed_files": [
+    "web/modules/custom/demo/src/DemoLegacy.php"
+  ],
+  "settings": {
+    "fail_on": "warning"
+  },
+  "verdicts": {
+    "diff": "pass",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "phpmd",
+      "path": "web/modules/custom/demo/src/DemoLegacy.php",
+      "line": 4,
+      "contains": "private $never;",
+      "modes": [
+        "full"
+      ]
+    }
+  ]
+}

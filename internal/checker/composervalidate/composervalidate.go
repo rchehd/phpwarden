@@ -48,10 +48,10 @@ type Target struct {
 }
 
 // Select validates the root composer.json when a root Composer file changed, plus composer.json files of selected modules.
-func Select(selection scope.Selection, cfg config.ComposerValidate) []Target {
+func Select(selection scope.Selection, cfg config.ComposerValidate, composerRoot string) []Target {
 	targets := []Target{}
 	if len(selection.ProjectFiles) > 0 {
-		targets = append(targets, Target{Path: "composer.json", Lock: true})
+		targets = append(targets, Target{Path: path.Join(composerRoot, "composer.json"), Lock: true})
 	}
 	for _, name := range selection.Files {
 		if path.Base(name) == "composer.json" {

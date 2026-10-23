@@ -135,7 +135,7 @@ func TestInvalidConfigurations(t *testing.T) {
 		"unknown field":         minimal + "profiel: drupal\n",
 		"nested unknown field":  minimal + "runner: {timeot: 1}\n",
 		"unknown checker":       minimal + "tools: {phpstna: {}}\n",
-		"unimplemented checker": minimal + "tools: {phpmd: {}}\n",
+		"unimplemented checker": minimal + "tools: {jscpd: {}}\n",
 		"unsupported profile":   strings.Replace(minimal, "profile: drupal", "profile: laravel", 1),
 		"missing profile":       strings.Replace(minimal, "profile: drupal\n", "", 1),
 		"unknown version":       strings.Replace(minimal, "version: 1", "version: 2", 1),

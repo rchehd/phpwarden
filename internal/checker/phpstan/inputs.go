@@ -77,7 +77,7 @@ func contextDigest(root string) (string, error) {
 	return fmt.Sprintf("%x", hash.Sum(nil)), err
 }
 
-func prepare(root string, cfg config.PHPStan) (string, string, error) {
+func prepare(root, composerRoot string, cfg config.PHPStan) (string, string, error) {
 	regular := func(name string) error {
 		if err := projectpath.Validate(name); err != nil {
 			return err
@@ -93,8 +93,14 @@ func prepare(root string, cfg config.PHPStan) (string, string, error) {
 	}
 	selected := cfg.Config
 	if selected == "" && cfg.DiscoverConfig {
-		for _, candidate := range ConfigCandidates {
-			if _, err := os.Lstat(filepath.Join(root, candidate)); os.IsNotExist(err) {
+		candidates := slices.Clone(ConfigCandidates)
+		if composerRoot != "." {
+			for _, name := range ConfigCandidates {
+				candidates = append(candidates, path.Join(composerRoot, name))
+			}
+		}
+		for _, candidate := range candidates {
+			if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(candidate))); os.IsNotExist(err) {
 				continue
 			}
 			selected = candidate
@@ -124,7 +130,7 @@ func prepare(root string, cfg config.PHPStan) (string, string, error) {
 	autoload := cfg.Autoload
 	if autoload == "auto" {
 		vendor := "vendor"
-		if data, err := os.ReadFile(filepath.Join(root, "composer.json")); err == nil {
+		if data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(composerRoot), "composer.json")); err == nil {
 			var composer struct {
 				Config struct {
 					VendorDir string `json:"vendor-dir"`
@@ -137,7 +143,7 @@ func prepare(root string, cfg config.PHPStan) (string, string, error) {
 				vendor = composer.Config.VendorDir
 			}
 		}
-		autoload = path.Join(vendor, "autoload.php")
+		autoload = path.Join(composerRoot, vendor, "autoload.php")
 		if err := projectpath.Validate(autoload); err != nil {
 			return "", "", err
 		}

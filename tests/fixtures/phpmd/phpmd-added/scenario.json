@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "id": "phpmd-added",
+  "state": "unstaged",
+  "patch": "change.patch",
+  "changed_files": [
+    "web/modules/custom/demo/demo.module"
+  ],
+  "settings": {
+    "fail_on": "warning"
+  },
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "phpmd",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 11,
+      "contains": "$unused = count($items);",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

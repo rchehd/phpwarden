@@ -73,6 +73,8 @@ jobs:
         run: composer install --working-dir tools/twig-cs-fixer --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
       - name: Install locked Composer tool dependencies for native worker tests
         run: composer install --working-dir tools/composer --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
+      - name: Install locked PHPMD tool dependencies for native worker tests
+        run: composer install --working-dir tools/phpmd --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
       - name: Check formatting
         run: |
           files=$(gofmt -l cmd internal schemas)

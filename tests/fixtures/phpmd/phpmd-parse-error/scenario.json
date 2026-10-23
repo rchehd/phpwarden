@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "phpmd-parse-error",
+  "state": "untracked",
+  "changed_files": [
+    "web/modules/custom/demo/src/Broken.php"
+  ],
+  "settings": {
+    "fail_on": "warning"
+  },
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "phpmd",
+      "path": "web/modules/custom/demo/src/Broken.php",
+      "line": null,
+      "global": true,
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

@@ -25,4 +25,7 @@
 !tools/composer/
 !tools/composer/composer.json
 !tools/composer/composer.lock
+!tools/phpmd/
+!tools/phpmd/composer.json
+!tools/phpmd/composer.lock
 **/*_test.go

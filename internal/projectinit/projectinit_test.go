@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -118,7 +119,7 @@ func TestRejectsProjectsItCannotConfigure(t *testing.T) {
 			}
 		})
 	}
-	if _, err := Run(context.Background(), Options{CWD: t.TempDir()}); err == nil || !strings.Contains(err.Error(), "no composer.json found") {
+	if _, err := Run(context.Background(), Options{CWD: t.TempDir()}); err == nil || !strings.Contains(err.Error(), "not a Drupal project") {
 		t.Fatalf("directory without composer.json accepted: %v", err)
 	}
 }
@@ -159,35 +160,70 @@ func TestNeverOverwritesConfiguration(t *testing.T) {
 	}
 }
 
-func TestFindsProjectRootBaseAndNativeConfigs(t *testing.T) {
-	repository := t.TempDir()
-	root := filepath.Join(repository, "platform")
-	source := drupalProject(t, ">=8.1", map[string]string{"phpcs.xml.dist": "<ruleset/>\n", "phpstan.neon": "parameters: {}\n"})
-	if err := os.Rename(source, root); err != nil {
-		t.Fatal(err)
-	}
-	for _, args := range [][]string{{"init", "--quiet"}, {"update-ref", "refs/remotes/origin/develop", "HEAD"}, {"symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop"}} {
-		if args[0] == "update-ref" {
-			commit := exec.Command("git", "-C", repository, "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "--quiet", "--allow-empty", "-m", "init")
-			if output, err := commit.CombinedOutput(); err != nil {
-				t.Fatalf("%v: %s", err, output)
-			}
-		}
+func gitRepository(t *testing.T, repository string) {
+	t.Helper()
+	for _, args := range [][]string{{"init", "--quiet"}, {"add", "--all"}, {"-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "--quiet", "--allow-empty", "-m", "init"},
+		{"update-ref", "refs/remotes/origin/develop", "HEAD"}, {"symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop"}} {
 		if output, err := exec.Command("git", append([]string{"-C", repository}, args...)...).CombinedOutput(); err != nil {
 			t.Fatalf("%v: %s", err, output)
 		}
 	}
-	if _, err := Run(context.Background(), Options{CWD: repository}); err == nil || !strings.Contains(err.Error(), "pass --project") {
-		t.Fatalf("monorepo root accepted: %v", err)
+}
+
+func TestMonorepoConfigAtGitRootWithComposerRoot(t *testing.T) {
+	repository := t.TempDir()
+	root := filepath.Join(repository, "platform")
+	source := drupalProject(t, ">=8.1", map[string]string{
+		"composer.json": `{"require":{"drupal/core":"^11"},"repositories":{"profile":{"type":"path","url":"web/profiles/custom/demo_profile"},` +
+			`"packages":{"type":"path","url":"../packages/*"},"outside":{"type":"path","url":"../.."}}}`,
+		"phpcs.xml.dist": "<ruleset/>\n", "phpstan.neon": "parameters: {}\n",
+	})
+	if err := os.Rename(source, root); err != nil {
+		t.Fatal(err)
 	}
+	writeFile(t, repository, ".ddev/config.yaml", "php_version: \"8.3\"\n")
+	writeFile(t, repository, "profile/composer.json", `{"name":"acme/demo_profile","type":"drupal-custom-profile"}`)
+	writeFile(t, repository, "packages/feature/composer.json", `{"name":"acme/feature","type":"drupal-custom-module"}`)
+	writeFile(t, repository, "packages/plugin/composer.json", `{"name":"acme/plugin","type":"composer-plugin"}`)
+	if err := os.MkdirAll(filepath.Join(root, "web/profiles/custom"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../../../../profile", filepath.Join(root, "web/profiles/custom/demo_profile")); err != nil {
+		t.Fatal(err)
+	}
+	gitRepository(t, repository)
 	result, err := Run(context.Background(), Options{CWD: filepath.Join(root, "web/modules/custom")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	natives := []NativeConfig{{"phpcs", "phpcs.xml.dist"}, {"phpstan", "phpstan.neon"}}
-	resolved, _ := filepath.EvalSymlinks(root)
-	if result.Location.Root != resolved || result.Base == nil || *result.Base != "origin/develop" || len(result.NativeConfigs) != 2 ||
-		result.NativeConfigs[0] != natives[0] || result.NativeConfigs[1] != natives[1] {
-		t.Fatalf("wrong discovery: %+v", result)
+	resolved, _ := filepath.EvalSymlinks(repository)
+	natives := []NativeConfig{{"phpcs", "platform/phpcs.xml.dist"}, {"phpstan", "platform/phpstan.neon"}}
+	if result.Location.Root != resolved || result.ComposerRoot != "platform" || *result.Runtime != (Choice{"8.3", ".ddev/config.yaml php_version"}) ||
+		result.Base == nil || *result.Base != "origin/develop" || !slices.Equal(result.NativeConfigs, natives) {
+		t.Fatalf("wrong monorepo result: %+v %+v", result, result.Runtime)
+	}
+	if !slices.Equal(result.Project.SourceRoots, []string{"packages/feature", "platform/web/modules/custom", "platform/web/profiles/custom", "profile"}) ||
+		!slices.ContainsFunc(result.Project.Warnings, func(warning string) bool { return strings.Contains(warning, `"../.." is outside the project root`) }) {
+		t.Fatalf("path repositories not discovered: %+v", result.Project)
+	}
+	effective, err := config.Load(result.Location)
+	if err != nil || effective.Config.ComposerRoot != "platform" {
+		t.Fatalf("written configuration lacks composer_root: %+v %v", effective.Config, err)
+	}
+	if result, err := Run(context.Background(), Options{CWD: repository}); err != nil || result.Created {
+		t.Fatalf("second init must keep the configuration: %+v %v", result, err)
+	}
+	other := drupalProject(t, ">=8.1", nil)
+	if err := os.Rename(other, filepath.Join(repository, "other")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(repository, config.Filename)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Run(context.Background(), Options{CWD: repository}); err == nil || !strings.Contains(err.Error(), "several Drupal Composer projects found (other, platform)") {
+		t.Fatalf("ambiguous monorepo accepted: %v", err)
+	}
+	if result, err := Run(context.Background(), Options{CWD: filepath.Join(repository, "other", "web")}); err != nil || result.ComposerRoot != "other" {
+		t.Fatalf("working directory did not choose the project: %+v %v", result, err)
 	}
 }

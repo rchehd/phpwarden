@@ -40,6 +40,11 @@ COPY tools/composer/composer.json tools/composer/composer.lock ./
 RUN php /usr/local/bin/composer install --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction --classmap-authoritative \
     && php -r 'require "vendor/autoload.php"; if (Composer\Composer::getVersion() !== "2.10.3") { exit(1); }'
 
+WORKDIR /opt/phpwarden/tools/phpmd
+COPY tools/phpmd/composer.json tools/phpmd/composer.lock ./
+RUN php /usr/local/bin/composer install --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction --classmap-authoritative \
+    && php -r 'require "vendor/autoload.php"; if (Composer\InstalledVersions::getPrettyVersion("phpmd/phpmd") !== "3.0.0" || !extension_loaded("xml")) { exit(1); }'
+
 FROM ${PHP_IMAGE} AS worker
 
 ARG PHP_VERSION
@@ -57,12 +62,13 @@ COPY --from=tools /opt/phpwarden/tools/phpcs /usr/local/lib/phpwarden/phpcs
 COPY --from=tools /opt/phpwarden/tools/phpstan /usr/local/lib/phpwarden/phpstan
 COPY --from=tools /opt/phpwarden/tools/twig-cs-fixer /usr/local/lib/phpwarden/twig-cs-fixer
 COPY --from=tools /opt/phpwarden/tools/composer /usr/local/lib/phpwarden/composer
+COPY --from=tools /opt/phpwarden/tools/phpmd /usr/local/lib/phpwarden/phpmd
 LABEL org.opencontainers.image.title="PHPWarden static worker" \
     org.opencontainers.image.source="https://github.com/rchehd/phpwarden" \
     io.phpwarden.protocol="2" \
-    io.phpwarden.toolset="static-dev-v9-php${PHP_RUNTIME}" \
+    io.phpwarden.toolset="static-dev-v10-php${PHP_RUNTIME}" \
     io.phpwarden.php-version="${PHP_VERSION}" \
-    io.phpwarden.checkers="composer-audit,composer-validate,debug,drupal-config,phpcs,phpstan,syntax,twig-cs-fixer,whitespace,yaml" \
+    io.phpwarden.checkers="composer-audit,composer-validate,debug,drupal-config,phpcs,phpmd,phpstan,syntax,twig-cs-fixer,whitespace,yaml" \
     io.phpwarden.symfony-yaml-version="6.4.48" \
     io.phpwarden.phpcs-version="4.0.4" \
     io.phpwarden.coder-version="9.0.1" \
@@ -72,7 +78,9 @@ LABEL org.opencontainers.image.title="PHPWarden static worker" \
     io.phpwarden.phpstan-deprecations-version="2.0.5" \
     io.phpwarden.twig-cs-fixer-version="4.1.1" \
     io.phpwarden.twig-version="3.30.0" \
-    io.phpwarden.composer-version="2.10.3"
+    io.phpwarden.composer-version="2.10.3" \
+    io.phpwarden.phpmd-version="3.0.0" \
+    io.phpwarden.pdepend-version="3.0.0"
 
 WORKDIR /workspace
 USER 10001:10001

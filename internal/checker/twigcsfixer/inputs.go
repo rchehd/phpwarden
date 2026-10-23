@@ -31,8 +31,8 @@ func InputRequired(cfg config.Config, selection scope.Selection, only []string) 
 	return checker.Enabled("twig-cs-fixer", cfg.Tools.TwigCSFixer.Enabled, only) && len(Select(selection, cfg.Tools.TwigCSFixer, cfg.Profile).Files) > 0
 }
 
-func ContextHash(root string, cfg config.TwigCSFixer) string {
-	_, inputs, err := prepare(root, cfg)
+func ContextHash(root, composerRoot string, cfg config.TwigCSFixer) string {
+	_, inputs, err := prepare(root, composerRoot, cfg)
 	message := ""
 	if err != nil {
 		message = err.Error()
@@ -45,7 +45,7 @@ func ContextHash(root string, cfg config.TwigCSFixer) string {
 }
 
 // Returns the selected project config ("" for the profile fallback) and content hashes of every input it may read.
-func prepare(root string, cfg config.TwigCSFixer) (string, map[string]string, error) {
+func prepare(root, composerRoot string, cfg config.TwigCSFixer) (string, map[string]string, error) {
 	inputs := map[string]string{}
 	record := func(name string) error {
 		if err := projectpath.Validate(name); err != nil {
@@ -109,7 +109,13 @@ func prepare(root string, cfg config.TwigCSFixer) (string, map[string]string, er
 		}
 		selected = cfg.Config
 	} else if cfg.DiscoverConfig {
-		for _, name := range ConfigCandidates {
+		candidates := slices.Clone(ConfigCandidates)
+		if composerRoot != "." {
+			for _, name := range ConfigCandidates {
+				candidates = append(candidates, path.Join(composerRoot, name))
+			}
+		}
+		for _, name := range candidates {
 			err := record(name)
 			if errors.Is(err, fs.ErrNotExist) {
 				continue
