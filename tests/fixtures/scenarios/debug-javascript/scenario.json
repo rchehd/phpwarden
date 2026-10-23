@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "id": "debug-javascript",
+  "state": "committed",
+  "patch": "change.patch",
+  "changed_files": [
+    "web/modules/custom/demo/js/demo.js",
+    "web/modules/custom/demo/js/demo.min.js"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "debug",
+      "path": "web/modules/custom/demo/js/demo.js",
+      "line": 2,
+      "contains": "console.log('legacy')",
+      "modes": [
+        "full"
+      ]
+    },
+    {
+      "checker": "debug",
+      "path": "web/modules/custom/demo/js/demo.js",
+      "line": 5,
+      "contains": "debugger;",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    },
+    {
+      "checker": "debug",
+      "path": "web/modules/custom/demo/js/demo.js",
+      "line": 6,
+      "contains": "console.debug(label)",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

@@ -164,10 +164,7 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 		} else {
 			settings := cfg.Tools.Debug
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
-			selected := selection.Filter(settings.Include, settings.Exclude, func(filename string) bool {
-				return slices.Contains(defaults.PHPExtensions, strings.ToLower(filepath.Ext(filename)))
-			})
-			outcome = debug.Run(ctx, location.Root, selected, settings, process)
+			outcome = debug.Run(ctx, location.Root, debug.Select(selection, settings, cfg.Profile), settings, process)
 		}
 		result.Checks = append(result.Checks, outcome.Check)
 		result.Findings = append(result.Findings, outcome.Findings...)

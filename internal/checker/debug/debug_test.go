@@ -2,11 +2,14 @@ package debug
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/rchehd/phpwarden/internal/config"
+	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/runner"
 	"github.com/rchehd/phpwarden/internal/scope"
 )
@@ -120,5 +123,123 @@ func TestProjectSourceIsNeverExecuted(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "executed")); !os.IsNotExist(err) {
 		t.Fatal("project source was executed")
+	}
+}
+
+func drupalSettings() config.Debug {
+	defaults, _ := profile.Lookup("drupal")
+	return config.Debug{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 10,
+		Functions: defaults.DebugFunctions, JSFunctions: defaults.DebugJSFunctions, TwigFunctions: defaults.DebugTwigFunctions}
+}
+
+func findings(t *testing.T, filename, code string, process runner.Process) []string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, filename), []byte(code), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	selection := scope.Selection{Files: []string{filename}, LineMap: map[string][]scope.Range{filename: nil}}
+	result := Run(context.Background(), root, selection, drupalSettings(), process)
+	if result.Check.Status == "error" || result.Check.Status == "unavailable" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	rows := []string{}
+	for _, finding := range result.Findings {
+		rows = append(rows, fmt.Sprintf("%d %s %s", *finding.Line, finding.Rule, finding.Message))
+	}
+	return rows
+}
+
+func TestDevelFunctionsDieAndPrintRReturnMode(t *testing.T) {
+	for _, testcase := range []struct {
+		name  string
+		code  string
+		count int
+	}{
+		{"Devel", "dvm($a); ksm($a); kpr($a); dd($a); ddm($a); ddebug_backtrace(); xdebug_break();", 7},
+		{"die call", "die('stop');", 1},
+		{"bare die", "if ($a) { DIE; }", 1},
+		{"exit is legitimate", "exit(1);", 0},
+		{"die method", "$object->die(); $object?->die(); Demo::die(); class A { function die() {} const DIE = 1; }", 0},
+		{"print_r prints", "print_r($a);", 1},
+		{"print_r with false", "print_r($a, FALSE); print_r($a, \\false);", 2},
+		{"print_r returns", "$text = print_r($a, TRUE); $text = print_r($a, $return); $text = print_r(['x' => f($a, 1)], true);", 0},
+		{"nested comma", "print_r(f($a, true));", 1},
+	} {
+		t.Run(testcase.name, func(t *testing.T) {
+			if rows := findings(t, "example.php", "<?php\n"+testcase.code+"\n", runner.Exec{}); len(rows) != testcase.count {
+				t.Fatalf("expected %d findings, got %v", testcase.count, rows)
+			}
+		})
+	}
+}
+
+func TestJavaScriptDebugLeftovers(t *testing.T) {
+	for _, testcase := range []struct {
+		name string
+		code string
+		want []string
+	}{
+		{"calls", "console.log(a);\nconsole . debug(a);\nwindow.console.log(a);\nconsole.info(a);\n", []string{"1 debug.js_call Debug call console.log() is left in JavaScript", "2 debug.js_call Debug call console.debug() is left in JavaScript"}},
+		{"debugger", "function f() {\n  debugger;\n  debugger\n}\nconst o = {debugger: 1, x: o.debugger};\n", []string{"2 debug.debugger debugger statement is left in JavaScript", "3 debug.debugger debugger statement is left in JavaScript"}},
+		{"comments and strings", "// console.log(a);\n/* debugger;\nconsole.log(a); */\nconst s = 'console.log(a)' + \"debugger;\";\n", []string{}},
+		{"template", "const s = `console.log(a) ${console.log(b)} debugger`;\nconsole.trace();\n", []string{"1 debug.js_call Debug call console.log() is left in JavaScript", "2 debug.js_call Debug call console.trace() is left in JavaScript"}},
+		{"nested template braces", "const s = `${ {a: `x${y}`}.a } console.log(a)`; console.dir(s);\n", []string{"1 debug.js_call Debug call console.dir() is left in JavaScript"}},
+		{"regex and division", "const r = /console.log\\(x\\)/g; const d = a / b; console.log(d / 2);\n", []string{"1 debug.js_call Debug call console.log() is left in JavaScript"}},
+	} {
+		t.Run(testcase.name, func(t *testing.T) {
+			if rows := findings(t, "example.js", testcase.code, unexpectedProcess(t)); !slices.Equal(rows, testcase.want) {
+				t.Fatalf("got %q, want %q", rows, testcase.want)
+			}
+		})
+	}
+}
+
+func TestTwigDebugLeftovers(t *testing.T) {
+	for _, testcase := range []struct {
+		name string
+		code string
+		want []string
+	}{
+		{"print and tags", "<p>{{ dump(item) }}</p>\n{% set x = kint(item) %}\n{{- dump() -}}\n", []string{"1 debug.twig_call Debug function dump() is called in a Twig template", "2 debug.twig_call Debug function kint() is called in a Twig template", "3 debug.twig_call Debug function dump() is called in a Twig template"}},
+		{"text comments strings verbatim", "dump(x) outside\n{# {{ dump(x) }} #}\n{{ 'dump(x)' ~ item.dump(x) }}\n{% verbatim %}{{ dump(x) }}{% endverbatim %}\n", []string{}},
+		{"multiline", "{{\n  kint(\n item) }}\n", []string{"2 debug.twig_call Debug function kint() is called in a Twig template"}},
+	} {
+		t.Run(testcase.name, func(t *testing.T) {
+			if rows := findings(t, "card.html.twig", testcase.code, unexpectedProcess(t)); !slices.Equal(rows, testcase.want) {
+				t.Fatalf("got %q, want %q", rows, testcase.want)
+			}
+		})
+	}
+}
+
+func unexpectedProcess(t *testing.T) fakeProcess {
+	return func(context.Context, runner.Command) runner.Result {
+		t.Fatal("PHP must not run for JavaScript or Twig files")
+		return runner.Result{}
+	}
+}
+
+func TestSelectsJavaScriptAndTwigButNotMinified(t *testing.T) {
+	files := []string{"a.module", "b.js", "c.min.js", "d.html.twig", "e.css", "F.JS"}
+	selection := scope.Selection{Files: files, LineMap: map[string][]scope.Range{}}
+	for _, name := range files {
+		selection.LineMap[name] = nil
+	}
+	selected := Select(selection, drupalSettings(), "drupal")
+	if !slices.Equal(selected.Files, []string{"a.module", "b.js", "d.html.twig", "F.JS"}) {
+		t.Fatalf("wrong selection: %v", selected.Files)
+	}
+}
+
+func TestSourceFindingsFollowChangedLines(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.js"), []byte("console.log(1);\nconsole.log(2);\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	selection := scope.Selection{Files: []string{"a.js"}, LineMap: map[string][]scope.Range{"a.js": {{Start: 2, End: 2}}}}
+	result := Run(context.Background(), root, selection, drupalSettings(), unexpectedProcess(t))
+	if result.Check.Status != "failed" || len(result.Findings) != 1 || *result.Findings[0].Line != 2 || result.Runtime != nil {
+		t.Fatalf("changed-line filter ignored: %+v", result)
 	}
 }

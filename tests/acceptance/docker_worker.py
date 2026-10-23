@@ -152,7 +152,8 @@ class DockerWorkerTest(unittest.TestCase):
                         self.assertEqual(result["verdict"], verdict)
                         self.assertEqual(result["exit_code"], 1 if verdict == "fail" else 0)
                         self.assertTrue(result["complete"])
-                        self.assertEqual(result["environment"]["php_runtime"], self.runtime)
+                        # JavaScript- and Twig-only scenarios run no PHP checker.
+                        self.assertIn(result["environment"]["php_runtime"], (self.runtime, None))
                         actual = sorted(
                             (row["checker"], row["path"], row["line"]) for row in result["findings"]
                         )

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "id": "debug-twig",
+  "state": "staged",
+  "patch": "change.patch",
+  "changed_files": [
+    "web/modules/custom/demo/templates/card.html.twig"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "debug",
+      "path": "web/modules/custom/demo/templates/card.html.twig",
+      "line": 3,
+      "contains": "{{ dump(content) }}",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

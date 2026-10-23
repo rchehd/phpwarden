@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "id": "debug-devel-php",
+  "state": "unstaged",
+  "patch": "change.patch",
+  "changed_files": [
+    "web/modules/custom/demo/demo.module"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "debug",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 4,
+      "contains": "dvm($value)",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    },
+    {
+      "checker": "debug",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 6,
+      "contains": "print_r($value);",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    },
+    {
+      "checker": "debug",
+      "path": "web/modules/custom/demo/demo.module",
+      "line": 7,
+      "contains": "die('stop')",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+diff --git a/web/modules/custom/demo/demo.module b/web/modules/custom/demo/demo.module
+index 86e5570..3662bdf 100644
+--- a/web/modules/custom/demo/demo.module
++++ b/web/modules/custom/demo/demo.module
+@@ -1,3 +1,7 @@
+ <?php
+ 
+ $value = 1;
++dvm($value);
++$text = print_r($value, TRUE);
++print_r($value);
++die('stop');

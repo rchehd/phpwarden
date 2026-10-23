@@ -98,7 +98,7 @@ All checkers are enabled by default. `composer-audit` is the only one that uses 
 |---|---|
 | `composer-validate` | `composer.json` and `composer.lock` validity, like `composer validate` |
 | `composer-audit` | Known vulnerabilities and abandoned packages in `composer.lock`, like `composer audit` |
-| `debug` | Debug calls: `var_dump`, `print_r`, `dpm`, `dsm`, `kint` |
+| `debug` | Debug leftovers: PHP calls such as `var_dump`, `print_r` (not with `$return`), Devel's `dpm`/`kint`/`dd`, and `die`; `console.log` and `debugger` in JavaScript (not `*.min.js`); `dump()` and `kint()` in Twig |
 | `syntax` | PHP syntax (`php -l`) in `.php`, `.module`, `.inc`, `.install`, `.theme`, `.profile`, `.engine`, `.test` |
 | `yaml` | YAML syntax |
 | `whitespace` | Trailing whitespace and unresolved merge conflict markers |

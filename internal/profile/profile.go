@@ -30,6 +30,9 @@ type PHPRequirement struct {
 
 type Defaults struct {
 	DebugFunctions            []string
+	DebugJSFunctions          []string
+	DebugTwigFunctions        []string
+	JSExtensions              []string
 	PHPExtensions             []string
 	ModuleConfigDirectories   []string
 	ModuleConfigForbiddenKeys []string
@@ -45,7 +48,10 @@ func Lookup(id string) (Defaults, bool) {
 		return Defaults{}, false
 	}
 	return Defaults{
-		DebugFunctions:            []string{"var_dump", "print_r", "dpm", "dsm", "kint"},
+		DebugFunctions:            []string{"var_dump", "print_r", "dpm", "dvm", "dsm", "ksm", "kint", "kpr", "dd", "ddm", "ddebug_backtrace", "xdebug_break", "die"},
+		DebugJSFunctions:          []string{"console.log", "console.debug", "console.trace", "console.dir"},
+		DebugTwigFunctions:        []string{"dump", "kint"},
+		JSExtensions:              []string{".js"},
 		PHPExtensions:             []string{".php", ".module", ".inc", ".install", ".theme", ".profile", ".engine", ".test"},
 		ModuleConfigDirectories:   []string{"config/install", "config/optional", "config/schema"},
 		ModuleConfigForbiddenKeys: []string{"uuid", "_core"},

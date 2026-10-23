@@ -206,6 +206,8 @@ type Debug struct {
 	Include        []string `json:"include,omitempty"`
 	Exclude        []string `json:"exclude"`
 	Functions      []string `json:"functions"`
+	JSFunctions    []string `json:"js_functions"`
+	TwigFunctions  []string `json:"twig_functions"`
 }
 
 type Effective struct {
@@ -277,7 +279,7 @@ func Parse(data []byte) (Effective, error) {
 				Syntax: Syntax{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120,
 					Exclude: []string{}, ExtraExtensions: []string{}}, Debug: Debug{
 					Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120,
-					Exclude: []string{}, Functions: defaults.DebugFunctions,
+					Exclude: []string{}, Functions: defaults.DebugFunctions, JSFunctions: defaults.DebugJSFunctions, TwigFunctions: defaults.DebugTwigFunctions,
 				}},
 		},
 		Provenance: map[string]string{
@@ -286,8 +288,8 @@ func Parse(data []byte) (Effective, error) {
 			"runner.timeout_seconds": "core_default", "tools.debug.enabled": "profile_default",
 			"tools.debug.required": "core_default", "tools.debug.fail_on": "core_default",
 			"tools.debug.timeout_seconds": "core_default", "tools.debug.exclude": "core_default",
-			"tools.debug.functions": "profile_default",
-			"tools.syntax.enabled":  "profile_default", "tools.syntax.required": "core_default",
+			"tools.debug.functions": "profile_default", "tools.debug.js_functions": "profile_default", "tools.debug.twig_functions": "profile_default",
+			"tools.syntax.enabled": "profile_default", "tools.syntax.required": "core_default",
 			"tools.syntax.fail_on": "core_default", "tools.syntax.timeout_seconds": "core_default",
 			"tools.syntax.exclude": "core_default", "tools.syntax.extra_extensions": "core_default",
 			"tools.yaml.enabled": "profile_default", "tools.yaml.required": "core_default",

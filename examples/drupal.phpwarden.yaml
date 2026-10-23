@@ -71,3 +71,6 @@ tools:
     enabled: true
     required: true
     fail_on: error
+    # Lists replace the profile defaults.
+    js_functions: [console.log, console.debug, console.trace, console.dir]
+    twig_functions: [dump, kint]
