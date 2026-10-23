@@ -12,6 +12,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/checker/debug"
 	"github.com/rchehd/phpwarden/internal/checker/syntax"
+	yamlcheck "github.com/rchehd/phpwarden/internal/checker/yaml"
 	"github.com/rchehd/phpwarden/internal/compatibility"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
@@ -93,7 +94,15 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, s
 	}
 	for _, id := range checker.Requested(only) {
 		var outcome checker.Outcome
-		if id == "syntax" {
+		if id == "yaml" {
+			settings := cfg.Tools.YAML
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			selected := selection.Filter(settings.Include, settings.Exclude, func(filename string) bool {
+				extension := strings.ToLower(filepath.Ext(filename))
+				return extension == ".yml" || extension == ".yaml"
+			})
+			outcome = yamlcheck.Run(ctx, location.Root, selected, settings, process)
+		} else if id == "syntax" {
 			settings := cfg.Tools.Syntax
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
 			extensions := append(slices.Clone(defaults.PHPExtensions), settings.ExtraExtensions...)

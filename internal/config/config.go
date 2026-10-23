@@ -53,6 +53,16 @@ type Runner struct {
 type Tools struct {
 	Debug  Debug  `json:"debug"`
 	Syntax Syntax `json:"syntax"`
+	YAML   YAML   `json:"yaml"`
+}
+
+type YAML struct {
+	Enabled        bool     `json:"enabled"`
+	Required       bool     `json:"required"`
+	FailOn         string   `json:"fail_on"`
+	TimeoutSeconds int      `json:"timeout_seconds"`
+	Include        []string `json:"include,omitempty"`
+	Exclude        []string `json:"exclude"`
 }
 
 type Syntax struct {
@@ -126,11 +136,12 @@ func Parse(data []byte) (Effective, error) {
 			Framework: Framework{Version: "auto"},
 			Scope:     Scope{Mode: "diff", Exclude: []string{}},
 			Runner:    Runner{TimeoutSeconds: 300},
-			Tools: Tools{Syntax: Syntax{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120,
-				Exclude: []string{}, ExtraExtensions: []string{}}, Debug: Debug{
-				Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120,
-				Exclude: []string{}, Functions: defaults.DebugFunctions,
-			}},
+			Tools: Tools{YAML: YAML{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}},
+				Syntax: Syntax{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120,
+					Exclude: []string{}, ExtraExtensions: []string{}}, Debug: Debug{
+					Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120,
+					Exclude: []string{}, Functions: defaults.DebugFunctions,
+				}},
 		},
 		Provenance: map[string]string{
 			"framework.version": "core_default", "scope.mode": "core_default",
@@ -142,6 +153,9 @@ func Parse(data []byte) (Effective, error) {
 			"tools.syntax.enabled":  "profile_default", "tools.syntax.required": "core_default",
 			"tools.syntax.fail_on": "core_default", "tools.syntax.timeout_seconds": "core_default",
 			"tools.syntax.exclude": "core_default", "tools.syntax.extra_extensions": "core_default",
+			"tools.yaml.enabled": "profile_default", "tools.yaml.required": "core_default",
+			"tools.yaml.fail_on": "core_default", "tools.yaml.timeout_seconds": "core_default",
+			"tools.yaml.exclude": "core_default",
 		},
 		Pending: []string{},
 	}
@@ -241,14 +255,14 @@ func markProvenance(values map[string]any, prefix string, sources map[string]str
 }
 
 func validateValues(cfg Config) error {
-	for _, values := range [][]string{cfg.Scope.Include, cfg.Tools.Debug.Include, cfg.Tools.Syntax.Include} {
+	for _, values := range [][]string{cfg.Scope.Include, cfg.Tools.Debug.Include, cfg.Tools.Syntax.Include, cfg.Tools.YAML.Include} {
 		for _, value := range values {
 			if err := projectpath.Validate(value); err != nil {
 				return err
 			}
 		}
 	}
-	for _, values := range [][]string{cfg.Scope.Exclude, cfg.Tools.Debug.Exclude, cfg.Tools.Syntax.Exclude} {
+	for _, values := range [][]string{cfg.Scope.Exclude, cfg.Tools.Debug.Exclude, cfg.Tools.Syntax.Exclude, cfg.Tools.YAML.Exclude} {
 		if err := validatePatterns(values); err != nil {
 			return err
 		}

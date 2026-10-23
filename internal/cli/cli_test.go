@@ -142,3 +142,14 @@ func TestWorkerExecuteRejectsInvalidStdinRequests(t *testing.T) {
 		}
 	}
 }
+
+func TestGlobalYAMLFailureIsVisibleInText(t *testing.T) {
+	result := report.New()
+	result.Checks = []report.Check{{ID: "yaml", Status: "failed", Required: true, FailOn: "error"}}
+	result.Findings = []report.Finding{{Checker: "yaml", Rule: "yaml.syntax", Kind: "global", Severity: "error", Message: `YAML file "config.yml": invalid UTF-8`}}
+	result.Finalize()
+	var stdout, stderr bytes.Buffer
+	if code := writeReport(&stdout, &stderr, "text", result); code != 1 || !strings.Contains(stdout.String(), result.Findings[0].Message) || stderr.Len() != 0 {
+		t.Fatalf("global finding is not visible: exit=%d %s %s", code, &stdout, &stderr)
+	}
+}

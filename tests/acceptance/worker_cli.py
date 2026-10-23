@@ -7,6 +7,8 @@ from pathlib import Path
 
 from tests.support.scenarios import materialize
 from tests.support.syntax import check_syntax_fixtures, check_syntax_settings
+from tests.support.yaml import FIXTURES as YAML_FIXTURES
+from tests.support.yaml import check_yaml_fixtures, check_yaml_settings
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures" / "scenarios"
@@ -17,7 +19,11 @@ class WorkerCLITest(unittest.TestCase):
     def setUpClass(cls):
         cls.temporary = tempfile.TemporaryDirectory(prefix="phpwarden-cli-")
         cls.addClassCleanup(cls.temporary.cleanup)
-        cls.binary = Path(cls.temporary.name) / "phpwarden"
+        cls.binary = Path(cls.temporary.name) / "bin" / "phpwarden"
+        cls.binary.parent.mkdir()
+        tools = Path(cls.temporary.name) / "lib" / "phpwarden" / "yaml"
+        tools.parent.mkdir(parents=True)
+        tools.symlink_to(ROOT / "tools" / "yaml", target_is_directory=True)
         subprocess.run(
             ["go", "build", "-o", str(cls.binary), "./cmd/phpwarden"],
             cwd=ROOT,
@@ -97,6 +103,43 @@ class WorkerCLITest(unittest.TestCase):
 
     def test_syntax_settings_and_explicit_selection(self):
         check_syntax_settings(self, self.configure, self.run_worker)
+
+    def test_yaml_fixtures(self):
+        check_yaml_fixtures(self, self.configure, self.run_worker)
+
+    def test_yaml_settings(self):
+        check_yaml_settings(self, self.configure, self.run_worker)
+
+    def test_missing_yaml_bundle_never_loads_project_autoload(self):
+        with materialize(YAML_FIXTURES / "yaml-duplicate-key") as scenario:
+            self.configure(scenario)
+            with tempfile.TemporaryDirectory(prefix="phpwarden-no-tools-") as temporary:
+                binary = Path(temporary) / "bin" / "phpwarden"
+                binary.parent.mkdir()
+                shutil.copy2(self.binary, binary)
+                vendor = scenario.root / "vendor"
+                vendor.mkdir()
+                (vendor / "autoload.php").write_text(
+                    "<?php file_put_contents(__DIR__ . '/../executed', 'bad');\n"
+                )
+                for required in (True, False):
+                    filename = scenario.root / ".phpwarden.yaml"
+                    config = json.loads(filename.read_text())
+                    config["tools"]["yaml"] = {"required": required}
+                    filename.write_text(json.dumps(config))
+                    completed = subprocess.run(
+                        [str(binary), "worker", "check", "--only", "yaml", "--format", "json"],
+                        cwd=scenario.root,
+                        env=scenario.env,
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
+                    )
+                    result = json.loads(completed.stdout)
+                    self.assertEqual(completed.returncode, 3 if required else 0, result)
+                    self.assertFalse(result["complete"])
+                    self.assertEqual(result["checks"][0]["reason"], "dependencies_missing")
+                self.assertFalse((scenario.root / "executed").exists())
 
     def test_process_failures_and_optional_policy(self):
         for name, script, settings, code, status in (

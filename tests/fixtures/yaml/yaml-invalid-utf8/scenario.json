@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "id": "yaml-invalid-utf8",
+  "state": "untracked",
+  "changed_files": [
+    "web/modules/custom/demo/encoding.yaml"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "yaml",
+      "path": "web/modules/custom/demo/encoding.yaml",
+      "line": null,
+      "contains": "",
+      "modes": [
+        "diff",
+        "full"
+      ],
+      "global": true
+    }
+  ]
+}

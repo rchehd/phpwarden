@@ -11,6 +11,10 @@ scope:
   mode: diff
   base: origin/main
 tools:
+  yaml:
+    enabled: true
+    required: true
+    fail_on: error
   syntax:
     enabled: true
     required: true

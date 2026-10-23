@@ -1,0 +1,7 @@
+defaults: &base
+  enabled: true
+service:
+  <<: *base
+  args: !tagged_iterator service.tag
+  constant: !php/const Unknown::VALUE
+object: !php/object 'O:8:"stdClass":0:{}'

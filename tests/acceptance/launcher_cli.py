@@ -9,6 +9,8 @@ from pathlib import Path
 from tests.acceptance.docker_worker import snapshot
 from tests.support.scenarios import materialize
 from tests.support.syntax import check_syntax_fixtures, check_syntax_settings
+from tests.support.yaml import FIXTURES as YAML_FIXTURES
+from tests.support.yaml import check_yaml_fixtures, check_yaml_settings
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures" / "scenarios"
@@ -91,6 +93,43 @@ class LauncherCLITest(unittest.TestCase):
             ),
         )
 
+    def test_yaml_fixtures(self):
+        def run(scenario, arguments):
+            before = snapshot(scenario.root)
+            result = self.run_cli(scenario.root, ["check", *arguments], scenario.env)
+            self.assertEqual(snapshot(scenario.root), before)
+            return result
+
+        check_yaml_fixtures(
+            self, lambda scenario: self.configure(scenario.root, scenario.base), run
+        )
+
+    def test_yaml_settings(self):
+        check_yaml_settings(
+            self,
+            lambda scenario: self.configure(scenario.root, scenario.base),
+            lambda scenario, arguments: self.run_cli(
+                scenario.root, ["check", *arguments], scenario.env
+            ),
+        )
+
+    def test_yaml_global_error_is_visible_in_text(self):
+        with materialize(YAML_FIXTURES / "yaml-invalid-utf8") as scenario:
+            self.configure(scenario.root, scenario.base)
+            completed = subprocess.run(
+                [str(self.binary), "check", "--only", "yaml"],
+                cwd=scenario.root,
+                env=scenario.env,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            self.assertEqual(completed.returncode, 1, completed.stdout)
+            self.assertEqual(completed.stderr, "")
+            self.assertIn("YAML file", completed.stdout)
+            self.assertIn("encoding.yaml", completed.stdout)
+            self.assertIn("UTF-8", completed.stdout)
+
     def test_public_check_matches_all_fixture_modes_without_host_php_or_go(self):
         for directory in sorted(FIXTURES.iterdir()):
             for mode in ("diff", "full", "whole-files", "paths"):
@@ -111,7 +150,7 @@ class LauncherCLITest(unittest.TestCase):
                         self.assertEqual(result["exit_code"], 1 if verdict == "fail" else 0)
                         self.assertTrue(result["complete"])
                         self.assertTrue(result["environment"]["image"].startswith("sha256:"))
-                        self.assertEqual(result["environment"]["toolset"], "static-dev-v1-php8.4")
+                        self.assertEqual(result["environment"]["toolset"], "static-dev-v2-php8.4")
                         expected = sorted(
                             (row["checker"], row["path"], row["line"])
                             for row in scenario.spec["findings"]

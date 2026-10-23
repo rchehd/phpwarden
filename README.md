@@ -14,7 +14,7 @@ PHPWarden is being designed as a standalone CLI with Docker-based tools and adap
 
 ## Development status
 
-The project is in early development. The Go CLI validates configuration, discovers Drupal layout and locked versions, inspects Git scope, selects a development toolset, and runs PHP debug and syntax checkers through Docker. A local development image contains PHP 8.4 and Git. Published images, automatic pulls, and agent integrations are not available yet.
+The project is in early development. The Go CLI validates configuration, discovers Drupal layout and locked versions, inspects Git scope, selects a development toolset, and runs PHP debug, PHP syntax, and YAML syntax checkers through Docker. A local development image contains PHP 8.4, Git, and isolated Symfony YAML dependencies. Published images, automatic pulls, and agent integrations are not available yet.
 
 ## Build and try the CLI
 
@@ -28,7 +28,7 @@ bin/phpwarden config show --config examples/drupal.phpwarden.yaml --format json
 
 For a project, save its configuration as `.phpwarden.yaml` in the project root. The CLI finds the nearest configuration from the current directory up to the Git worktree root, or accepts an explicit `--project` or `--config` path. Explicit paths also allow configuration validation outside Git. Relative command-line paths are resolved from the caller's directory.
 
-Validation checks YAML structure, the [v1 schema](schemas/config-v1.schema.json), PHP target ranges, and path boundaries. It rejects unknown fields and checker IDs, duplicate keys, aliases, and numeric PHP versions. The implemented checkers are `debug` and `syntax`, both enabled by default.
+Validation checks YAML structure, the [v1 schema](schemas/config-v1.schema.json), PHP target ranges, and path boundaries. It rejects unknown fields and checker IDs, duplicate keys, aliases, and numeric PHP versions. The implemented checkers are `debug`, `syntax`, and `yaml`, all enabled by default.
 
 `config show` includes discovered project facts, core and Drupal defaults, explicit project overrides, and their provenance. Its `pending` list identifies unresolved values. `config validate` checks configuration syntax/schema and path boundaries without inspecting Composer metadata. Discovery validates Composer PHP requirements and compares installed Drupal version metadata when available. Full dependency integrity and release image compatibility remain future work. The development launcher currently requires PHP runtime and target `"8.4"`.
 
@@ -107,6 +107,21 @@ Settings live under `tools.syntax`: `enabled`, `required`, `fail_on`, `timeout_s
 
 Lint uses the image's PHP runtime, currently 8.4.26. It does not prove compatibility with every configured PHP target, resolve missing functions/classes, or check interactions between separately compiled files. Deprecation and warning checks belong to other adapters. No site, database, Composer installation, or project `vendor` directory is needed.
 
+## Check YAML syntax
+
+`yaml` parses every selected `.yml` or `.yaml` file with Symfony YAML 7.4.21, including uppercase extensions. Errors anywhere in the selected file are reported, including unchanged lines and deletion-only changes. An error without a parser position, such as invalid UTF-8, becomes a file-context global finding instead of an invented line number.
+
+```sh
+phpwarden check --only yaml
+phpwarden check --only debug,syntax,yaml --mode full
+```
+
+Use `tools.yaml.enabled`, `required`, `fail_on`, `timeout_seconds`, `include`, and `exclude`. The checker timeout covers the entire helper run. `--only yaml` enables it explicitly; `fail_on: never` retains findings without blocking. Missing bundled dependencies, missing PHP, crashes, malformed reports, and timeouts are execution failures. Optional failures remain incomplete.
+
+The parser uses a fixed preset: custom tags are accepted as data, collection alias resolutions and nesting depth are each limited to 128, and PHP object deserialization and constant/enum resolution are disabled. Project autoload, scripts, application code, and databases are never loaded. PHP-specific tags are not evaluated or validated against project symbols. Symfony's supported YAML subset excludes multi-document files; a syntax pass does not validate Drupal services, routes, or configuration schemas.
+
+Dependencies are isolated in [tools/yaml/composer.json](tools/yaml/composer.json) and its lock file. The image installs them during a separate build stage with scripts/plugins disabled; Composer itself is not shipped in the runtime image. Native `worker check` expects its tool bundle at `../lib/phpwarden/yaml/vendor/autoload.php` relative to the worker binary. The Docker image provides that layout; a standalone host launcher needs no local PHP, Composer, Symfony, or project `vendor`.
+
 Reports follow the [v1 report schema](schemas/report-v1.schema.json), which is embedded and validated before output. Exit codes are `0` for no blocking findings, `1` for blocking findings, `2` for input errors, and `3` for required checker/process failures or changed inputs. Optional failures return `complete: false` and a visible `PARTIAL` text result. The worker checks file/configuration checksums and recomputes scope after analysis. Each helper run owns and removes its temporary directory.
 
 Reports include `environment.framework_version` when an exact version is available. Direct `worker check` reports have no resolved image/toolset metadata. Public `check` reports identify the inspected immutable local image ID and development toolset. Release compatibility validation remains pending.
@@ -129,11 +144,13 @@ The manifest schema is [manifest-v1.schema.json](schemas/manifest-v1.schema.json
 
 Only the tested development image is bundled today. Release-selection tests use synthetic fixtures, which do not advertise actual Drupal/tool compatibility or published images. Registry pulls, real release entries, package locks, and release matrix tests remain pending. Project configuration cannot override the bundled manifest or select an arbitrary image.
 
-`check` computes Git scope on the host, verifies the local image's platform/protocol/toolset/PHP labels, and starts it by its inspected image ID. It sends a versioned request with effective settings, selected files/lines, input checksums, and the expected PHP version over stdin. The worker verifies inputs and its actual PHP version; the launcher also rechecks host checksums and Git scope. Linked worktrees and monorepos work without mounting external Git metadata into the worker.
+`check` computes Git scope on the host, verifies the local image's platform/protocol/toolset/PHP/Symfony YAML labels, and starts it by its inspected image ID. It sends a versioned request with effective settings, selected files/lines, input checksums, and the expected PHP version over stdin. The worker verifies inputs and its actual PHP version; the YAML helper also verifies its Symfony version. The launcher rechecks host checksums and Git scope. Linked worktrees and monorepos work without mounting external Git metadata into the worker.
 
 The launcher requires host Git and a local Docker Unix socket, with no host PHP, Composer, or Go requirement for the built binary. It mounts the project read-only, uses your UID/GID, disables container networking, and gives each run its own temporary filesystem and container name. Interruptions return `130`; global timeouts and runner failures return `3`, with best-effort removal of the run's container. An empty scope or disabling all requested checkers needs no Docker process after configuration/toolset validation.
 
 The development image must already exist under `phpwarden:static-php8.4-dev`; a missing image returns an error with build instructions. There is no registry fallback or pull for this unpublished tag. Remote Docker contexts and other platforms are currently rejected. The worker protocol is now v2, carrying a checker selection list instead of the previous debug-only flag. Rebuild the CLI and image together; old debug images cannot satisfy the new toolset/protocol/capability checks. The report format remains v1, with `environment.protocol: 2`.
+
+The current toolset is `static-dev-v2-php8.4`, with `debug,syntax,yaml` capabilities. Rebuild the existing development tag after adding YAML; an earlier debug/syntax-only image is rejected.
 
 ## Run the development Docker image
 
@@ -156,7 +173,7 @@ docker run --rm --pull=never --network=none --read-only \
 
 Set PHP runtime/target to `"8.4"` and configure an available diff base. Source roots can be discovered or supplied through `scope.include`. Append `--mode full` for a full scan or `--base origin/main` to override the diff base. The command returns the worker's exit code and JSON report.
 
-This image contains the debug and syntax checkers, PHP 8.4.26, and Git. It requires no host PHP, Composer, or Go, and no project `vendor` directory. The image defaults to UID/GID 10001; the command above uses your UID/GID to read private project directories. Check mode mounts the project read-only and uses a private temporary filesystem. Git trusts only the known `/workspace` mount through the image's system configuration.
+This image contains the debug, syntax, and YAML checkers, PHP 8.4.26, Git, and the locked Symfony YAML tool bundle. It requires no host PHP, Composer, or Go, and no project `vendor` directory. The image defaults to UID/GID 10001; the command above uses your UID/GID to read private project directories. Check mode mounts the project read-only and uses a private temporary filesystem. Git trusts only the known `/workspace` mount through the image's system configuration.
 
 Use a local Docker daemon with access to the source directory. Mount the entire Git repository for monorepos and pass `--project /workspace/path/to/project`. Linked worktrees or separate Git directories whose metadata lives outside the mount need additional path mapping; the launcher will handle those separately. Container paths in findings remain relative to the configured project.
 
@@ -164,10 +181,11 @@ The tag is local and unpublished. Base images are pinned by digest, while Alpine
 
 ## Repository checks
 
-Requires Go 1.26.5, PHP 8.4 with tokenizer, Python 3.12, and Git. From the repository root:
+Native repository tests require Go 1.26.5, PHP 8.4 with tokenizer, Composer 2.10.3, Python 3.12, and Git. Composer installs only the repository's isolated test tool dependencies. From the repository root:
 
 ```sh
 python3 -m venv .venv
+composer install --working-dir tools/yaml --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction
 .venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python -m ruff check tests
 .venv/bin/python -m ruff format --check tests
@@ -175,6 +193,7 @@ python3 -m venv .venv
 go vet ./...
 go test -race ./...
 php -l internal/checker/debug/helper.php
+php -l internal/checker/yaml/helper.php
 .venv/bin/python -m unittest tests.acceptance.worker_cli -v
 ```
 
@@ -193,6 +212,8 @@ python3 -m unittest tests.acceptance.launcher_cli -v
 The launcher suite extracts the actual CLI binary from the built image and runs public `check` across the same 24 fixture combinations with no PHP or Go on the client PATH. It also checks linked worktrees, monorepos, offline resolve, and settings overrides. Go tests inject missing Docker/images, invalid reports, changed inputs, cancellation, and timeout failures.
 
 Five syntax fixtures add 20 combinations per worker, Docker, and launcher suite: added parser errors, old errors outside diff hunks, deletion-only errors at EOF, compile errors, and untracked paths with spaces. Shared acceptance checks cover explicit checker selection, disabled defaults, nonblocking findings, extra extensions, exclusions, and source that must never execute. Optional execution failures keep `complete: false`; already observed blocking findings still return exit 1 unless a required execution failure takes precedence with exit 3.
+
+Six YAML fixtures add another 24 combinations per suite: duplicate keys, old errors outside hunks, deletion-only errors, uppercase untracked paths with spaces, valid aliases/custom tags, and invalid UTF-8 without a line number. Settings tests cover include/exclude, disabled/explicit selection, empty files, nonblocking findings, and project autoload isolation. Native worker tests also remove the adjacent tool bundle to verify required and optional failure policies. The native acceptance harness creates a temporary binary-and-library layout; Docker tests use the actual bundled installation with no network at check time.
 
 Drupal discovery acceptance covers root/web/docroot/custom web roots, multisite custom directories, automatic source roots, explicit broad roots with profile exclusions, locked version reporting, malformed metadata, and version conflicts. These are small synthetic Git projects; they do not establish compatibility with a full installed Drupal application.
 

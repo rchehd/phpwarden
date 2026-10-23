@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "id": "yaml-untracked-error",
+  "state": "untracked",
+  "changed_files": [
+    "web/modules/custom/demo/broken file.YAML"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "yaml",
+      "path": "web/modules/custom/demo/broken file.YAML",
+      "line": 2,
+      "contains": "name: second",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

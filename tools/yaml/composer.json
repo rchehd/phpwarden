@@ -1,0 +1,14 @@
+{
+  "name": "phpwarden/yaml-tools",
+  "description": "Isolated dependencies for the PHPWarden YAML checker",
+  "type": "project",
+  "require": {
+    "php": ">=8.4 <8.5",
+    "symfony/yaml": "7.4.21"
+  },
+  "config": {
+    "allow-plugins": false,
+    "platform": {"php": "8.4.26"},
+    "sort-packages": true
+  }
+}

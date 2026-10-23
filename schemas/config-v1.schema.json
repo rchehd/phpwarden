@@ -54,6 +54,18 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "yaml": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean", "default": true},
+            "required": {"type": "boolean", "default": true},
+            "fail_on": {"type": "string", "enum": ["error", "warning", "never"], "default": "error"},
+            "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 2147483647, "default": 120},
+            "include": {"$ref": "#/$defs/include"},
+            "exclude": {"$ref": "#/$defs/exclude"}
+          }
+        },
         "syntax": {
           "type": "object",
           "additionalProperties": false,

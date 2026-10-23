@@ -1,0 +1,6 @@
+--- a/web/modules/custom/demo/demo.services.yml
++++ b/web/modules/custom/demo/demo.services.yml
+@@ -1,2 +1,2 @@
+ name: first
+-other: value
++name: second

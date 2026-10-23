@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "id": "yaml-old-error",
+  "state": "committed",
+  "patch": "change.patch",
+  "changed_files": [
+    "web/modules/custom/demo/demo.services.yml"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "yaml",
+      "path": "web/modules/custom/demo/demo.services.yml",
+      "line": 2,
+      "contains": "name: second",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

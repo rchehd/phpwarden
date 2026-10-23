@@ -39,6 +39,11 @@ func TestDefaultsAndProvenance(t *testing.T) {
 		result.Provenance["tools.syntax.enabled"] != "profile_default" {
 		t.Fatalf("unexpected syntax defaults: %+v", syntax)
 	}
+	yaml := result.Config.Tools.YAML
+	if !yaml.Enabled || !yaml.Required || yaml.FailOn != "error" || yaml.TimeoutSeconds != 120 || yaml.Exclude == nil ||
+		result.Provenance["tools.yaml.enabled"] != "profile_default" {
+		t.Fatalf("unexpected YAML defaults: %+v", yaml)
+	}
 	if result.Provenance["php.runtime"] != "project_config" ||
 		result.Provenance["tools.debug.functions"] != "profile_default" ||
 		result.Provenance["scope.mode"] != "core_default" {
@@ -148,6 +153,11 @@ func TestInvalidConfigurations(t *testing.T) {
 		"syntax upper ext":      minimal + "tools: {syntax: {extra_extensions: [.PHTML]}}\n",
 		"syntax bad include":    minimal + "tools: {syntax: {include: [../outside]}}\n",
 		"syntax bad exclude":    minimal + "tools: {syntax: {exclude: ['[']}}\n",
+		"yaml parser flags":     minimal + "tools: {yaml: {flags: 1}}\n",
+		"yaml zero timeout":     minimal + "tools: {yaml: {timeout_seconds: 0}}\n",
+		"yaml bad policy":       minimal + "tools: {yaml: {fail_on: errors}}\n",
+		"yaml bad include":      minimal + "tools: {yaml: {include: [../outside]}}\n",
+		"yaml bad exclude":      minimal + "tools: {yaml: {exclude: ['[']}}\n",
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {

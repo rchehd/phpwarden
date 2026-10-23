@@ -30,7 +30,9 @@ def check_syntax_fixtures(test, configure, run):
                 ]
                 test.assertEqual(actual, expected, result)
                 test.assertTrue(all(row["kind"] == "syntax" for row in result["findings"]))
-                test.assertEqual([row["id"] for row in result["checks"]], ["debug", "syntax"])
+                test.assertEqual(
+                    [row["id"] for row in result["checks"]], ["debug", "syntax", "yaml"]
+                )
                 if mode == "diff" and directory.name == "deletion-syntax-error":
                     test.assertEqual(
                         result["scope"]["line_map"][scenario.spec["changed_files"][0]], []
@@ -42,7 +44,11 @@ def check_syntax_settings(test, configure, run):
         configure(scenario)
         filename = scenario.root / ".phpwarden.yaml"
         config = json.loads(filename.read_text())
-        config["tools"] = {"debug": {"enabled": False}, "syntax": {"enabled": False}}
+        config["tools"] = {
+            "debug": {"enabled": False},
+            "syntax": {"enabled": False},
+            "yaml": {"enabled": False},
+        }
         filename.write_text(json.dumps(config))
         test.assertEqual(run(scenario, [])["exit_code"], 0)
         result = run(scenario, ["--only", "syntax"])

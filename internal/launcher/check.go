@@ -167,6 +167,9 @@ func inspect(ctx context.Context, selection toolset.Selection, process runner.Pr
 	if image.Config.Labels["io.phpwarden.php-version"] != selection.PHPVersion {
 		return "", fmt.Errorf("local image PHP version label does not match the selected toolset")
 	}
+	if version, ok := selection.Tools["symfony-yaml"]; ok && image.Config.Labels["io.phpwarden.symfony-yaml-version"] != version {
+		return "", fmt.Errorf("local image Symfony YAML version label does not match the selected toolset")
+	}
 	if !selection.Development && !slices.Contains(image.RepoDigests, selection.Image) {
 		return "", fmt.Errorf("local image repository digest does not match the selected manifest image")
 	}
@@ -211,6 +214,8 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 			required, failOn := request.Config.Tools.Debug.Required, request.Config.Tools.Debug.FailOn
 			if check.ID == "syntax" {
 				required, failOn = request.Config.Tools.Syntax.Required, request.Config.Tools.Syntax.FailOn
+			} else if check.ID == "yaml" {
+				required, failOn = request.Config.Tools.YAML.Required, request.Config.Tools.YAML.FailOn
 			}
 			if !slices.Contains(checker.Requested(request.Only), check.ID) || seen[check.ID] || check.Required != required || check.FailOn != failOn {
 				return result, fmt.Errorf("worker checker selection or policy does not match the request")
@@ -227,12 +232,28 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 		}
 	}
 	for _, finding := range result.Findings {
-		if finding.Path == nil || finding.Line == nil || !slices.Contains(checker.Requested(request.Only), finding.Checker) {
+		if !slices.Contains(checker.Requested(request.Only), finding.Checker) {
+			return result, fmt.Errorf("worker finding is outside the requested scope")
+		}
+		if finding.Checker == "yaml" && finding.Kind == "global" {
+			matched := false
+			for _, filename := range request.Selection.Files {
+				if strings.HasPrefix(finding.Message, fmt.Sprintf("YAML file %q: ", filename)) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return result, fmt.Errorf("global YAML finding does not match a selected file")
+			}
+			continue
+		}
+		if finding.Path == nil || finding.Line == nil {
 			return result, fmt.Errorf("worker finding is outside the requested scope")
 		}
 		if _, exists := request.Selection.LineMap[*finding.Path]; !exists ||
 			finding.Checker == "debug" && (finding.Kind != "code" || !request.Selection.Contains(*finding.Path, *finding.Line)) ||
-			finding.Checker == "syntax" && finding.Kind != "syntax" {
+			(finding.Checker == "syntax" || finding.Checker == "yaml") && finding.Kind != "syntax" {
 			return result, fmt.Errorf("worker finding is outside the requested scope")
 		}
 	}

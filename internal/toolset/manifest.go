@@ -162,7 +162,7 @@ func compileEntry(release string, item entry) (candidate, error) {
 	}
 	if item.Development && (release != "development" || item.Framework != nil || item.Toolset != DevelopmentID ||
 		item.PHP.Version != DevelopmentPHPVersion || item.PHP.Runtime != "8.4" || item.PHP.Targets.Min != "8.4" || item.PHP.Targets.Max != "8.4" ||
-		!slices.Equal(item.Capabilities, []string{"debug", "syntax"})) {
+		!slices.Equal(item.Capabilities, []string{"debug", "syntax", "yaml"})) {
 		return result, fmt.Errorf("only the bundled framework-independent static development toolset is supported")
 	}
 	platforms := make(map[string]bool)

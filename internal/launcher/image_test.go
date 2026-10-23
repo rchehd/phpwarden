@@ -12,11 +12,11 @@ import (
 
 func TestReleaseImageInspectionVerifiesDigestAndManifestLabels(t *testing.T) {
 	selected := toolset.Selection{ID: "fixture-toolset", Image: "ghcr.io/example/fixture@" + testImage,
-		Platform: "linux/amd64", Protocol: 2, Capabilities: []string{"debug", "phpstan"}, PHPVersion: "8.4.26"}
-	for _, which := range []string{"matching", "missing digest", "wrong digest", "wrong platform", "wrong protocol", "wrong toolset", "wrong capabilities", "wrong PHP", "missing image"} {
+		Platform: "linux/amd64", Protocol: 2, Capabilities: []string{"debug", "phpstan"}, PHPVersion: "8.4.26", Tools: map[string]string{"symfony-yaml": "7.4.21"}}
+	for _, which := range []string{"matching", "missing digest", "wrong digest", "wrong platform", "wrong protocol", "wrong toolset", "wrong capabilities", "wrong PHP", "missing image", "wrong YAML"} {
 		t.Run(which, func(t *testing.T) {
 			labels := map[string]string{"io.phpwarden.protocol": "2", "io.phpwarden.toolset": selected.ID,
-				"io.phpwarden.checkers": "debug,phpstan", "io.phpwarden.php-version": selected.PHPVersion}
+				"io.phpwarden.checkers": "debug,phpstan", "io.phpwarden.php-version": selected.PHPVersion, "io.phpwarden.symfony-yaml-version": "7.4.21"}
 			digests := []string{selected.Image}
 			architecture := "amd64"
 			switch which {
@@ -34,6 +34,8 @@ func TestReleaseImageInspectionVerifiesDigestAndManifestLabels(t *testing.T) {
 				labels["io.phpwarden.checkers"] = "debug"
 			case "wrong PHP":
 				labels["io.phpwarden.php-version"] = "8.4.25"
+			case "wrong YAML":
+				labels["io.phpwarden.symfony-yaml-version"] = "7.4.20"
 			}
 			calls := 0
 			process := processFunc(func(_ context.Context, command runner.Command) runner.Result {

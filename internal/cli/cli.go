@@ -38,7 +38,7 @@ Scope options:
   --mode diff|full     Override configured mode
   --base REF           Diff base ref
   --whole-files        Include all lines of selected diff files
-  --only ID[,ID...]    Select debug, syntax, or both; enable selected checkers
+  --only ID[,ID...]    Select debug, syntax, yaml; enable selected checkers
 
 Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
 Check uses the local development Docker image (Linux amd64, PHP runtime/target 8.4).
@@ -386,6 +386,8 @@ func writeReport(stdout, stderr io.Writer, format string, result report.Report) 
 		for _, finding := range result.Findings {
 			if finding.Path != nil && finding.Line != nil {
 				fmt.Fprintf(stdout, "%q:%d: %s\n", *finding.Path, *finding.Line, finding.Message)
+			} else {
+				fmt.Fprintln(stdout, finding.Message)
 			}
 		}
 		for _, check := range result.Checks {

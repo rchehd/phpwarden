@@ -9,4 +9,8 @@
 !schemas/**
 !docker/
 !docker/Dockerfile
+!tools/
+!tools/yaml/
+!tools/yaml/composer.json
+!tools/yaml/composer.lock
 **/*_test.go

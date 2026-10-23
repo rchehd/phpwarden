@@ -10,7 +10,7 @@ class ScenarioFixturesTest(unittest.TestCase):
     def scenarios(self):
         directories = sorted(
             path
-            for group in (FIXTURES, FIXTURES.parent / "syntax")
+            for group in (FIXTURES, FIXTURES.parent / "syntax", FIXTURES.parent / "yaml")
             for path in group.iterdir()
             if path.is_dir()
         )
@@ -43,10 +43,15 @@ class ScenarioFixturesTest(unittest.TestCase):
                 for finding in scenario.spec["findings"]:
                     path = (scenario.root / finding["path"]).resolve()
                     self.assertTrue(path.is_relative_to(scenario.root))
+                    if finding.get("global"):
+                        self.assertEqual(finding["checker"], "yaml")
+                        self.assertIsNone(finding["line"])
+                        self.assertTrue(path.is_file())
+                        continue
                     lines = path.read_text().splitlines()
                     self.assertGreater(finding["line"], 0)
                     if finding.get("eof"):
-                        self.assertEqual(finding["checker"], "syntax")
+                        self.assertIn(finding["checker"], ("syntax", "yaml"))
                         self.assertEqual(finding["line"], len(lines) + 1)
                         continue
                     self.assertLessEqual(finding["line"], len(lines))

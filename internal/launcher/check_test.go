@@ -73,7 +73,7 @@ func dockerDouble(t *testing.T, location config.Location, calls *[]runner.Comman
 		case "context":
 			return runner.Result{Stdout: []byte(`"unix:///var/run/docker.sock"`)}
 		case "image":
-			return runner.Result{Stdout: []byte(`[{"Id":"` + testImage + `","Os":"linux","Architecture":"amd64","Config":{"Labels":{"io.phpwarden.protocol":"2","io.phpwarden.toolset":"` + toolset.DevelopmentID + `","io.phpwarden.checkers":"debug,syntax","io.phpwarden.php-version":"8.4.26"}}}]`)}
+			return runner.Result{Stdout: []byte(`[{"Id":"` + testImage + `","Os":"linux","Architecture":"amd64","Config":{"Labels":{"io.phpwarden.protocol":"2","io.phpwarden.toolset":"` + toolset.DevelopmentID + `","io.phpwarden.checkers":"debug,syntax,yaml","io.phpwarden.php-version":"8.4.26","io.phpwarden.symfony-yaml-version":"7.4.21"}}}]`)}
 		case "run":
 			for _, argument := range []string{"--read-only", "--network=none", "--cap-drop=ALL", "--security-opt=no-new-privileges:true", "--pull=never", testImage} {
 				if !slices.Contains(command.Args, argument) {

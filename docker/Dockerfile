@@ -8,6 +8,15 @@ COPY internal ./internal
 COPY schemas ./schemas
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/phpwarden ./cmd/phpwarden
 
+FROM php:8.4.26-cli-alpine3.23@sha256:da7a7a945a493ac9c015f327231afd820bbe57fc6ae22f4f520a79fbd635ba39 AS tools
+
+RUN apk add --no-cache unzip ca-certificates
+ADD --checksum=sha256:7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6 https://getcomposer.org/download/2.10.3/composer.phar /usr/local/bin/composer
+WORKDIR /opt/phpwarden/tools/yaml
+COPY tools/yaml/composer.json tools/yaml/composer.lock ./
+RUN php /usr/local/bin/composer install --no-dev --no-plugins --no-scripts --prefer-dist --no-interaction --classmap-authoritative \
+    && php -r 'require "vendor/autoload.php"; if (Composer\InstalledVersions::getPrettyVersion("symfony/yaml") !== "v7.4.21") { exit(1); }'
+
 FROM php:8.4.26-cli-alpine3.23@sha256:da7a7a945a493ac9c015f327231afd820bbe57fc6ae22f4f520a79fbd635ba39 AS worker
 
 RUN apk add --no-cache git ca-certificates \
@@ -17,11 +26,13 @@ RUN apk add --no-cache git ca-certificates \
     && php -r 'if (!function_exists("token_get_all") || PHP_VERSION !== "8.4.26") { exit(1); }'
 
 COPY --from=build /out/phpwarden /usr/local/bin/phpwarden
+COPY --from=tools /opt/phpwarden/tools/yaml /usr/local/lib/phpwarden/yaml
 LABEL org.opencontainers.image.title="PHPWarden static worker" \
     io.phpwarden.protocol="2" \
-    io.phpwarden.toolset="static-dev-v1-php8.4" \
+    io.phpwarden.toolset="static-dev-v2-php8.4" \
     io.phpwarden.php-version="8.4.26" \
-    io.phpwarden.checkers="debug,syntax"
+    io.phpwarden.checkers="debug,syntax,yaml" \
+    io.phpwarden.symfony-yaml-version="7.4.21"
 
 WORKDIR /workspace
 USER 10001:10001

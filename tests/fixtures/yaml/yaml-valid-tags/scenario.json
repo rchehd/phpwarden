@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "id": "yaml-valid-tags",
+  "state": "untracked",
+  "changed_files": [
+    "web/modules/custom/demo/valid.yaml"
+  ],
+  "verdicts": {
+    "diff": "pass",
+    "full": "pass"
+  },
+  "findings": []
+}

@@ -1,0 +1,8 @@
+--- a/web/modules/custom/demo/demo.services.yml
++++ b/web/modules/custom/demo/demo.services.yml
+@@ -7,4 +7,4 @@
+ 
+ 
+ unchanged: value
+-other: before
++other: after
