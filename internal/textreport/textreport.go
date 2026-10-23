@@ -129,6 +129,16 @@ func Write(out io.Writer, result report.Report, options Options) error {
 	return w.err
 }
 
+func against(base string) string {
+	if count, err := strconv.Atoi(strings.TrimPrefix(base, "HEAD~")); strings.HasPrefix(base, "HEAD~") && err == nil && count > 0 {
+		if count == 1 {
+			return "in the last commit"
+		}
+		return "in the last " + plural(count, "commit")
+	}
+	return "against " + base
+}
+
 func (w *writer) header(result report.Report) {
 	parts := []string{"PHPWarden"}
 	if scope := result.Scope; scope != nil {
@@ -138,9 +148,9 @@ func (w *writer) header(result report.Report) {
 		case scope.Mode == "paths":
 			parts = append(parts, "selected paths")
 		case scope.BaseRef != nil && scope.WholeFiles:
-			parts = append(parts, "whole changed files against "+*scope.BaseRef)
+			parts = append(parts, "whole changed files "+against(*scope.BaseRef))
 		case scope.BaseRef != nil:
-			parts = append(parts, "changes against "+*scope.BaseRef)
+			parts = append(parts, "changes "+against(*scope.BaseRef))
 		}
 		parts = append(parts, plural(len(scope.Files), "file"))
 	}

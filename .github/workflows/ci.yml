@@ -1,4 +1,4 @@
-name: Repository checks
+name: CI
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   docker:
-    name: Docker static worker integration
+    name: Docker images · build, test, publish
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
@@ -45,7 +45,7 @@ jobs:
           done
 
   go:
-    name: Go CLI and configuration
+    name: Go · lint and tests
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -98,7 +98,7 @@ jobs:
         run: python -m unittest tests.acceptance.worker_cli -v
 
   test-fixtures:
-    name: Test infrastructure and Git fixtures
+    name: Test fixtures · lint and validate
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

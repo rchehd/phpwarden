@@ -400,3 +400,44 @@ func TestProjectFilesOutsideSourceRoots(t *testing.T) {
 		t.Fatalf("unrequested Composer files selected: %v", files)
 	}
 }
+
+func TestLastCommits(t *testing.T) {
+	root := baseline(t)
+	commit := func(filename, content string) {
+		write(t, root, filename, content)
+		git(t, root, "add", "--all")
+		git(t, root, "-c", "core.hooksPath="+os.DevNull, "commit", "--quiet", "-m", filename)
+	}
+	commit("src/first.php", "<?php\n")
+	commit("src/second.php", "<?php\n")
+	commit("src/demo.php", "<?php\n\nvar_dump('legacy');\n$changed = 1;\n")
+	opts := options(root, "diff")
+	for count, want := range map[int][]string{1: {"src/demo.php"}, 2: {"src/demo.php", "src/second.php"}, 3: {"src/demo.php", "src/first.php", "src/second.php"}} {
+		opts.Commits = count
+		selection := build(t, opts)
+		if !reflect.DeepEqual(selection.Files, want) || *selection.BaseRef != "HEAD~"+string(rune('0'+count)) {
+			t.Fatalf("last %d commits: %+v", count, selection)
+		}
+	}
+	opts.Commits = 1
+	if ranges := build(t, opts).LineMap["src/demo.php"]; !reflect.DeepEqual(ranges, []Range{{Start: 4, End: 4}}) {
+		t.Fatalf("last commit must keep line filtering: %+v", ranges)
+	}
+	write(t, root, "src/uncommitted.php", "<?php\n")
+	if files := build(t, opts).Files; !reflect.DeepEqual(files, []string{"src/demo.php", "src/uncommitted.php"}) {
+		t.Fatalf("uncommitted changes must stay in scope: %v", files)
+	}
+	opts.Commits = 4
+	if _, err := Build(context.Background(), opts); err == nil || !strings.Contains(err.Error(), "HEAD has 4 commits") {
+		t.Fatalf("history shorter than requested accepted: %v", err)
+	}
+	opts.Commits, opts.Base = 1, "main"
+	if _, err := Build(context.Background(), opts); err == nil {
+		t.Fatal("commits combined with base")
+	}
+	full := options(root, "full")
+	full.Commits = 1
+	if _, err := Build(context.Background(), full); err == nil {
+		t.Fatal("commits accepted outside diff")
+	}
+}

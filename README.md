@@ -71,6 +71,7 @@ PHPWarden looks for `.phpwarden.yaml` from the current directory up to the Git r
 ```sh
 phpwarden check                                # changed lines against scope.base
 phpwarden check --base origin/develop          # another base branch
+phpwarden check --commits 2                    # the last 2 commits plus uncommitted changes
 phpwarden check --whole-files                  # all lines of changed files
 phpwarden check --mode full                    # all custom code
 phpwarden check web/modules/custom/my_module   # specific paths

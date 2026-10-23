@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/rchehd/phpwarden/internal/projectpath"
@@ -21,6 +22,8 @@ type Options struct {
 	Exclude    []string
 	Paths      []string
 	WholeFiles bool
+	// Commits > 0 diffs against HEAD~Commits instead of Base.
+	Commits int
 	// Project-level files outside the source roots, such as composer.json, reported when changed or requested.
 	ProjectFiles []string
 }
@@ -78,6 +81,9 @@ func Build(ctx context.Context, options Options) (Selection, error) {
 	}
 	if result.Mode != "diff" && (options.Base != "" || options.WholeFiles) {
 		return result, fmt.Errorf("base and whole-files apply only to diff")
+	}
+	if options.Commits > 0 && (result.Mode != "diff" || options.Base != "") {
+		return result, fmt.Errorf("commits apply only to diff and cannot be combined with a base")
 	}
 	if (result.Mode == "paths") != (len(options.Paths) > 0) {
 		return result, fmt.Errorf("explicit paths require paths mode")
@@ -145,7 +151,16 @@ func Build(ctx context.Context, options Options) (Selection, error) {
 	var changed map[string]bool
 	if result.Mode == "diff" {
 		base := options.Base
-		if base == "" {
+		if options.Commits > 0 {
+			output, err := repo.git("rev-list", "--count", "--first-parent", "HEAD")
+			if err != nil {
+				return result, fmt.Errorf("count commits: %w", err)
+			}
+			if count, _ := strconv.Atoi(strings.TrimSpace(string(output))); count <= options.Commits {
+				return result, fmt.Errorf("cannot check the last %d commits: HEAD has %d commits; use --mode full for the whole history", options.Commits, count)
+			}
+			base = fmt.Sprintf("HEAD~%d", options.Commits)
+		} else if base == "" {
 			output, err := repo.git("symbolic-ref", "--quiet", "refs/remotes/origin/HEAD")
 			if err != nil {
 				return result, fmt.Errorf("base ref is unavailable; pass --base or fetch origin/HEAD: %w", err)

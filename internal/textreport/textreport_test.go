@@ -122,3 +122,16 @@ func TestColorOnlyWhenRequested(t *testing.T) {
 		}
 	}
 }
+
+func TestLastCommitsHeader(t *testing.T) {
+	for ref, want := range map[string]string{"HEAD~1": "changes in the last commit ·", "HEAD~3": "changes in the last 3 commits ·", "HEAD~x": "changes against HEAD~x ·"} {
+		result := base("web/modules/custom/demo/demo.module")
+		result.Scope.BaseRef = new(ref)
+		result.Checks = []report.Check{check("debug", "passed", true, "")}
+		result.Finalize()
+		var output bytes.Buffer
+		if err := Write(&output, result, Options{}); err != nil || !strings.Contains(output.String(), want) {
+			t.Fatalf("header for %s misses %q: %s %v", ref, want, &output, err)
+		}
+	}
+}

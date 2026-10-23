@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/rchehd/phpwarden/internal/checker"
@@ -50,6 +51,7 @@ Init options:
 Scope options:
   --mode diff|full     Override configured mode
   --base REF           Diff base ref
+  --commits N          Diff against HEAD~N: the last N commits plus uncommitted changes
   --whole-files        Include all lines of selected diff files
   --only ID[,ID...]    Select composer-audit, composer-validate, debug, drupal-config, phpcs, phpstan, syntax, twig-cs-fixer, whitespace, yaml; enable selected checkers
 
@@ -75,6 +77,7 @@ type options struct {
 	only       string
 	phpRuntime string
 	phpTarget  string
+	commits    int
 }
 
 type response struct {
@@ -151,7 +154,7 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	if isInit && args.config != "" {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("init always writes %s in the project root; use --project", config.Filename))
 	}
-	if !isScope && !isWorker && !isCheck && (args.mode != "" || args.base != "" || args.wholeFiles) {
+	if !isScope && !isWorker && !isCheck && (args.mode != "" || args.base != "" || args.wholeFiles || args.commits > 0) {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("scope options require the scope command"))
 	}
 	only, err := checker.ParseOnly(args.only)
@@ -261,7 +264,7 @@ func parse(arguments []string) (options, error) {
 			continue
 		}
 		name, value, inline := strings.Cut(argument, "=")
-		if !slices.Contains([]string{"--project", "--config", "--format", "--mode", "--base", "--only", "--color", "--php-runtime", "--php-target"}, name) {
+		if !slices.Contains([]string{"--project", "--config", "--format", "--mode", "--base", "--only", "--color", "--php-runtime", "--php-target", "--commits"}, name) {
 			return result, fmt.Errorf("unknown option %q", name)
 		}
 		if seen[name] {
@@ -288,6 +291,12 @@ func parse(arguments []string) (options, error) {
 			result.mode = value
 		case "--base":
 			result.base = value
+		case "--commits":
+			count, err := strconv.Atoi(value)
+			if err != nil || count < 1 || count > 1000 {
+				return result, fmt.Errorf("--commits must be a number from 1 to 1000")
+			}
+			result.commits = count
 		case "--php-runtime", "--php-target":
 			if !minorVersion.MatchString(value) {
 				return result, fmt.Errorf("%s must be MAJOR.MINOR, such as 8.3", name)
@@ -362,13 +371,16 @@ func scopeOptions(args options, cwd string, location config.Location, cfg config
 	}
 	paths := args.command[1:]
 	if len(paths) > 0 {
-		if args.mode != "" || args.base != "" || args.wholeFiles {
-			return scope.Options{}, fmt.Errorf("explicit paths cannot be combined with mode/base/whole-files")
+		if args.mode != "" || args.base != "" || args.wholeFiles || args.commits > 0 {
+			return scope.Options{}, fmt.Errorf("explicit paths cannot be combined with mode/base/commits/whole-files")
 		}
 		mode = "paths"
 	}
-	if mode != "diff" && (args.base != "" || args.wholeFiles) {
-		return scope.Options{}, fmt.Errorf("base and whole-files apply only to diff")
+	if mode != "diff" && (args.base != "" || args.wholeFiles || args.commits > 0) {
+		return scope.Options{}, fmt.Errorf("base, commits and whole-files apply only to diff")
+	}
+	if args.base != "" && args.commits > 0 {
+		return scope.Options{}, fmt.Errorf("--commits and --base cannot be combined")
 	}
 	defaults, _ := profile.Lookup(cfg.Profile)
 	base, wholeFiles := "", false
@@ -377,10 +389,13 @@ func scopeOptions(args options, cwd string, location config.Location, cfg config
 		if args.base != "" {
 			base = args.base
 		}
+		if args.commits > 0 {
+			base = ""
+		}
 		wholeFiles = wholeFiles || args.wholeFiles
 	}
 	return scope.Options{
-		Root: location.Root, CWD: cwd, Mode: mode, Base: base, WholeFiles: wholeFiles,
+		Root: location.Root, CWD: cwd, Mode: mode, Base: base, WholeFiles: wholeFiles, Commits: args.commits,
 		Include: cfg.Scope.Include, Exclude: cfg.Scope.Exclude, Paths: paths, ProjectFiles: defaults.ProjectFiles,
 	}, nil
 }

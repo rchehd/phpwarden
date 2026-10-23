@@ -55,7 +55,8 @@ func TestUsageErrorsNeverReturnSuccess(t *testing.T) {
 		{"--version", "config", "show"}, {"check", "--color", "purple"}, {"config", "show", "--format", "compact"},
 		{"scope", "--format", "compact"}, {"init", "--only", "debug"}, {"init", "--mode", "full"}, {"init", "--config", "x.yaml"},
 		{"init", "--format", "compact"}, {"init", "--php-runtime", "8"}, {"init", "--php-target", "8.3.1"}, {"check", "--php-runtime", "8.3"},
-		{"init", "extra"},
+		{"init", "extra"}, {"check", "--commits", "0"}, {"check", "--commits", "x"}, {"check", "--commits", "2", "--base", "main"},
+		{"check", "--commits", "2", "--mode", "full"}, {"check", "--commits", "1", "demo.php"}, {"config", "show", "--commits", "1"},
 	}
 	for _, args := range cases {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
