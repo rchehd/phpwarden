@@ -5,6 +5,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.support.drupal_config import (
+    check_drupal_config_custom_layout,
+    check_drupal_config_fixtures,
+    check_drupal_config_settings,
+)
 from tests.support.scenarios import materialize
 from tests.support.syntax import check_syntax_fixtures, check_syntax_settings
 from tests.support.whitespace import check_whitespace_fixtures, check_whitespace_settings
@@ -116,6 +121,15 @@ class WorkerCLITest(unittest.TestCase):
 
     def test_whitespace_settings(self):
         check_whitespace_settings(self, self.configure, self.run_worker)
+
+    def test_drupal_config_fixtures(self):
+        check_drupal_config_fixtures(self, self.configure, self.run_worker)
+
+    def test_drupal_config_settings(self):
+        check_drupal_config_settings(self, self.configure, self.run_worker)
+
+    def test_drupal_config_custom_layout(self):
+        check_drupal_config_custom_layout(self, self.configure, self.run_worker)
 
     def test_missing_yaml_bundle_never_loads_project_autoload(self):
         with materialize(YAML_FIXTURES / "yaml-duplicate-key") as scenario:

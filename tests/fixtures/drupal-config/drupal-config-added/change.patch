@@ -1,0 +1,6 @@
+--- a/web/modules/custom/demo/config/install/demo.settings.yml
++++ b/web/modules/custom/demo/config/install/demo.settings.yml
+@@ -1 +1,3 @@
++uuid: site-value
++_core: {default_config_hash: site-hash}
+ status: true

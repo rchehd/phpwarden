@@ -50,6 +50,12 @@ func TestDefaultsAndProvenance(t *testing.T) {
 		result.Provenance["tools.whitespace.enabled"] != "profile_default" {
 		t.Fatalf("unexpected whitespace defaults: %+v", whitespace)
 	}
+	drupal := result.Config.Tools.DrupalConfig
+	if !drupal.Enabled || !drupal.Required || drupal.FailOn != "error" || drupal.TimeoutSeconds != 120 ||
+		!slices.Equal(drupal.ForbiddenKeys, []string{"uuid", "_core"}) || len(drupal.Directories) != 3 || drupal.ModuleRoots == nil || drupal.Exclude == nil ||
+		result.Provenance["tools.drupal-config.forbidden_keys"] != "profile_default" {
+		t.Fatalf("unexpected Drupal config defaults: %+v", drupal)
+	}
 	if result.Provenance["php.runtime"] != "project_config" ||
 		result.Provenance["tools.debug.functions"] != "profile_default" ||
 		result.Provenance["scope.mode"] != "core_default" {
@@ -172,6 +178,18 @@ func TestInvalidConfigurations(t *testing.T) {
 		"whitespace exclude":    minimal + "tools: {whitespace: {exclude: ['[']}}\n",
 		"trailing exclude":      minimal + "tools: {whitespace: {trailing_whitespace_exclude: ['../**']}}\n",
 		"marker exclude":        minimal + "tools: {whitespace: {conflict_markers_exclude: ['/outside']}}\n",
+		"drupal unknown":        minimal + "tools: {drupal-config: {rules: []}}\n",
+		"drupal timeout":        minimal + "tools: {drupal-config: {timeout_seconds: 0}}\n",
+		"drupal policy":         minimal + "tools: {drupal-config: {fail_on: errors}}\n",
+		"drupal include":        minimal + "tools: {drupal-config: {include: [../outside]}}\n",
+		"drupal exclude":        minimal + "tools: {drupal-config: {exclude: ['[']}}\n",
+		"drupal directories":    minimal + "tools: {drupal-config: {directories: [../outside]}}\n",
+		"drupal root dir":       minimal + "tools: {drupal-config: {directories: ['./']}}\n",
+		"drupal empty dirs":     minimal + "tools: {drupal-config: {directories: []}}\n",
+		"drupal module path":    minimal + "tools: {drupal-config: {module_roots: [/outside]}}\n",
+		"drupal module parent":  minimal + "tools: {drupal-config: {module_roots: [../outside]}}\n",
+		"drupal duplicate":      minimal + "tools: {drupal-config: {forbidden_keys: [uuid, uuid]}}\n",
+		"drupal bad key":        minimal + "tools: {drupal-config: {forbidden_keys: ['']}}\n",
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -198,6 +216,27 @@ func TestWhitespaceOverrides(t *testing.T) {
 	if cfg.Enabled || cfg.TrailingWhitespace || cfg.ConflictMarkers || len(cfg.TrailingWhitespaceExclude) != 0 || len(cfg.ConflictMarkersExclude) != 1 ||
 		result.Provenance["tools.whitespace.trailing_whitespace_exclude"] != "project_config" {
 		t.Fatalf("whitespace overrides lost: %+v", result)
+	}
+}
+
+func TestDrupalConfigOverrides(t *testing.T) {
+	result, err := Parse([]byte(minimal + `tools:
+  drupal-config:
+    enabled: false
+    required: false
+    fail_on: never
+    forbidden_keys: []
+    directories: [defaults]
+    module_roots: ['.', packages/demo]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := result.Config.Tools.DrupalConfig
+	if cfg.Enabled || cfg.Required || cfg.FailOn != "never" || len(cfg.ForbiddenKeys) != 0 ||
+		!slices.Equal(cfg.Directories, []string{"defaults"}) || len(cfg.ModuleRoots) != 2 ||
+		result.Provenance["tools.drupal-config.forbidden_keys"] != "project_config" {
+		t.Fatalf("Drupal config overrides lost: %+v", result)
 	}
 }
 

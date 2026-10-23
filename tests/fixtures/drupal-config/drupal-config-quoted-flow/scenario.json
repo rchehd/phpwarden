@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "id": "drupal-config-quoted-flow",
+  "state": "untracked",
+  "changed_files": [
+    "web/modules/custom/demo/config/optional/spaced file.YAML"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "drupal-config",
+      "path": "web/modules/custom/demo/config/optional/spaced file.YAML",
+      "line": 1,
+      "contains": "uuid",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    },
+    {
+      "checker": "drupal-config",
+      "path": "web/modules/custom/demo/config/optional/spaced file.YAML",
+      "line": 1,
+      "contains": "_core",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

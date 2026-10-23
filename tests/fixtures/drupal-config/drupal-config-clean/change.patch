@@ -1,0 +1,11 @@
+--- a/web/modules/custom/demo/config/schema/demo.schema.yml
++++ b/web/modules/custom/demo/config/schema/demo.schema.yml
+@@ -1,2 +1,8 @@
+ demo.settings:
+   type: config_object
++  mapping:
++    uuid: {type: string}
++    _core: {type: mapping}
++text: |
++  uuid: text
++# _core: comment

@@ -218,6 +218,8 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 				required, failOn = request.Config.Tools.YAML.Required, request.Config.Tools.YAML.FailOn
 			} else if check.ID == "whitespace" {
 				required, failOn = request.Config.Tools.Whitespace.Required, request.Config.Tools.Whitespace.FailOn
+			} else if check.ID == "drupal-config" {
+				required, failOn = request.Config.Tools.DrupalConfig.Required, request.Config.Tools.DrupalConfig.FailOn
 			}
 			if !slices.Contains(checker.Requested(request.Only), check.ID) || seen[check.ID] || check.Required != required || check.FailOn != failOn {
 				return result, fmt.Errorf("worker checker selection or policy does not match the request")
@@ -255,6 +257,7 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 		}
 		if _, exists := request.Selection.LineMap[*finding.Path]; !exists ||
 			(finding.Checker == "debug" || finding.Checker == "whitespace") && (finding.Kind != "code" || !request.Selection.Contains(*finding.Path, *finding.Line)) ||
+			finding.Checker == "drupal-config" && finding.Kind != "code" ||
 			(finding.Checker == "syntax" || finding.Checker == "yaml") && finding.Kind != "syntax" {
 			return result, fmt.Errorf("worker finding is outside the requested scope")
 		}

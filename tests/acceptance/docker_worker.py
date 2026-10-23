@@ -11,6 +11,11 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from tests.support.drupal_config import (
+    check_drupal_config_custom_layout,
+    check_drupal_config_fixtures,
+    check_drupal_config_settings,
+)
 from tests.support.scenarios import materialize
 from tests.support.syntax import check_syntax_fixtures
 from tests.support.whitespace import check_whitespace_fixtures, check_whitespace_settings
@@ -132,7 +137,7 @@ class DockerWorkerTest(unittest.TestCase):
         self.assertEqual(self.metadata["Config"]["User"], "10001:10001")
         self.assertEqual(
             self.metadata["Config"]["Labels"]["io.phpwarden.checkers"],
-            "debug,syntax,whitespace,yaml",
+            "debug,drupal-config,syntax,whitespace,yaml",
         )
         with materialize(FIXTURES / "clean-debug") as scenario:
             self.configure(scenario)
@@ -183,7 +188,7 @@ class DockerWorkerTest(unittest.TestCase):
 
         check_yaml_fixtures(self, self.configure, run)
 
-    def run_whitespace(self, scenario, arguments):
+    def run_check(self, scenario, arguments):
         before = snapshot(scenario.root)
         result = self.report(
             self.run_container(scenario.root, ["worker", "check", "--format", "json", *arguments])
@@ -192,10 +197,19 @@ class DockerWorkerTest(unittest.TestCase):
         return result
 
     def test_whitespace_fixtures(self):
-        check_whitespace_fixtures(self, self.configure, self.run_whitespace)
+        check_whitespace_fixtures(self, self.configure, self.run_check)
 
     def test_whitespace_settings(self):
-        check_whitespace_settings(self, self.configure, self.run_whitespace)
+        check_whitespace_settings(self, self.configure, self.run_check)
+
+    def test_drupal_config_fixtures(self):
+        check_drupal_config_fixtures(self, self.configure, self.run_check)
+
+    def test_drupal_config_settings(self):
+        check_drupal_config_settings(self, self.configure, self.run_check)
+
+    def test_drupal_config_custom_layout(self):
+        check_drupal_config_custom_layout(self, self.configure, self.run_check)
 
     def test_no_host_php_or_go_and_no_runtime_build_tools(self):
         with materialize(FIXTURES / "added-debug") as scenario:

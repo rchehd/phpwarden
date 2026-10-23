@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "id": "drupal-config-outside-directories",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/config/sync/site.yml",
+    "web/modules/custom/demo/demo.routing.yml"
+  ],
+  "verdicts": {
+    "diff": "pass",
+    "full": "pass"
+  },
+  "findings": [],
+  "patch": "change.patch"
+}

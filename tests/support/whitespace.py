@@ -37,7 +37,7 @@ def check_whitespace_fixtures(test, configure, run):
                 test.assertEqual(result["diagnostics"], [])
                 test.assertEqual(
                     [row["id"] for row in result["checks"]],
-                    ["debug", "syntax", "whitespace", "yaml"],
+                    ["debug", "drupal-config", "syntax", "whitespace", "yaml"],
                 )
                 for row in result["findings"]:
                     test.assertEqual(row["checker"], "whitespace")
@@ -54,7 +54,8 @@ def check_whitespace_settings(test, configure, run):
         filename = scenario.root / ".phpwarden.yaml"
         config = json.loads(filename.read_text())
         config["tools"] = {
-            name: {"enabled": False} for name in ("debug", "syntax", "whitespace", "yaml")
+            name: {"enabled": False}
+            for name in ("debug", "drupal-config", "syntax", "whitespace", "yaml")
         }
         filename.write_text(json.dumps(config))
         test.assertEqual(run(scenario, [])["exit_code"], 0)

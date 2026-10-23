@@ -1,0 +1,11 @@
+--- a/web/modules/custom/demo/config/sync/site.yml
++++ b/web/modules/custom/demo/config/sync/site.yml
+@@ -1 +1,3 @@
++uuid: site-export
++_core: {}
+ status: true
+--- a/web/modules/custom/demo/demo.routing.yml
++++ b/web/modules/custom/demo/demo.routing.yml
+@@ -1 +1,2 @@
++uuid: unrelated
+ status: true

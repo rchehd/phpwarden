@@ -11,6 +11,7 @@ import (
 
 	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/checker/debug"
+	"github.com/rchehd/phpwarden/internal/checker/drupalconfig"
 	"github.com/rchehd/phpwarden/internal/checker/syntax"
 	"github.com/rchehd/phpwarden/internal/checker/whitespace"
 	yamlcheck "github.com/rchehd/phpwarden/internal/checker/yaml"
@@ -18,6 +19,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/profile"
+	"github.com/rchehd/phpwarden/internal/profile/drupal"
 	"github.com/rchehd/phpwarden/internal/protocol"
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/runner"
@@ -95,7 +97,14 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, s
 	}
 	for _, id := range checker.Requested(only) {
 		var outcome checker.Outcome
-		if id == "whitespace" {
+		if id == "drupal-config" {
+			settings := cfg.Tools.DrupalConfig
+			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
+			selected := selection.Filter(settings.Include, settings.Exclude, func(filename string) bool {
+				return cfg.Profile == "drupal" && drupal.ModuleConfigFile(filename, settings.Directories, settings.ModuleRoots)
+			})
+			outcome = drupalconfig.Run(ctx, location.Root, selected, settings)
+		} else if id == "whitespace" {
 			settings := cfg.Tools.Whitespace
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
 			selected := selection.Filter(settings.Include, settings.Exclude, func(string) bool { return true })

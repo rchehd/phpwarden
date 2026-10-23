@@ -11,6 +11,13 @@ scope:
   mode: diff
   base: origin/main
 tools:
+  drupal-config:
+    enabled: true
+    required: true
+    fail_on: error
+    directories: [config/install, config/optional, config/schema]
+    forbidden_keys: [uuid, _core]
+    module_roots: []
   whitespace:
     enabled: true
     required: true

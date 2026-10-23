@@ -27,8 +27,10 @@ type PHPRequirement struct {
 }
 
 type Defaults struct {
-	DebugFunctions []string
-	PHPExtensions  []string
+	DebugFunctions            []string
+	PHPExtensions             []string
+	ModuleConfigDirectories   []string
+	ModuleConfigForbiddenKeys []string
 }
 
 func Lookup(id string) (Defaults, bool) {
@@ -36,7 +38,9 @@ func Lookup(id string) (Defaults, bool) {
 		return Defaults{}, false
 	}
 	return Defaults{
-		DebugFunctions: []string{"var_dump", "print_r", "dpm", "dsm", "kint"},
-		PHPExtensions:  []string{".php", ".module", ".inc", ".install", ".theme", ".profile", ".engine", ".test"},
+		DebugFunctions:            []string{"var_dump", "print_r", "dpm", "dsm", "kint"},
+		PHPExtensions:             []string{".php", ".module", ".inc", ".install", ".theme", ".profile", ".engine", ".test"},
+		ModuleConfigDirectories:   []string{"config/install", "config/optional", "config/schema"},
+		ModuleConfigForbiddenKeys: []string{"uuid", "_core"},
 	}, true
 }

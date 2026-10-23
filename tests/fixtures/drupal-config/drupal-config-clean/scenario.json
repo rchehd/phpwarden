@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "id": "drupal-config-clean",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/config/schema/demo.schema.yml"
+  ],
+  "verdicts": {
+    "diff": "pass",
+    "full": "pass"
+  },
+  "findings": [],
+  "patch": "change.patch"
+}

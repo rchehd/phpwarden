@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "id": "drupal-config-added",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/config/install/demo.settings.yml"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "drupal-config",
+      "path": "web/modules/custom/demo/config/install/demo.settings.yml",
+      "line": 1,
+      "contains": "uuid",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    },
+    {
+      "checker": "drupal-config",
+      "path": "web/modules/custom/demo/config/install/demo.settings.yml",
+      "line": 2,
+      "contains": "_core",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

@@ -1,0 +1,7 @@
+--- a/web/modules/custom/demo/config/install/demo.settings.yml
++++ b/web/modules/custom/demo/config/install/demo.settings.yml
+@@ -10,3 +10,4 @@
+ value_7: true
+ value_8: true
+ value_9: true
++new_value: true

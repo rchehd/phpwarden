@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"path"
 	"strings"
 
 	"github.com/rchehd/phpwarden/internal/profile"
@@ -51,10 +52,23 @@ type Runner struct {
 }
 
 type Tools struct {
-	Debug      Debug      `json:"debug"`
-	Syntax     Syntax     `json:"syntax"`
-	YAML       YAML       `json:"yaml"`
-	Whitespace Whitespace `json:"whitespace"`
+	DrupalConfig DrupalConfig `json:"drupal-config"`
+	Debug        Debug        `json:"debug"`
+	Syntax       Syntax       `json:"syntax"`
+	YAML         YAML         `json:"yaml"`
+	Whitespace   Whitespace   `json:"whitespace"`
+}
+
+type DrupalConfig struct {
+	Enabled        bool     `json:"enabled"`
+	Required       bool     `json:"required"`
+	FailOn         string   `json:"fail_on"`
+	TimeoutSeconds int      `json:"timeout_seconds"`
+	Include        []string `json:"include,omitempty"`
+	Exclude        []string `json:"exclude"`
+	Directories    []string `json:"directories"`
+	ForbiddenKeys  []string `json:"forbidden_keys"`
+	ModuleRoots    []string `json:"module_roots"`
 }
 
 type Whitespace struct {
@@ -150,8 +164,10 @@ func Parse(data []byte) (Effective, error) {
 			Framework: Framework{Version: "auto"},
 			Scope:     Scope{Mode: "diff", Exclude: []string{}},
 			Runner:    Runner{TimeoutSeconds: 300},
-			Tools: Tools{Whitespace: Whitespace{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{},
-				TrailingWhitespace: true, ConflictMarkers: true, TrailingWhitespaceExclude: []string{"**/*.md", "**/*.patch", "**/*.diff"}, ConflictMarkersExclude: []string{}},
+			Tools: Tools{DrupalConfig: DrupalConfig{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{},
+				Directories: defaults.ModuleConfigDirectories, ForbiddenKeys: defaults.ModuleConfigForbiddenKeys, ModuleRoots: []string{}},
+				Whitespace: Whitespace{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{},
+					TrailingWhitespace: true, ConflictMarkers: true, TrailingWhitespaceExclude: []string{"**/*.md", "**/*.patch", "**/*.diff"}, ConflictMarkersExclude: []string{}},
 				YAML: YAML{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}},
 				Syntax: Syntax{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120,
 					Exclude: []string{}, ExtraExtensions: []string{}}, Debug: Debug{
@@ -177,6 +193,10 @@ func Parse(data []byte) (Effective, error) {
 			"tools.whitespace.exclude": "core_default", "tools.whitespace.trailing_whitespace": "core_default",
 			"tools.whitespace.conflict_markers": "core_default", "tools.whitespace.trailing_whitespace_exclude": "core_default",
 			"tools.whitespace.conflict_markers_exclude": "core_default",
+			"tools.drupal-config.enabled":               "profile_default", "tools.drupal-config.required": "core_default",
+			"tools.drupal-config.fail_on": "core_default", "tools.drupal-config.timeout_seconds": "core_default",
+			"tools.drupal-config.exclude": "core_default", "tools.drupal-config.directories": "profile_default",
+			"tools.drupal-config.forbidden_keys": "profile_default", "tools.drupal-config.module_roots": "core_default",
 		},
 		Pending: []string{},
 	}
@@ -276,15 +296,21 @@ func markProvenance(values map[string]any, prefix string, sources map[string]str
 }
 
 func validateValues(cfg Config) error {
-	for _, values := range [][]string{cfg.Scope.Include, cfg.Tools.Debug.Include, cfg.Tools.Syntax.Include, cfg.Tools.YAML.Include, cfg.Tools.Whitespace.Include} {
+	for _, values := range [][]string{cfg.Scope.Include, cfg.Tools.Debug.Include, cfg.Tools.Syntax.Include, cfg.Tools.YAML.Include, cfg.Tools.Whitespace.Include,
+		cfg.Tools.DrupalConfig.Include, cfg.Tools.DrupalConfig.Directories, cfg.Tools.DrupalConfig.ModuleRoots} {
 		for _, value := range values {
 			if err := projectpath.Validate(value); err != nil {
 				return err
 			}
 		}
 	}
+	for _, directory := range cfg.Tools.DrupalConfig.Directories {
+		if path.Clean(directory) == "." {
+			return fmt.Errorf("tools.drupal-config.directories must name subdirectories of a module")
+		}
+	}
 	for _, values := range [][]string{cfg.Scope.Exclude, cfg.Tools.Debug.Exclude, cfg.Tools.Syntax.Exclude, cfg.Tools.YAML.Exclude,
-		cfg.Tools.Whitespace.Exclude, cfg.Tools.Whitespace.TrailingWhitespaceExclude, cfg.Tools.Whitespace.ConflictMarkersExclude} {
+		cfg.Tools.Whitespace.Exclude, cfg.Tools.Whitespace.TrailingWhitespaceExclude, cfg.Tools.Whitespace.ConflictMarkersExclude, cfg.Tools.DrupalConfig.Exclude} {
 		if err := validatePatterns(values); err != nil {
 			return err
 		}

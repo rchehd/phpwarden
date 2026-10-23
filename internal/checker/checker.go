@@ -17,7 +17,7 @@ type Outcome struct {
 	PHPVersion  *string
 }
 
-func IDs() []string { return []string{"debug", "syntax", "whitespace", "yaml"} }
+func IDs() []string { return []string{"debug", "drupal-config", "syntax", "whitespace", "yaml"} }
 
 func ParseOnly(value string) ([]string, error) {
 	if value == "" {
@@ -57,5 +57,5 @@ func Enabled(id string, configured bool, only []string) bool {
 }
 
 func AnyEnabled(cfg config.Config, only []string) bool {
-	return Enabled("debug", cfg.Tools.Debug.Enabled, only) || Enabled("syntax", cfg.Tools.Syntax.Enabled, only) || Enabled("yaml", cfg.Tools.YAML.Enabled, only) || Enabled("whitespace", cfg.Tools.Whitespace.Enabled, only)
+	return Enabled("debug", cfg.Tools.Debug.Enabled, only) || Enabled("drupal-config", cfg.Tools.DrupalConfig.Enabled, only) || Enabled("syntax", cfg.Tools.Syntax.Enabled, only) || Enabled("yaml", cfg.Tools.YAML.Enabled, only) || Enabled("whitespace", cfg.Tools.Whitespace.Enabled, only)
 }

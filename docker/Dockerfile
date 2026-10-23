@@ -29,9 +29,9 @@ COPY --from=build /out/phpwarden /usr/local/bin/phpwarden
 COPY --from=tools /opt/phpwarden/tools/yaml /usr/local/lib/phpwarden/yaml
 LABEL org.opencontainers.image.title="PHPWarden static worker" \
     io.phpwarden.protocol="2" \
-    io.phpwarden.toolset="static-dev-v3-php8.4" \
+    io.phpwarden.toolset="static-dev-v4-php8.4" \
     io.phpwarden.php-version="8.4.26" \
-    io.phpwarden.checkers="debug,syntax,whitespace,yaml" \
+    io.phpwarden.checkers="debug,drupal-config,syntax,whitespace,yaml" \
     io.phpwarden.symfony-yaml-version="7.4.21"
 
 WORKDIR /workspace

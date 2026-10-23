@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "id": "drupal-config-custom-root",
+  "state": "untracked",
+  "changed_files": [
+    "web/modules/custom/extensions/local/config/install/demo.yml"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "drupal-config",
+      "path": "web/modules/custom/extensions/local/config/install/demo.yml",
+      "line": 1,
+      "contains": "uuid",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ],
+  "settings": {
+    "module_roots": [
+      "web/modules/custom/extensions/local"
+    ]
+  }
+}

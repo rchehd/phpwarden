@@ -14,7 +14,7 @@ PHPWarden is being designed as a standalone CLI with Docker-based tools and adap
 
 ## Development status
 
-The project is in early development. The Go CLI validates configuration, discovers Drupal layout and locked versions, inspects Git scope, selects a development toolset, and runs PHP debug, PHP syntax, YAML syntax, whitespace, and conflict marker checks through Docker. A local development image contains PHP 8.4, Git, and isolated Symfony YAML dependencies. Published images, automatic pulls, and agent integrations are not available yet.
+The project is in early development. The Go CLI validates configuration, discovers Drupal layout and locked versions, inspects Git scope, selects a development toolset, and runs PHP debug, PHP syntax, YAML syntax, Drupal module config, whitespace, and conflict marker checks through Docker. A local development image contains PHP 8.4, Git, and isolated Symfony YAML dependencies. Published images, automatic pulls, and agent integrations are not available yet.
 
 ## Build and try the CLI
 
@@ -28,7 +28,7 @@ bin/phpwarden config show --config examples/drupal.phpwarden.yaml --format json
 
 For a project, save its configuration as `.phpwarden.yaml` in the project root. The CLI finds the nearest configuration from the current directory up to the Git worktree root, or accepts an explicit `--project` or `--config` path. Explicit paths also allow configuration validation outside Git. Relative command-line paths are resolved from the caller's directory.
 
-Validation checks YAML structure, the [v1 schema](schemas/config-v1.schema.json), PHP target ranges, and path boundaries. It rejects unknown fields and checker IDs, duplicate keys, aliases, and numeric PHP versions. The implemented checkers are `debug`, `syntax`, `whitespace`, and `yaml`, all enabled by default.
+Validation checks YAML structure, the [v1 schema](schemas/config-v1.schema.json), PHP target ranges, and path boundaries. It rejects unknown fields and checker IDs, duplicate keys, aliases, and numeric PHP versions. The implemented checkers are `debug`, `drupal-config`, `syntax`, `whitespace`, and `yaml`, all enabled by default for the Drupal profile.
 
 `config show` includes discovered project facts, core and Drupal defaults, explicit project overrides, and their provenance. Its `pending` list identifies unresolved values. `config validate` checks configuration syntax/schema and path boundaries without inspecting Composer metadata. Discovery validates Composer PHP requirements and compares installed Drupal version metadata when available. Full dependency integrity and release image compatibility remain future work. The development launcher currently requires PHP runtime and target `"8.4"`.
 
@@ -141,6 +141,23 @@ CRLF line endings are accepted; trailing spaces/tabs before CRLF or at EOF are f
 
 Findings use rules `whitespace.trailing` and `conflict.marker`, with `kind: code`. The implementation runs inside the Go worker without launching Git, PHP, or project code. Public `check` continues to use the selected Docker image. No fixes are applied.
 
+## Check Drupal module configuration
+
+`drupal-config` rejects top-level `uuid` and `_core` keys in selected module configuration files. It checks the entire selected file, including unchanged lines and deletion-only changes. Nested keys, comments, and text values are allowed. Quoted, flow-style, and escaped keys are recognized; keys inherited through a top-level YAML merge are reported at the merge key. Explicit keys take their own position.
+
+```sh
+phpwarden check --only drupal-config
+phpwarden check --only drupal-config --mode full
+```
+
+The default `directories` are `config/install`, `config/optional`, and `config/schema`, relative to a module root. Matching includes files in their subdirectories and accepts `.yml`/`.yaml` case-insensitively. Module roots are inferred from conventional `modules/<name>` and `modules/custom/<name>` or `modules/contrib/<name>` paths, including multisite and nested modules. Scope and core/contrib exclusions still apply. This is path-based classification; module metadata is not loaded. Site config exports, unrelated YAML, themes, and profiles are outside this default classification.
+
+Settings live under `tools.drupal-config`: `enabled`, `required`, `fail_on`, `timeout_seconds`, `include`, `exclude`, `directories`, `forbidden_keys`, and `module_roots`. `directories` and `forbidden_keys` replace their defaults; `forbidden_keys: []` disables the rules. `module_roots` adds exact project-relative module directories for custom layouts. For a standalone module repository, set `module_roots: ["."]` and an appropriate `scope.include`; a Composer custom installer directory likewise needs explicit module roots. Roots are literal paths, not glob patterns. They never expand the shared file scope. Use include/exclude to narrow conventional modules.
+
+The checker uses the Go worker's existing YAML parser (`go.yaml.in/yaml/v3`) to inspect mappings, without PHP, Drupal bootstrap, project autoload, or a database. It accepts one document, limits syntax-tree depth to 128, and uses the parser's alias validation/expansion safeguards. Malformed YAML, duplicate keys, invalid encoding/aliases/merges, excessive nesting, and read errors make the semantic check incomplete; required errors return exit 3 even with `fail_on: never`. The independent Symfony `yaml` checker supplies syntax findings. This checker does not validate Drupal configuration schemas or require a mapping for otherwise valid empty/scalar/sequence documents.
+
+Findings use `drupal.config.forbidden_key` with `kind: code` and parser line/column positions. All top-level key checks apply to the complete selected file. Public `check` runs this native checker inside the selected image; it applies no fixes.
+
 ## Check through Docker
 
 After building the Go CLI and development image, run these commands in your configured Git project:
@@ -165,7 +182,7 @@ The launcher requires host Git and a local Docker Unix socket, with no host PHP,
 
 The development image must already exist under `phpwarden:static-php8.4-dev`; a missing image returns an error with build instructions. There is no registry fallback or pull for this unpublished tag. Remote Docker contexts and other platforms are currently rejected. The worker protocol is now v2, carrying a checker selection list instead of the previous debug-only flag. Rebuild the CLI and image together; old debug images cannot satisfy the new toolset/protocol/capability checks. The report format remains v1, with `environment.protocol: 2`.
 
-The current toolset is `static-dev-v3-php8.4`, with `debug,syntax,whitespace,yaml` capabilities. Rebuild the existing development tag after adding whitespace checks; earlier images are rejected.
+The current toolset is `static-dev-v4-php8.4`, with `debug,drupal-config,syntax,whitespace,yaml` capabilities and preset `drupal-static` 1.3.0. Rebuild the existing development tag after adding Drupal config checks; earlier images are rejected. The static development entry remains independent of Drupal runtime APIs; it does not advertise a tested framework version matrix.
 
 ## Run the development Docker image
 
@@ -188,7 +205,7 @@ docker run --rm --pull=never --network=none --read-only \
 
 Set PHP runtime/target to `"8.4"` and configure an available diff base. Source roots can be discovered or supplied through `scope.include`. Append `--mode full` for a full scan or `--base origin/main` to override the diff base. The command returns the worker's exit code and JSON report.
 
-This image contains the debug, syntax, whitespace, and YAML checkers, PHP 8.4.26, Git, and the locked Symfony YAML tool bundle. It requires no host PHP, Composer, or Go, and no project `vendor` directory. The image defaults to UID/GID 10001; the command above uses your UID/GID to read private project directories. Check mode mounts the project read-only and uses a private temporary filesystem. Git trusts only the known `/workspace` mount through the image's system configuration.
+This image contains the debug, Drupal config, syntax, whitespace, and YAML checkers, PHP 8.4.26, Git, and the locked Symfony YAML tool bundle. It requires no host PHP, Composer, or Go, and no project `vendor` directory. The image defaults to UID/GID 10001; the command above uses your UID/GID to read private project directories. Check mode mounts the project read-only and uses a private temporary filesystem. Git trusts only the known `/workspace` mount through the image's system configuration.
 
 Use a local Docker daemon with access to the source directory. Mount the entire Git repository for monorepos and pass `--project /workspace/path/to/project`. Linked worktrees or separate Git directories whose metadata lives outside the mount need additional path mapping; the launcher will handle those separately. Container paths in findings remain relative to the configured project.
 
@@ -231,6 +248,8 @@ Five syntax fixtures add 20 combinations per worker, Docker, and launcher suite:
 Six YAML fixtures add another 24 combinations per suite: duplicate keys, old errors outside hunks, deletion-only errors, uppercase untracked paths with spaces, valid aliases/custom tags, and invalid UTF-8 without a line number. Settings tests cover include/exclude, disabled/explicit selection, empty files, nonblocking findings, and project autoload isolation. Native worker tests also remove the adjacent tool bundle to verify required and optional failure policies. The native acceptance harness creates a temporary binary-and-library layout; Docker tests use the actual bundled installation with no network at check time.
 
 Six whitespace fixtures add 24 combinations per suite: added spaces/tabs, old violations outside hunks, deletion-only changes, Markdown conflicts, untracked CRLF/EOF content with a spaced filename and binary data, and marker lookalikes. Shared settings tests cover independent rule toggles/exclusions, explicit selection, include/exclude, and nonblocking findings. Go tests also cover long lines, invalid UTF-8 text, late NUL bytes, cancellation, and partial read failures. Intentional fixture whitespace is exempted from repository `git diff --check` via a scoped attribute.
+
+Eight Drupal config fixtures add 32 combinations per suite: new keys, old keys outside hunks, deletion-only changes, quoted/flow YAML, inherited keys, clean nested schema keys, files outside module config directories, and an explicit custom module root. Shared settings tests cover only/disabled, custom keys and directories, include/exclude, nonblocking findings, malformed YAML required/optional policies, custom/standalone module roots, site-export exclusion, and autoload isolation. Go tests also cover escaped keys, BOM/CRLF, merge precedence/positions, invalid aliases, nesting limits, cancellation, and partial read failures.
 
 Drupal discovery acceptance covers root/web/docroot/custom web roots, multisite custom directories, automatic source roots, explicit broad roots with profile exclusions, locked version reporting, malformed metadata, and version conflicts. These are small synthetic Git projects; they do not establish compatibility with a full installed Drupal application.
 
