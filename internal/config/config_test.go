@@ -44,6 +44,12 @@ func TestDefaultsAndProvenance(t *testing.T) {
 		result.Provenance["tools.yaml.enabled"] != "profile_default" {
 		t.Fatalf("unexpected YAML defaults: %+v", yaml)
 	}
+	whitespace := result.Config.Tools.Whitespace
+	if !whitespace.Enabled || !whitespace.Required || whitespace.FailOn != "error" || whitespace.TimeoutSeconds != 120 ||
+		!whitespace.TrailingWhitespace || !whitespace.ConflictMarkers || len(whitespace.TrailingWhitespaceExclude) != 3 || whitespace.ConflictMarkersExclude == nil ||
+		result.Provenance["tools.whitespace.enabled"] != "profile_default" {
+		t.Fatalf("unexpected whitespace defaults: %+v", whitespace)
+	}
 	if result.Provenance["php.runtime"] != "project_config" ||
 		result.Provenance["tools.debug.functions"] != "profile_default" ||
 		result.Provenance["scope.mode"] != "core_default" {
@@ -158,6 +164,14 @@ func TestInvalidConfigurations(t *testing.T) {
 		"yaml bad policy":       minimal + "tools: {yaml: {fail_on: errors}}\n",
 		"yaml bad include":      minimal + "tools: {yaml: {include: [../outside]}}\n",
 		"yaml bad exclude":      minimal + "tools: {yaml: {exclude: ['[']}}\n",
+		"whitespace unknown":    minimal + "tools: {whitespace: {git_options: []}}\n",
+		"whitespace bool":       minimal + "tools: {whitespace: {conflict_markers: 'false'}}\n",
+		"whitespace timeout":    minimal + "tools: {whitespace: {timeout_seconds: 0}}\n",
+		"whitespace policy":     minimal + "tools: {whitespace: {fail_on: errors}}\n",
+		"whitespace include":    minimal + "tools: {whitespace: {include: [../outside]}}\n",
+		"whitespace exclude":    minimal + "tools: {whitespace: {exclude: ['[']}}\n",
+		"trailing exclude":      minimal + "tools: {whitespace: {trailing_whitespace_exclude: ['../**']}}\n",
+		"marker exclude":        minimal + "tools: {whitespace: {conflict_markers_exclude: ['/outside']}}\n",
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -165,6 +179,25 @@ func TestInvalidConfigurations(t *testing.T) {
 				t.Fatal("invalid input was accepted")
 			}
 		})
+	}
+}
+
+func TestWhitespaceOverrides(t *testing.T) {
+	result, err := Parse([]byte(minimal + `tools:
+  whitespace:
+    enabled: false
+    trailing_whitespace: false
+    conflict_markers: false
+    trailing_whitespace_exclude: []
+    conflict_markers_exclude: ['**/fixtures/**']
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := result.Config.Tools.Whitespace
+	if cfg.Enabled || cfg.TrailingWhitespace || cfg.ConflictMarkers || len(cfg.TrailingWhitespaceExclude) != 0 || len(cfg.ConflictMarkersExclude) != 1 ||
+		result.Provenance["tools.whitespace.trailing_whitespace_exclude"] != "project_config" {
+		t.Fatalf("whitespace overrides lost: %+v", result)
 	}
 }
 

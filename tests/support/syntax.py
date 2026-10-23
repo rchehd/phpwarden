@@ -31,7 +31,8 @@ def check_syntax_fixtures(test, configure, run):
                 test.assertEqual(actual, expected, result)
                 test.assertTrue(all(row["kind"] == "syntax" for row in result["findings"]))
                 test.assertEqual(
-                    [row["id"] for row in result["checks"]], ["debug", "syntax", "yaml"]
+                    [row["id"] for row in result["checks"]],
+                    ["debug", "syntax", "whitespace", "yaml"],
                 )
                 if mode == "diff" and directory.name == "deletion-syntax-error":
                     test.assertEqual(
@@ -48,6 +49,7 @@ def check_syntax_settings(test, configure, run):
             "debug": {"enabled": False},
             "syntax": {"enabled": False},
             "yaml": {"enabled": False},
+            "whitespace": {"enabled": False},
         }
         filename.write_text(json.dumps(config))
         test.assertEqual(run(scenario, [])["exit_code"], 0)

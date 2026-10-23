@@ -31,7 +31,8 @@ def check_yaml_fixtures(test, configure, run):
                 test.assertTrue(result["complete"], result)
                 test.assertEqual(result["diagnostics"], [])
                 test.assertEqual(
-                    [row["id"] for row in result["checks"]], ["debug", "syntax", "yaml"]
+                    [row["id"] for row in result["checks"]],
+                    ["debug", "syntax", "whitespace", "yaml"],
                 )
                 for row in result["findings"]:
                     test.assertEqual(row["kind"], "global" if row["line"] is None else "syntax")
@@ -51,6 +52,7 @@ def check_yaml_settings(test, configure, run):
             "debug": {"enabled": False},
             "syntax": {"enabled": False},
             "yaml": {"enabled": False},
+            "whitespace": {"enabled": False},
         }
         filename.write_text(json.dumps(config))
         test.assertEqual(run(scenario, [])["exit_code"], 0)

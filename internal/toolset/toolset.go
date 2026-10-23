@@ -12,7 +12,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/phpconstraint"
 )
 
-const DevelopmentID = "static-dev-v2-php8.4"
+const DevelopmentID = "static-dev-v3-php8.4"
 const DevelopmentPHPVersion = "8.4.26"
 
 type Selection struct {

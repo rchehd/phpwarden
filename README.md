@@ -14,7 +14,7 @@ PHPWarden is being designed as a standalone CLI with Docker-based tools and adap
 
 ## Development status
 
-The project is in early development. The Go CLI validates configuration, discovers Drupal layout and locked versions, inspects Git scope, selects a development toolset, and runs PHP debug, PHP syntax, and YAML syntax checkers through Docker. A local development image contains PHP 8.4, Git, and isolated Symfony YAML dependencies. Published images, automatic pulls, and agent integrations are not available yet.
+The project is in early development. The Go CLI validates configuration, discovers Drupal layout and locked versions, inspects Git scope, selects a development toolset, and runs PHP debug, PHP syntax, YAML syntax, whitespace, and conflict marker checks through Docker. A local development image contains PHP 8.4, Git, and isolated Symfony YAML dependencies. Published images, automatic pulls, and agent integrations are not available yet.
 
 ## Build and try the CLI
 
@@ -28,7 +28,7 @@ bin/phpwarden config show --config examples/drupal.phpwarden.yaml --format json
 
 For a project, save its configuration as `.phpwarden.yaml` in the project root. The CLI finds the nearest configuration from the current directory up to the Git worktree root, or accepts an explicit `--project` or `--config` path. Explicit paths also allow configuration validation outside Git. Relative command-line paths are resolved from the caller's directory.
 
-Validation checks YAML structure, the [v1 schema](schemas/config-v1.schema.json), PHP target ranges, and path boundaries. It rejects unknown fields and checker IDs, duplicate keys, aliases, and numeric PHP versions. The implemented checkers are `debug`, `syntax`, and `yaml`, all enabled by default.
+Validation checks YAML structure, the [v1 schema](schemas/config-v1.schema.json), PHP target ranges, and path boundaries. It rejects unknown fields and checker IDs, duplicate keys, aliases, and numeric PHP versions. The implemented checkers are `debug`, `syntax`, `whitespace`, and `yaml`, all enabled by default.
 
 `config show` includes discovered project facts, core and Drupal defaults, explicit project overrides, and their provenance. Its `pending` list identifies unresolved values. `config validate` checks configuration syntax/schema and path boundaries without inspecting Composer metadata. Discovery validates Composer PHP requirements and compares installed Drupal version metadata when available. Full dependency integrity and release image compatibility remain future work. The development launcher currently requires PHP runtime and target `"8.4"`.
 
@@ -79,7 +79,7 @@ Project autoload and executable `installed.php` are never loaded. If only PHP me
 
 ## Debug worker
 
-The worker command runs directly in its execution environment and requires PHP with the tokenizer extension. Its PHP minor version must match `php.runtime`. It can run inside a preselected image or directly during development. Public `phpwarden check` uses Docker and has no host PHP fallback.
+The worker command runs directly in its execution environment. The debug checker requires PHP with the tokenizer extension; its PHP minor version must match `php.runtime`. It can run inside a preselected image or directly during development. Public `phpwarden check` uses Docker and has no host PHP fallback.
 
 In a configured project with discovered or explicit source roots:
 
@@ -126,6 +126,21 @@ Reports follow the [v1 report schema](schemas/report-v1.schema.json), which is e
 
 Reports include `environment.framework_version` when an exact version is available. Direct `worker check` reports have no resolved image/toolset metadata. Public `check` reports identify the inspected immutable local image ID and development toolset. Release compatibility validation remains pending.
 
+## Check whitespace and conflict markers
+
+`whitespace` checks all selected file types for trailing ASCII spaces/tabs and unresolved merge conflict markers. Diff mode reports added lines only. Full mode and explicit paths check all lines; `--whole-files` checks all lines of changed files, including deletion-only changes.
+
+```sh
+phpwarden check --only whitespace
+phpwarden check --only whitespace --mode full
+```
+
+Settings live under `tools.whitespace`: the common `enabled`, `required`, `fail_on`, `timeout_seconds`, `include`, and `exclude` fields, plus independent `trailing_whitespace` and `conflict_markers` toggles. `trailing_whitespace_exclude` defaults to `["**/*.md", "**/*.patch", "**/*.diff"]`; `conflict_markers_exclude` defaults to `[]`. Rule-specific lists replace defaults, so set `trailing_whitespace_exclude: []` to check Markdown trailing spaces. Common exclusions apply to both rules. Patterns are case-sensitive, as with other checker exclusions.
+
+CRLF line endings are accepted; trailing spaces/tabs before CRLF or at EOF are findings. Files containing a NUL byte anywhere are skipped as binary; other content is checked as bytes, without requiring UTF-8. Columns are one-based byte positions. Marker detection recognizes runs of at least seven identical `<`, `|`, `=`, or `>` characters at column one, followed by a space, tab, or end of line. It flags each marker independently, including diff3 base markers and longer marker widths. Indented markers, quoted patch lines, and shorter runs are not recognized. A literal separator such as `=======` also matches; use marker-specific exclusions for intentional examples.
+
+Findings use rules `whitespace.trailing` and `conflict.marker`, with `kind: code`. The implementation runs inside the Go worker without launching Git, PHP, or project code. Public `check` continues to use the selected Docker image. No fixes are applied.
+
 ## Check through Docker
 
 After building the Go CLI and development image, run these commands in your configured Git project:
@@ -150,7 +165,7 @@ The launcher requires host Git and a local Docker Unix socket, with no host PHP,
 
 The development image must already exist under `phpwarden:static-php8.4-dev`; a missing image returns an error with build instructions. There is no registry fallback or pull for this unpublished tag. Remote Docker contexts and other platforms are currently rejected. The worker protocol is now v2, carrying a checker selection list instead of the previous debug-only flag. Rebuild the CLI and image together; old debug images cannot satisfy the new toolset/protocol/capability checks. The report format remains v1, with `environment.protocol: 2`.
 
-The current toolset is `static-dev-v2-php8.4`, with `debug,syntax,yaml` capabilities. Rebuild the existing development tag after adding YAML; an earlier debug/syntax-only image is rejected.
+The current toolset is `static-dev-v3-php8.4`, with `debug,syntax,whitespace,yaml` capabilities. Rebuild the existing development tag after adding whitespace checks; earlier images are rejected.
 
 ## Run the development Docker image
 
@@ -173,7 +188,7 @@ docker run --rm --pull=never --network=none --read-only \
 
 Set PHP runtime/target to `"8.4"` and configure an available diff base. Source roots can be discovered or supplied through `scope.include`. Append `--mode full` for a full scan or `--base origin/main` to override the diff base. The command returns the worker's exit code and JSON report.
 
-This image contains the debug, syntax, and YAML checkers, PHP 8.4.26, Git, and the locked Symfony YAML tool bundle. It requires no host PHP, Composer, or Go, and no project `vendor` directory. The image defaults to UID/GID 10001; the command above uses your UID/GID to read private project directories. Check mode mounts the project read-only and uses a private temporary filesystem. Git trusts only the known `/workspace` mount through the image's system configuration.
+This image contains the debug, syntax, whitespace, and YAML checkers, PHP 8.4.26, Git, and the locked Symfony YAML tool bundle. It requires no host PHP, Composer, or Go, and no project `vendor` directory. The image defaults to UID/GID 10001; the command above uses your UID/GID to read private project directories. Check mode mounts the project read-only and uses a private temporary filesystem. Git trusts only the known `/workspace` mount through the image's system configuration.
 
 Use a local Docker daemon with access to the source directory. Mount the entire Git repository for monorepos and pass `--project /workspace/path/to/project`. Linked worktrees or separate Git directories whose metadata lives outside the mount need additional path mapping; the launcher will handle those separately. Container paths in findings remain relative to the configured project.
 
@@ -214,6 +229,8 @@ The launcher suite extracts the actual CLI binary from the built image and runs 
 Five syntax fixtures add 20 combinations per worker, Docker, and launcher suite: added parser errors, old errors outside diff hunks, deletion-only errors at EOF, compile errors, and untracked paths with spaces. Shared acceptance checks cover explicit checker selection, disabled defaults, nonblocking findings, extra extensions, exclusions, and source that must never execute. Optional execution failures keep `complete: false`; already observed blocking findings still return exit 1 unless a required execution failure takes precedence with exit 3.
 
 Six YAML fixtures add another 24 combinations per suite: duplicate keys, old errors outside hunks, deletion-only errors, uppercase untracked paths with spaces, valid aliases/custom tags, and invalid UTF-8 without a line number. Settings tests cover include/exclude, disabled/explicit selection, empty files, nonblocking findings, and project autoload isolation. Native worker tests also remove the adjacent tool bundle to verify required and optional failure policies. The native acceptance harness creates a temporary binary-and-library layout; Docker tests use the actual bundled installation with no network at check time.
+
+Six whitespace fixtures add 24 combinations per suite: added spaces/tabs, old violations outside hunks, deletion-only changes, Markdown conflicts, untracked CRLF/EOF content with a spaced filename and binary data, and marker lookalikes. Shared settings tests cover independent rule toggles/exclusions, explicit selection, include/exclude, and nonblocking findings. Go tests also cover long lines, invalid UTF-8 text, late NUL bytes, cancellation, and partial read failures. Intentional fixture whitespace is exempted from repository `git diff --check` via a scoped attribute.
 
 Drupal discovery acceptance covers root/web/docroot/custom web roots, multisite custom directories, automatic source roots, explicit broad roots with profile exclusions, locked version reporting, malformed metadata, and version conflicts. These are small synthetic Git projects; they do not establish compatibility with a full installed Drupal application.
 

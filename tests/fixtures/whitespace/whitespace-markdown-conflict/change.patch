@@ -1,0 +1,12 @@
+--- a/web/modules/custom/demo/guide.md
++++ b/web/modules/custom/demo/guide.md
+@@ -1 +1,8 @@
+-# Guide
++# Guide  
++<<<<<<< HEAD
++ours  
++||||||| base
++ancestor
++=======
++theirs
++>>>>>>> branch

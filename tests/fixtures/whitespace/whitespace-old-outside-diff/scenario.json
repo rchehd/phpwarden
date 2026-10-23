@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "id": "whitespace-old-outside-diff",
+  "state": "committed",
+  "changed_files": [
+    "web/modules/custom/demo/demo.txt"
+  ],
+  "verdicts": {
+    "diff": "pass",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "whitespace",
+      "rule": "whitespace.trailing",
+      "path": "web/modules/custom/demo/demo.txt",
+      "line": 1,
+      "contains": "old ",
+      "modes": [
+        "full"
+      ]
+    },
+    {
+      "checker": "whitespace",
+      "rule": "conflict.marker",
+      "path": "web/modules/custom/demo/demo.txt",
+      "line": 2,
+      "contains": "<<<<<<<",
+      "modes": [
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

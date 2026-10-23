@@ -10,7 +10,12 @@ class ScenarioFixturesTest(unittest.TestCase):
     def scenarios(self):
         directories = sorted(
             path
-            for group in (FIXTURES, FIXTURES.parent / "syntax", FIXTURES.parent / "yaml")
+            for group in (
+                FIXTURES,
+                FIXTURES.parent / "syntax",
+                FIXTURES.parent / "yaml",
+                FIXTURES.parent / "whitespace",
+            )
             for path in group.iterdir()
             if path.is_dir()
         )

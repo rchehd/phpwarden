@@ -73,7 +73,7 @@ func dockerDouble(t *testing.T, location config.Location, calls *[]runner.Comman
 		case "context":
 			return runner.Result{Stdout: []byte(`"unix:///var/run/docker.sock"`)}
 		case "image":
-			return runner.Result{Stdout: []byte(`[{"Id":"` + testImage + `","Os":"linux","Architecture":"amd64","Config":{"Labels":{"io.phpwarden.protocol":"2","io.phpwarden.toolset":"` + toolset.DevelopmentID + `","io.phpwarden.checkers":"debug,syntax,yaml","io.phpwarden.php-version":"8.4.26","io.phpwarden.symfony-yaml-version":"7.4.21"}}}]`)}
+			return runner.Result{Stdout: []byte(`[{"Id":"` + testImage + `","Os":"linux","Architecture":"amd64","Config":{"Labels":{"io.phpwarden.protocol":"2","io.phpwarden.toolset":"` + toolset.DevelopmentID + `","io.phpwarden.checkers":"debug,syntax,whitespace,yaml","io.phpwarden.php-version":"8.4.26","io.phpwarden.symfony-yaml-version":"7.4.21"}}}]`)}
 		case "run":
 			for _, argument := range []string{"--read-only", "--network=none", "--cap-drop=ALL", "--security-opt=no-new-privileges:true", "--pull=never", testImage} {
 				if !slices.Contains(command.Args, argument) {
@@ -119,6 +119,41 @@ func TestDockerTransportUsesPinnedImageAndVersionedRequest(t *testing.T) {
 	}
 	if len(calls) != 4 || calls[3].Args[0] != "rm" || calls[3].Args[2] != calls[2].Args[slices.Index(calls[2].Args, "--name")+1] {
 		t.Fatalf("container cleanup did not match run: %+v", calls)
+	}
+}
+
+func TestWhitespaceTransportAndPolicyValidation(t *testing.T) {
+	for _, mutation := range []string{"", "wrong kind", "wrong policy", "old capabilities"} {
+		t.Run(mutation, func(t *testing.T) {
+			location, effective, options := fixture(t)
+			if err := os.WriteFile(filepath.Join(location.Root, "src/demo.php"), []byte("<?php\n// trailing \n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			var calls []runner.Command
+			base := dockerDouble(t, location, &calls)
+			process := processFunc(func(ctx context.Context, command runner.Command) runner.Result {
+				result := base(ctx, command)
+				if mutation == "old capabilities" && command.Args[0] == "image" {
+					result.Stdout = bytesReplace(result.Stdout, "debug,syntax,whitespace,yaml", "debug,syntax,yaml")
+				}
+				if command.Args[0] == "run" {
+					if mutation == "wrong kind" {
+						result.Stdout = bytesReplace(result.Stdout, `"kind":"code"`, `"kind":"syntax"`)
+					} else if mutation == "wrong policy" {
+						result.Stdout = bytesReplace(result.Stdout, `"required":true`, `"required":false`)
+					}
+				}
+				return result
+			})
+			result := Check(context.Background(), location, effective, options, []string{"whitespace"}, process)
+			if mutation != "" {
+				if result.ExitCode != 3 || result.Complete {
+					t.Fatalf("invalid whitespace report/image accepted: %+v", result)
+				}
+			} else if result.ExitCode != 1 || !result.Complete || len(result.Findings) != 1 || result.Findings[0].Rule != "whitespace.trailing" || result.Environment.PHPRuntime != nil {
+				t.Fatalf("native checker transport failed: %+v", result)
+			}
+		})
 	}
 }
 

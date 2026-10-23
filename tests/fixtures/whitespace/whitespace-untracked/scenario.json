@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "id": "whitespace-untracked",
+  "state": "untracked",
+  "changed_files": [
+    "web/modules/custom/demo/binary.dat",
+    "web/modules/custom/demo/space name.txt"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "whitespace",
+      "rule": "whitespace.trailing",
+      "path": "web/modules/custom/demo/space name.txt",
+      "line": 2,
+      "contains": "bad\t",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    },
+    {
+      "checker": "whitespace",
+      "rule": "whitespace.trailing",
+      "path": "web/modules/custom/demo/space name.txt",
+      "line": 3,
+      "contains": "last ",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ]
+}

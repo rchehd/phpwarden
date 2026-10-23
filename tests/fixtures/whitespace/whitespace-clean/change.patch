@@ -1,0 +1,8 @@
+--- a/web/modules/custom/demo/demo.txt
++++ b/web/modules/custom/demo/demo.txt
+@@ -1 +1,5 @@
+ clean
++<<<<<< short
++<<<<<<<identifier
+++<<<<<<< HEAD
++ =======

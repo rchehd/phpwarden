@@ -54,6 +54,22 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "whitespace": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean", "default": true},
+            "required": {"type": "boolean", "default": true},
+            "fail_on": {"type": "string", "enum": ["error", "warning", "never"], "default": "error"},
+            "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 2147483647, "default": 120},
+            "include": {"$ref": "#/$defs/include"},
+            "exclude": {"$ref": "#/$defs/exclude"},
+            "trailing_whitespace": {"type": "boolean", "default": true},
+            "conflict_markers": {"type": "boolean", "default": true},
+            "trailing_whitespace_exclude": {"$ref": "#/$defs/exclude", "default": ["**/*.md", "**/*.patch", "**/*.diff"]},
+            "conflict_markers_exclude": {"$ref": "#/$defs/exclude", "default": []}
+          }
+        },
         "yaml": {
           "type": "object",
           "additionalProperties": false,

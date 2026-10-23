@@ -9,6 +9,7 @@ from pathlib import Path
 from tests.acceptance.docker_worker import snapshot
 from tests.support.scenarios import materialize
 from tests.support.syntax import check_syntax_fixtures, check_syntax_settings
+from tests.support.whitespace import check_whitespace_fixtures, check_whitespace_settings
 from tests.support.yaml import FIXTURES as YAML_FIXTURES
 from tests.support.yaml import check_yaml_fixtures, check_yaml_settings
 
@@ -130,6 +131,22 @@ class LauncherCLITest(unittest.TestCase):
             self.assertIn("encoding.yaml", completed.stdout)
             self.assertIn("UTF-8", completed.stdout)
 
+    def run_whitespace(self, scenario, arguments):
+        before = snapshot(scenario.root)
+        result = self.run_cli(scenario.root, ["check", *arguments], scenario.env)
+        self.assertEqual(snapshot(scenario.root), before)
+        return result
+
+    def test_whitespace_fixtures(self):
+        check_whitespace_fixtures(
+            self, lambda scenario: self.configure(scenario.root, scenario.base), self.run_whitespace
+        )
+
+    def test_whitespace_settings(self):
+        check_whitespace_settings(
+            self, lambda scenario: self.configure(scenario.root, scenario.base), self.run_whitespace
+        )
+
     def test_public_check_matches_all_fixture_modes_without_host_php_or_go(self):
         for directory in sorted(FIXTURES.iterdir()):
             for mode in ("diff", "full", "whole-files", "paths"):
@@ -150,7 +167,7 @@ class LauncherCLITest(unittest.TestCase):
                         self.assertEqual(result["exit_code"], 1 if verdict == "fail" else 0)
                         self.assertTrue(result["complete"])
                         self.assertTrue(result["environment"]["image"].startswith("sha256:"))
-                        self.assertEqual(result["environment"]["toolset"], "static-dev-v2-php8.4")
+                        self.assertEqual(result["environment"]["toolset"], "static-dev-v3-php8.4")
                         expected = sorted(
                             (row["checker"], row["path"], row["line"])
                             for row in scenario.spec["findings"]

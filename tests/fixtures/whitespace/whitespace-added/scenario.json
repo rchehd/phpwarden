@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "id": "whitespace-added",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/demo.txt"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "whitespace",
+      "rule": "whitespace.trailing",
+      "path": "web/modules/custom/demo/demo.txt",
+      "line": 2,
+      "contains": "bad ",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    },
+    {
+      "checker": "whitespace",
+      "rule": "whitespace.trailing",
+      "path": "web/modules/custom/demo/demo.txt",
+      "line": 3,
+      "contains": "\t",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

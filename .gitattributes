@@ -1,1 +1,2 @@
 *.patch -whitespace
+tests/fixtures/whitespace/** -whitespace

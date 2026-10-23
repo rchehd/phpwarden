@@ -7,6 +7,7 @@ from pathlib import Path
 
 from tests.support.scenarios import materialize
 from tests.support.syntax import check_syntax_fixtures, check_syntax_settings
+from tests.support.whitespace import check_whitespace_fixtures, check_whitespace_settings
 from tests.support.yaml import FIXTURES as YAML_FIXTURES
 from tests.support.yaml import check_yaml_fixtures, check_yaml_settings
 
@@ -109,6 +110,12 @@ class WorkerCLITest(unittest.TestCase):
 
     def test_yaml_settings(self):
         check_yaml_settings(self, self.configure, self.run_worker)
+
+    def test_whitespace_fixtures(self):
+        check_whitespace_fixtures(self, self.configure, self.run_worker)
+
+    def test_whitespace_settings(self):
+        check_whitespace_settings(self, self.configure, self.run_worker)
 
     def test_missing_yaml_bundle_never_loads_project_autoload(self):
         with materialize(YAML_FIXTURES / "yaml-duplicate-key") as scenario:

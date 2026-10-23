@@ -11,6 +11,14 @@ scope:
   mode: diff
   base: origin/main
 tools:
+  whitespace:
+    enabled: true
+    required: true
+    fail_on: error
+    trailing_whitespace: true
+    conflict_markers: true
+    trailing_whitespace_exclude: ["**/*.md", "**/*.patch", "**/*.diff"]
+    conflict_markers_exclude: []
   yaml:
     enabled: true
     required: true

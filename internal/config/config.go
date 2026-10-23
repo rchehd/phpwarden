@@ -51,9 +51,23 @@ type Runner struct {
 }
 
 type Tools struct {
-	Debug  Debug  `json:"debug"`
-	Syntax Syntax `json:"syntax"`
-	YAML   YAML   `json:"yaml"`
+	Debug      Debug      `json:"debug"`
+	Syntax     Syntax     `json:"syntax"`
+	YAML       YAML       `json:"yaml"`
+	Whitespace Whitespace `json:"whitespace"`
+}
+
+type Whitespace struct {
+	Enabled                   bool     `json:"enabled"`
+	Required                  bool     `json:"required"`
+	FailOn                    string   `json:"fail_on"`
+	TimeoutSeconds            int      `json:"timeout_seconds"`
+	Include                   []string `json:"include,omitempty"`
+	Exclude                   []string `json:"exclude"`
+	TrailingWhitespace        bool     `json:"trailing_whitespace"`
+	ConflictMarkers           bool     `json:"conflict_markers"`
+	TrailingWhitespaceExclude []string `json:"trailing_whitespace_exclude"`
+	ConflictMarkersExclude    []string `json:"conflict_markers_exclude"`
 }
 
 type YAML struct {
@@ -136,7 +150,9 @@ func Parse(data []byte) (Effective, error) {
 			Framework: Framework{Version: "auto"},
 			Scope:     Scope{Mode: "diff", Exclude: []string{}},
 			Runner:    Runner{TimeoutSeconds: 300},
-			Tools: Tools{YAML: YAML{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}},
+			Tools: Tools{Whitespace: Whitespace{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{},
+				TrailingWhitespace: true, ConflictMarkers: true, TrailingWhitespaceExclude: []string{"**/*.md", "**/*.patch", "**/*.diff"}, ConflictMarkersExclude: []string{}},
+				YAML: YAML{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}},
 				Syntax: Syntax{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120,
 					Exclude: []string{}, ExtraExtensions: []string{}}, Debug: Debug{
 					Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120,
@@ -155,7 +171,12 @@ func Parse(data []byte) (Effective, error) {
 			"tools.syntax.exclude": "core_default", "tools.syntax.extra_extensions": "core_default",
 			"tools.yaml.enabled": "profile_default", "tools.yaml.required": "core_default",
 			"tools.yaml.fail_on": "core_default", "tools.yaml.timeout_seconds": "core_default",
-			"tools.yaml.exclude": "core_default",
+			"tools.yaml.exclude":       "core_default",
+			"tools.whitespace.enabled": "profile_default", "tools.whitespace.required": "core_default",
+			"tools.whitespace.fail_on": "core_default", "tools.whitespace.timeout_seconds": "core_default",
+			"tools.whitespace.exclude": "core_default", "tools.whitespace.trailing_whitespace": "core_default",
+			"tools.whitespace.conflict_markers": "core_default", "tools.whitespace.trailing_whitespace_exclude": "core_default",
+			"tools.whitespace.conflict_markers_exclude": "core_default",
 		},
 		Pending: []string{},
 	}
@@ -255,14 +276,15 @@ func markProvenance(values map[string]any, prefix string, sources map[string]str
 }
 
 func validateValues(cfg Config) error {
-	for _, values := range [][]string{cfg.Scope.Include, cfg.Tools.Debug.Include, cfg.Tools.Syntax.Include, cfg.Tools.YAML.Include} {
+	for _, values := range [][]string{cfg.Scope.Include, cfg.Tools.Debug.Include, cfg.Tools.Syntax.Include, cfg.Tools.YAML.Include, cfg.Tools.Whitespace.Include} {
 		for _, value := range values {
 			if err := projectpath.Validate(value); err != nil {
 				return err
 			}
 		}
 	}
-	for _, values := range [][]string{cfg.Scope.Exclude, cfg.Tools.Debug.Exclude, cfg.Tools.Syntax.Exclude, cfg.Tools.YAML.Exclude} {
+	for _, values := range [][]string{cfg.Scope.Exclude, cfg.Tools.Debug.Exclude, cfg.Tools.Syntax.Exclude, cfg.Tools.YAML.Exclude,
+		cfg.Tools.Whitespace.Exclude, cfg.Tools.Whitespace.TrailingWhitespaceExclude, cfg.Tools.Whitespace.ConflictMarkersExclude} {
 		if err := validatePatterns(values); err != nil {
 			return err
 		}

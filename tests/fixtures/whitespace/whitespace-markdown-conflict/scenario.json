@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "id": "whitespace-markdown-conflict",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/guide.md"
+  ],
+  "verdicts": {
+    "diff": "fail",
+    "full": "fail"
+  },
+  "findings": [
+    {
+      "checker": "whitespace",
+      "rule": "conflict.marker",
+      "path": "web/modules/custom/demo/guide.md",
+      "line": 2,
+      "contains": "<<<<<<<",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    },
+    {
+      "checker": "whitespace",
+      "rule": "conflict.marker",
+      "path": "web/modules/custom/demo/guide.md",
+      "line": 4,
+      "contains": "|||||||",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    },
+    {
+      "checker": "whitespace",
+      "rule": "conflict.marker",
+      "path": "web/modules/custom/demo/guide.md",
+      "line": 6,
+      "contains": "=======",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    },
+    {
+      "checker": "whitespace",
+      "rule": "conflict.marker",
+      "path": "web/modules/custom/demo/guide.md",
+      "line": 8,
+      "contains": ">>>>>>>",
+      "modes": [
+        "diff",
+        "full"
+      ]
+    }
+  ],
+  "patch": "change.patch"
+}

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "id": "whitespace-clean",
+  "state": "unstaged",
+  "changed_files": [
+    "web/modules/custom/demo/demo.txt"
+  ],
+  "verdicts": {
+    "diff": "pass",
+    "full": "pass"
+  },
+  "findings": [],
+  "patch": "change.patch"
+}
