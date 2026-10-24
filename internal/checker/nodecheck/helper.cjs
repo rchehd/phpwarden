@@ -238,11 +238,25 @@ async function main() {
     }
   } catch (error) {
     result.files = [];
-    if (['MODULE_NOT_FOUND', 'ERR_MODULE_NOT_FOUND'].includes(error.code)) {
-      const directory = request.groups.find((group) => group.config)?.config;
-      const relative = directory ? path.relative(request.root, path.dirname(directory)) || '.' : request.composer_root;
+    if (['MODULE_NOT_FOUND', 'ERR_MODULE_NOT_FOUND'].includes(error.code) || ['extend-config-missing', 'plugin-missing'].includes(error.messageTemplate)) {
+      const importer = error.messageData?.importerName || request.groups.find((group) => group.config)?.config;
+      let directory = importer && inside(request.root, importer) ? path.dirname(importer) : request.root;
+      while (directory !== request.root && !fs.existsSync(path.join(directory, 'package.json'))) {
+        directory = path.dirname(directory);
+      }
+      const relative = path.relative(request.root, directory) || '.';
+      const packageFile = path.join(directory, 'package.json');
+      const pkg = fs.existsSync(packageFile) ? JSON.parse(fs.readFileSync(packageFile, 'utf8')) : {};
+      const manager = typeof pkg.packageManager === 'string' ? pkg.packageManager : '';
+      let install = `npm ci --prefix ${JSON.stringify(relative)}`;
+      if (manager.startsWith('yarn@') || fs.existsSync(path.join(directory, 'yarn.lock'))) {
+        const legacy = manager.startsWith('yarn@1.');
+        install = `yarn install ${legacy ? '--frozen-lockfile' : '--immutable'} in ${JSON.stringify(relative)}`;
+      } else if (manager.startsWith('pnpm@') || fs.existsSync(path.join(directory, 'pnpm-lock.yaml'))) {
+        install = `pnpm install --frozen-lockfile in ${JSON.stringify(relative)}`;
+      }
       error.code = 'dependencies_missing';
-      error.message += `; restore the project's locked dependencies with npm ci --prefix ${JSON.stringify(relative)}`;
+      error.message += `; restore the project's locked dependencies with ${install}`;
     }
     result.code = ['dependencies_missing', 'version_mismatch', 'config_invalid'].includes(error.code) ? error.code : 'analysis_failed';
     result.error = error.message || String(error);

@@ -13,6 +13,37 @@ try {
     foreach (['phpstan/phpstan', 'mglaman/phpstan-drupal', 'phpstan/phpstan-deprecation-rules', 'shipmonk/dead-code-detector', 'phpstan/phpstan-strict-rules'] as $name) {
         $versions[$name] = ltrim(InstalledVersions::getPrettyVersion($name), 'v');
     }
+    if ($request['autoload'] !== '') {
+        require $request['autoload'];
+        $preload = "<?php\n";
+        if (class_exists('PHPStan\\ExtensionInstaller\\GeneratedConfig')) {
+            // Bundled extensions follow PHPWarden settings; preserve other project extensions.
+            $reflection = new ReflectionClass('PHPStan\\ExtensionInstaller\\GeneratedConfig');
+            $constants = $reflection->getConstants();
+            foreach ($constants['EXTENSIONS'] as $name => $extension) {
+                if (isset($versions[$name])) {
+                    unset($constants['EXTENSIONS'][$name]);
+                    continue;
+                }
+                $directory = isset($extension['relative_install_path'])
+                    ? dirname($reflection->getFileName()) . '/' . $extension['relative_install_path']
+                    : $extension['install_path'];
+                $constants['EXTENSIONS'][$name]['install_path'] = realpath($directory) ?: $extension['install_path'];
+                unset($constants['EXTENSIONS'][$name]['relative_install_path']);
+            }
+            $code = "<?php\nnamespace PHPStan\\ExtensionInstaller;\nfinal class GeneratedConfig {\n";
+            foreach ($constants as $name => $value) {
+                $code .= 'public const ' . $name . ' = ' . var_export($value, true) . ";\n";
+            }
+            $generated = $temporary . '/extensions.php';
+            file_put_contents($generated, $code . "}\n");
+            $preload .= 'require ' . var_export($generated, true) . ";\n";
+        }
+        foreach ($request['preload'] as $filename) {
+            $preload .= 'require_once ' . var_export($filename, true) . ";\n";
+        }
+        file_put_contents($temporary . '/project-autoload.php', $preload);
+    }
     $literal = static fn(string $value): string => str_replace('%', '%%', $value);
     $includes = array_map($literal, $request['includes']);
     $parameters = [

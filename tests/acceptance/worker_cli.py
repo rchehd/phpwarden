@@ -1,7 +1,12 @@
+import errno
 import json
+import os
+import pty
+import select
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -356,6 +361,68 @@ class WorkerCLITest(unittest.TestCase):
             report = self.run_worker(scenario, ["--only", "phpstna"])
             self.assertEqual(report["exit_code"], 2)
             self.assertEqual(report["verdict"], "error")
+
+    def test_progress_is_interactive_text_only(self):
+        for output_format, term, ci, interactive in (
+            ("text", "xterm", "", True),
+            ("json", "xterm", "", False),
+            ("compact", "xterm", "", False),
+            ("text", "dumb", "", False),
+            ("text", "xterm", "true", False),
+        ):
+            with (
+                self.subTest(format=output_format, term=term, ci=ci),
+                materialize(FIXTURES / "added-debug") as scenario,
+            ):
+                self.configure(scenario)
+                master, slave = pty.openpty()
+                process = subprocess.Popen(
+                    [
+                        str(self.binary),
+                        "worker",
+                        "check",
+                        "--only",
+                        "whitespace",
+                        "--mode",
+                        "full",
+                        "--format",
+                        output_format,
+                    ],
+                    cwd=scenario.root,
+                    env=scenario.env | {"TERM": term, "CI": ci},
+                    stdout=slave,
+                    stderr=slave,
+                )
+                os.close(slave)
+                output = bytearray()
+                deadline = time.monotonic() + 30
+                try:
+                    while True:
+                        remaining = deadline - time.monotonic()
+                        self.assertGreater(remaining, 0, "PTY worker did not finish")
+                        if not select.select([master], [], [], min(remaining, 1))[0]:
+                            continue
+                        try:
+                            chunk = os.read(master, 65536)
+                        except OSError as error:
+                            if error.errno == errno.EIO:
+                                break
+                            raise
+                        if not chunk:
+                            break
+                        output.extend(chunk)
+                    self.assertEqual(process.wait(timeout=5), 0, output.decode())
+                finally:
+                    os.close(master)
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait(timeout=5)
+                text = output.decode()
+                self.assertEqual("\x1b[2K" in text, interactive, text)
+                if interactive:
+                    self.assertLess(text.rfind("\x1b[2K"), text.index("Result:"), text)
+                if output_format == "json":
+                    self.assertTrue(json.loads(text)["complete"], text)
 
     def test_runtime_mismatch_is_blocking(self):
         with materialize(FIXTURES / "added-debug") as scenario:

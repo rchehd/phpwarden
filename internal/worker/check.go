@@ -33,6 +33,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/profile/drupal"
+	"github.com/rchehd/phpwarden/internal/progress"
 	"github.com/rchehd/phpwarden/internal/protocol"
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/runner"
@@ -44,6 +45,7 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 	cfg := effective.Config
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(cfg.Runner.TimeoutSeconds)*time.Second)
 	defer cancel()
+	progress.Stage(ctx, "Reading Git changes")
 	selection, err := scope.Build(ctx, options)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -60,6 +62,7 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 		result.Finalize()
 		return result
 	}
+	progress.Stage(ctx, "Preparing analysis inputs")
 	before, err := runrequest.Snapshot(location, selection, only)
 	if err != nil {
 		return failure("input_read", err)
@@ -76,6 +79,7 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 	}
 	result = analyze(ctx, location, cfg, effective.Project, selection, only, audit, process)
 	validateRuntime(&result, effective)
+	progress.Stage(ctx, "Verifying project inputs are unchanged")
 	after, err := runrequest.Snapshot(location, selection, only)
 	if err != nil {
 		return failure("stale", err)
@@ -116,6 +120,7 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 		return report.InputError("selection", err)
 	}
 	for _, id := range checker.Requested(only) {
+		progress.Stage(ctx, "Checking "+id)
 		var outcome checker.Outcome
 		if id == "phpstan" {
 			settings := cfg.Tools.PHPStan

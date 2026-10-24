@@ -182,7 +182,7 @@ func analyse(ctx context.Context, root, composerRoot string, selection scope.Sel
 		quote := strings.NewReplacer(`\`, `\\`, `'`, `\'`)
 		wrapper := "<?php\n"
 		for _, name := range preload {
-			wrapper += "require '" + quote.Replace(name) + "';\n"
+			wrapper += "require_once '" + quote.Replace(name) + "';\n"
 		}
 		filename := filepath.Join(temporary, "autoload.php")
 		if err := os.WriteFile(filename, []byte(wrapper), 0o600); err != nil {
@@ -207,7 +207,11 @@ func analyse(ctx context.Context, root, composerRoot string, selection scope.Sel
 		}
 		return major*10000 + minor*100 + patch
 	}
-	input, _ := json.Marshal(map[string]any{"includes": includes, "extensions": extensions, "php_version": map[string]int{"min": versionID(target.Min, false), "max": versionID(target.Max, true)},
+	projectAutoload := ""
+	if autoload != "" {
+		projectAutoload = filepath.Join(root, filepath.FromSlash(autoload))
+	}
+	input, _ := json.Marshal(map[string]any{"includes": includes, "extensions": extensions, "autoload": projectAutoload, "preload": preload, "php_version": map[string]int{"min": versionID(target.Min, false), "max": versionID(target.Max, true)},
 		"diff": selection.Mode == "diff" && !selection.WholeFiles || mode.id != "phpstan", "bootstrapFiles": absolute(cfg.BootstrapFiles), "scanDirectories": absolute(cfg.ScanDirectories), "stubFiles": absolute(cfg.StubFiles), "exclude": append([]string{}, mode.exclude...),
 		"strict_rules": cfg.StrictRules, "strict_enabled": mode.id == "phpstan" && cfg.StrictRules.Enabled})
 	phpArgs := []string{"-d", "auto_prepend_file=", "-d", "auto_append_file=", "-d", "display_errors=stderr", "-d", "log_errors=0", "-d", "memory_limit=" + strconv.Itoa(cfg.MemoryLimitMB) + "M"}
@@ -240,6 +244,9 @@ func analyse(ctx context.Context, root, composerRoot string, selection scope.Sel
 		return fail("error", "invalid_report", "Invalid PHPStan PHP runtime version")
 	}
 	result.Runtime, result.PHPVersion = &meta.Runtime, &meta.PHPVersion
+	if autoload != "" {
+		preload = []string{filepath.Join(temporary, "project-autoload.php")}
+	}
 	args := append(slices.Clone(phpArgs), filepath.Join(bundle, "vendor/phpstan/phpstan/phpstan"), "analyse", "--configuration="+filepath.Join(temporary, "phpstan.neon"), "--error-format=json", "--no-progress", "--no-ansi", "--memory-limit="+strconv.Itoa(cfg.MemoryLimitMB)+"M")
 	if len(preload) > 0 {
 		args = append(args, "--autoload-file="+preload[0])

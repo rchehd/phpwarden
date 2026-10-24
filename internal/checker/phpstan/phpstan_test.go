@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rchehd/phpwarden/internal/config"
@@ -124,5 +125,63 @@ func TestTraitContextReportsMergeIntoSelectedPhysicalFile(t *testing.T) {
 	}
 	if _, _, err := decode(data, 1, "/project", []string{"src/Other.php"}); err == nil {
 		t.Fatal("foreign trait accepted")
+	}
+}
+
+func TestProjectExtensionInstallerKeepsCustomRulesWithoutEnablingBundledRulesTwice(t *testing.T) {
+	root := t.TempDir()
+	bundle, _ := filepath.Abs("../../../tools/phpstan")
+	quote := func(value string) string {
+		return "'" + strings.ReplaceAll(strings.ReplaceAll(value, `\`, `\\`), "'", `\'`) + "'"
+	}
+	write(t, root, "src/demo.php", "<?php\nfunction example(): int { return 'wrong'; }\n")
+	write(t, root, "vendor/autoload.php", `<?php
+spl_autoload_register(static function (string $class): void {
+    if ($class === 'PHPStan\\ExtensionInstaller\\GeneratedConfig') {
+        require __DIR__ . '/phpstan/extension-installer/src/GeneratedConfig.php';
+    }
+});
+`)
+	write(t, root, "vendor/phpstan/extension-installer/src/GeneratedConfig.php", `<?php
+namespace PHPStan\ExtensionInstaller;
+final class GeneratedConfig {
+    public const EXTENSIONS = [
+        'mglaman/phpstan-drupal' => ['install_path' => `+quote(filepath.Join(bundle, "vendor/mglaman/phpstan-drupal"))+`, 'extra' => ['includes' => ['extension.neon', 'rules.neon']]],
+        'phpstan/phpstan-deprecation-rules' => ['install_path' => `+quote(filepath.Join(bundle, "vendor/phpstan/phpstan-deprecation-rules"))+`, 'extra' => ['includes' => ['rules.neon']]],
+        'fixture/project-rules' => ['install_path' => '/old/install/path', 'relative_install_path' => '../../../fixture/project-rules', 'extra' => ['includes' => ['rules.neon']]],
+    ];
+    public const NOT_INSTALLED = [];
+    public const PHPSTAN_VERSION_CONSTRAINT = null;
+}
+
+`)
+	write(t, root, "vendor/fixture/project-rules/rules.neon", "parameters:\n    ignoreErrors:\n        - '#^Function example\\(\\) should return int but returns string\\.$#'\n")
+	selection := scope.Selection{Mode: "full", Files: []string{"src/demo.php"}, LineMap: map[string][]scope.Range{"src/demo.php": nil}}
+	cfg := settings(t)
+	check := func(want int) {
+		t.Helper()
+		result := run(context.Background(), root, ".", selection, cfg, config.Target{Min: "8.4", Max: "8.4"}, "", bundle, runner.Exec{})
+		if len(result.Diagnostics) != 0 || len(result.Findings) != want || (result.Check.Status == "failed") != (want > 0) {
+			t.Fatalf("extension-installer integration failed: %+v", result)
+		}
+	}
+	check(0)
+	write(t, root, "vendor/fixture/project-rules/rules.neon", "parameters:\n    reportUnmatchedIgnoredErrors: false\n")
+	check(1)
+	write(t, root, "src/demo.php", "<?php\n/** @deprecated */\nfunction old_api(): void {}\nold_api();\n")
+	cfg.Deprecations = false
+	check(0)
+}
+
+func TestCustomVendorAutoloadFunctionsAreLoadedOnce(t *testing.T) {
+	root := t.TempDir()
+	bundle, _ := filepath.Abs("../../../tools/phpstan")
+	write(t, root, "composer.json", `{"config":{"vendor-dir":"libs"}}`)
+	write(t, root, "libs/autoload.php", "<?php\nfunction project_value(): int { return 1; }\n")
+	write(t, root, "src/demo.php", "<?php\nfunction demo(): int { return project_value(); }\n")
+	selection := scope.Selection{Mode: "full", Files: []string{"src/demo.php"}, LineMap: map[string][]scope.Range{"src/demo.php": nil}}
+	result := run(context.Background(), root, ".", selection, settings(t), config.Target{Min: "8.4", Max: "8.4"}, "", bundle, runner.Exec{})
+	if result.Check.Status != "passed" || len(result.Diagnostics) != 0 || len(result.Findings) != 0 {
+		t.Fatalf("custom vendor autoload failed: %+v", result)
 	}
 }

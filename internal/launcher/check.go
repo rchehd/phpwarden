@@ -27,6 +27,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/checker/semgrep"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
+	"github.com/rchehd/phpwarden/internal/progress"
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/runner"
 	"github.com/rchehd/phpwarden/internal/runrequest"
@@ -56,10 +57,12 @@ func check(ctx context.Context, location config.Location, effective config.Effec
 		}
 		return result
 	}
+	progress.Stage(ctx, "Selecting compatible toolset")
 	selected, err := toolset.Resolve(effective)
 	if err != nil {
 		return report.InputError("compatibility", err)
 	}
+	progress.Stage(ctx, "Reading Git changes")
 	selection, err := scope.Build(ctx, options)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -74,6 +77,7 @@ func check(ctx context.Context, location config.Location, effective config.Effec
 	if err := discovery.Unchanged(location, effective); err != nil {
 		return failure("stale", err)
 	}
+	progress.Stage(ctx, "Checking Docker and worker image")
 	if err := localEndpoint(ctx, process); err != nil {
 		return failure("docker_unavailable", err)
 	}
@@ -81,6 +85,7 @@ func check(ctx context.Context, location config.Location, effective config.Effec
 	if err != nil {
 		return failure("image_unavailable", err)
 	}
+	progress.Stage(ctx, fmt.Sprintf("Preparing %d selected files", len(selection.Files)+len(selection.ProjectFiles)))
 	request, err := runrequest.Build(location, effective, selection, only, image, selected.ID)
 	if err != nil {
 		return failure("stale", err)
@@ -90,6 +95,7 @@ func check(ctx context.Context, location config.Location, effective config.Effec
 	if err != nil {
 		return failure("request_invalid", err)
 	}
+	progress.Stage(ctx, "Checking result cache")
 	cacheState, err := openResultCache(ctx, location, request, allowCache)
 	if err != nil {
 		return failure("launcher_cancelled", err)
@@ -102,6 +108,7 @@ func check(ctx context.Context, location config.Location, effective config.Effec
 	}
 	result, hit := cacheState.Read(request, time.Now())
 	if !hit {
+		progress.Stage(ctx, fmt.Sprintf("Running analyzers · %d files", len(selection.Files)+len(selection.ProjectFiles)))
 		result, err = runWorker(ctx, location, request, input, process)
 		if ctx.Err() != nil {
 			return failure("launcher_cancelled", ctx.Err())
@@ -113,6 +120,7 @@ func check(ctx context.Context, location config.Location, effective config.Effec
 	pendingCache, _ := json.Marshal(result)
 	for i, check := range result.Checks {
 		if check.ID == "composer-audit" && check.Reason != nil && *check.Reason == "delegated" {
+			progress.Stage(ctx, "Checking Composer security advisories")
 			cacheDir, _ := composeraudit.CacheDir()
 			outcome := composeraudit.Run(ctx, config.ComposerDir(location.Root, request.Config), auditSettings(request.Config, only), dockerFetcher(image, process), cacheDir, time.Now())
 			result.Checks[i] = outcome.Check
@@ -122,6 +130,7 @@ func check(ctx context.Context, location config.Location, effective config.Effec
 			result.Finalize()
 		}
 	}
+	progress.Stage(ctx, "Verifying project inputs are unchanged")
 	refreshed, err := scope.Build(ctx, options)
 	if err == nil && !reflect.DeepEqual(selection, refreshed) {
 		err = fmt.Errorf("Git scope changed during the check")

@@ -55,9 +55,9 @@ Init options:
   --php-target X.Y     PHP the code must support (default: Composer platform, else the runtime)
 
 Scope options:
-  --mode diff|full     Override configured mode
+  --mode diff|full     Override configured mode (default config: diff)
   --base REF           Diff base ref
-  --commits N          Diff against HEAD~N: the last N commits plus uncommitted changes
+  --commits N          Last N commits plus local edits; requires diff mode (default)
   --whole-files        Include all lines of selected diff files
   --no-cache           Run public check without reusing a result cache
   --fix                Fix selected files with PHPCS/Twig CS Fixer, then check them again
@@ -66,7 +66,7 @@ Scope options:
 Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
 Check uses local development Docker images (Linux amd64, PHP runtime 8.1–8.4, target from 8.1 up to the runtime).
 Init writes .phpwarden.yaml at the Git root and never overwrites an existing file.
-Worker check requires PHP in its execution environment. Published images are not available yet.
+Worker check requires PHP in its execution environment. Images must exist locally; automatic pulls are not implemented.
 `
 
 var minorVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
@@ -205,17 +205,26 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	if isInit {
 		return initProject(ctx, args, cwd, stdout, stderr)
 	}
+	var display *terminalProgress
+	if isCheck || isWorker {
+		ctx, display = startProgress(ctx, args.format, stdout, stderr)
+		defer display.Stop()
+	}
 	location, err := config.Resolve(config.LocationOptions{CWD: cwd, Project: args.project, Config: args.config})
 	if err != nil {
+		display.Stop()
 		return fail(stdout, stderr, args, "config", err)
 	}
 	effective, err := config.Load(location)
 	if err != nil {
+		display.Stop()
 		return fail(stdout, stderr, args, "config", err)
 	}
 	if !isConfig || args.command[1] == "show" {
+		display.Stage("Detecting project and installed dependencies")
 		effective, err = discovery.Apply(location, effective)
 		if err != nil {
+			display.Stop()
 			return fail(stdout, stderr, args, "discovery", err)
 		}
 	}
@@ -229,6 +238,7 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		}
 		options, err := scopeOptions(workerArgs, cwd, location, effective.Config)
 		if err != nil {
+			display.Stop()
 			return fail(stdout, stderr, args, "usage", err)
 		}
 		var result report.Report
@@ -243,6 +253,7 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		} else {
 			result = worker.Check(ctx, location, effective, options, only, runner.Exec{})
 		}
+		display.Stop()
 		return writeReport(stdout, stderr, args.format, args.color, result, args.all)
 	}
 	result := response{

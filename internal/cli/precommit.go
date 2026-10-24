@@ -102,14 +102,18 @@ func preCommit(ctx context.Context, args options, cwd string, stdout, stderr io.
 	}
 	options.Mode, options.Paths = "paths", selected
 	fmt.Fprintf(stdout, "PHPWarden pre-commit · %d staged file(s) · whole files\n", len(selected))
+	ctx, display := startProgress(ctx, "text", stdout, stderr)
+	defer display.Stop()
 	result := launcher.Check(ctx, location, effective, options, nil, runner.Exec{})
 	err = snapshot.Check(ctx, selected)
 	if ctx.Err() != nil {
+		display.Stop()
 		return failure(ctx.Err())
 	}
 	if err != nil {
 		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "stale", Stage: "pre-commit", Message: err.Error()})
 		result.Finalize()
 	}
+	display.Stop()
 	return writeReport(stdout, stderr, "text", args.color, result, args.all)
 }

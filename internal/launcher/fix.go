@@ -17,6 +17,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/edit"
+	"github.com/rchehd/phpwarden/internal/progress"
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/runner"
 	"github.com/rchehd/phpwarden/internal/runrequest"
@@ -42,11 +43,13 @@ func Fix(ctx context.Context, location config.Location, effective config.Effecti
 	if err != nil {
 		return report.InputError("fix", err)
 	}
+	progress.Stage(ctx, "Waiting for project fix lock")
 	release, err := cache.LockProject(ctx, location.Root)
 	if err != nil {
 		return failure("fix_lock", err)
 	}
 	defer release()
+	progress.Stage(ctx, "Reading Git changes for fixes")
 	selected, err := scope.Build(ctx, options)
 	if err != nil {
 		return report.InputError("scope", err)
@@ -77,6 +80,7 @@ func Fix(ctx context.Context, location config.Location, effective config.Effecti
 	if err != nil {
 		return failure("request_invalid", err)
 	}
+	progress.Stage(ctx, "Preparing fixes")
 	execution := fixContainer(ctx, location.Root, image, input, process)
 	if ctx.Err() != nil {
 		return failure("fix_cancelled", ctx.Err())
@@ -120,6 +124,7 @@ func Fix(ctx context.Context, location config.Location, effective config.Effecti
 	if ctx.Err() != nil {
 		return failure("fix_cancelled", ctx.Err())
 	}
+	progress.Stage(ctx, "Applying validated fixes")
 	changed, err = edit.Apply(location.Root, prepared.Edits, request.FixInputs())
 	if err != nil {
 		return failure("fix_write_failed", err)

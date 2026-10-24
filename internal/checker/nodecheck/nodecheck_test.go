@@ -248,3 +248,17 @@ func TestMissingFlatConfigImportIsDependencyFailure(t *testing.T) {
 		t.Fatalf("missing project plugin was misclassified: %+v", result)
 	}
 }
+
+func TestMissingLegacySharedConfigNamesItsDependencyDirectory(t *testing.T) {
+	root := t.TempDir()
+	bundle, _ := filepath.Abs("../../../tools/node")
+	write(t, root, "src/.eslintrc.json", `{"extends":"../web/core/.eslintrc.json"}`)
+	write(t, root, "web/core/.eslintrc.json", `{"extends":"phpwarden-missing-fixture-config"}`)
+	write(t, root, "web/core/package.json", `{"packageManager":"yarn@4.9.1"}`)
+	write(t, root, "web/core/yarn.lock", "")
+	write(t, root, "src/a.js", "let value = 1;\n")
+	result := run(context.Background(), root, selection("src/a.js"), settings(t), "eslint", bundle, runner.Exec{})
+	if result.Check.Status != "unavailable" || len(result.Diagnostics) != 1 || result.Diagnostics[0].Code != "dependencies_missing" || !strings.Contains(result.Diagnostics[0].Message, "web/core") || !strings.Contains(result.Diagnostics[0].Message, "yarn install --immutable") {
+		t.Fatalf("missing shared configuration was misclassified: %+v", result)
+	}
+}

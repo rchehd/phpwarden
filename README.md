@@ -1,12 +1,14 @@
 # PHPWarden
 
-PHPWarden runs static quality checks on Drupal projects. By default it checks only the lines you changed against a base branch. The tools run inside a Docker image, so the host needs no PHP or Composer. Results come as readable text or JSON, with stable exit codes for CI and scripts.
+PHPWarden runs static quality checks for PHP projects. Profiles provide the conventions, source layout and default rules for each framework or CMS. By default it checks only the lines you changed against a base branch. The tools run inside a Docker image, so the host needs no PHP or Composer. Results come as readable text or JSON, with stable exit codes for CI and scripts.
+
+Drupal is currently the only available profile. Symfony and Laravel profiles are planned; WordPress is a possible future addition. The configuration and examples below use the Drupal profile.
 
 ## Requirements
 
 - Linux amd64, Git, and a local Docker daemon.
 - Go 1.26.5 to build the CLI.
-- A Drupal project on PHP 8.1, 8.2, 8.3, or 8.4. Other frameworks are not supported yet.
+- A project supported by an available profile. The current Drupal profile supports PHP 8.1, 8.2, 8.3, and 8.4.
 
 ## Install
 
@@ -342,6 +344,8 @@ tools:
 `id` matches the advisory ID or its CVE. After `until`, the advisory is reported again.
 
 ## Results
+
+Interactive text runs show a live stage and elapsed time on stderr while preparing the project, running Docker checks and fetching Composer advisories. The status line is cleared before the final report. Redirected output, CI, JSON, compact output and `TERM=dumb` do not animate. The Docker worker currently returns its checks together, so the launcher shows the Docker analysis stage rather than individual checker progress or a percentage.
 
 The default text output starts with the result and analysis completeness, then groups findings by severity, checker and rule. Each group shows its full finding/file counts, files and compact position lists. Repeated explanations appear once; differing messages keep their details next to the relevant positions. Setup failures and coverage notes appear before the findings:
 
