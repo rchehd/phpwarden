@@ -34,7 +34,6 @@ var hints = map[string]hint{
 	"stale":                  {"Run the check again once the files stop changing.", ""},
 	"checker_timeout":        {"Raise the checker's timeout_seconds or runner.timeout_seconds.", ""},
 	"advisories_unavailable": {"Connect to the network, or raise tools.composer-audit.max_stale_hours to accept an older cache.", ""},
-	"dependencies_missing":   {"Rebuild the Docker image together with the CLI.", "rebuild"},
 	"scope_invalid":          {"Check the base branch and paths; phpwarden scope shows what would be checked.", "--base"},
 }
 

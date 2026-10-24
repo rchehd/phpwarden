@@ -98,6 +98,34 @@ func TestCategorySummaryPreservesCoverageAndFailurePolicies(t *testing.T) {
 	}
 }
 
+func TestMissingProjectDependenciesNeverSuggestImageRebuild(t *testing.T) {
+	for _, tc := range []struct {
+		id, title, message string
+	}{
+		{"eslint", "JavaScript dependencies unavailable", "Failed to load airbnb-base; restore the project's locked dependencies with yarn install --immutable in web/core"},
+		{"stylelint", "Stylesheet dependencies unavailable", "Install the declared stylelint dependencies in frontend"},
+		{"composer-unused", "Dependencies unavailable", "Dependency checks require installed Composer 2 metadata and dependencies"},
+	} {
+		for _, compact := range []bool{false, true} {
+			result := base("demo.php")
+			result.Checks = []report.Check{check(tc.id, "unavailable", true, "dependencies_missing")}
+			result.Diagnostics = []report.Diagnostic{{Checker: new(tc.id), Code: "dependencies_missing", Message: tc.message}}
+			result.Finalize()
+			var output bytes.Buffer
+			if err := Write(&output, result, Options{Compact: compact}); err != nil {
+				t.Fatal(err)
+			}
+			text := output.String()
+			if strings.Contains(text, "Rebuild") || strings.Contains(text, "Fix:") || !compact && !strings.Contains(text, tc.title) {
+				t.Fatalf("incorrect dependency guidance for %s (compact=%t):\n%s", tc.id, compact, text)
+			}
+			if !strings.Contains(strings.Join(strings.Fields(text), " "), tc.message) {
+				t.Fatalf("dependency guidance lost the original instruction:\n%s", text)
+			}
+		}
+	}
+}
+
 func TestCategoryFindingsRespectEachChecksFailurePolicy(t *testing.T) {
 	for _, policy := range []string{"never", "error", "warning"} {
 		result := base("demo.php")

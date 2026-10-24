@@ -117,6 +117,14 @@ func diagnosticIssue(diagnostic report.Diagnostic, check report.Check) categoryI
 	}[diagnostic.Code]; ok {
 		issue.title = title
 	}
+	if diagnostic.Code == "dependencies_missing" && diagnostic.Checker != nil {
+		switch *diagnostic.Checker {
+		case "eslint":
+			issue.title = "JavaScript dependencies unavailable"
+		case "stylelint":
+			issue.title = "Stylesheet dependencies unavailable"
+		}
+	}
 	if check.Status == "error" || check.Status == "unavailable" {
 		if check.Required {
 			issue.title += " (required)"
