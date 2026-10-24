@@ -72,7 +72,7 @@ type Result struct {
 	PreCommit     *githook.Installation `json:"pre_commit,omitempty"`
 }
 
-// Run writes a minimal configuration for the Drupal project, or validates the one already there.
+// Run writes an annotated configuration, or validates the one already there.
 func Run(ctx context.Context, options Options) (Result, error) {
 	root, err := projectRoot(ctx, options)
 	if err != nil {
@@ -231,7 +231,18 @@ func generate(location config.Location, composerRoot string, runtime, target Cho
 		return nil, toolset.Selection{}, err
 	}
 	selection, err := toolset.Resolve(effective)
-	return data, selection, err
+	if err != nil {
+		return nil, toolset.Selection{}, err
+	}
+	reference, err := configurationReference(effective.Config)
+	if err != nil {
+		return nil, toolset.Selection{}, err
+	}
+	data = append(data, reference...)
+	if _, err := config.Parse(data); err != nil {
+		return nil, toolset.Selection{}, fmt.Errorf("generated configuration is invalid: %w", err)
+	}
+	return data, selection, nil
 }
 
 func validateExisting(root string) error {
