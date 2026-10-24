@@ -50,7 +50,7 @@ func TestFindingsUseChangedLinesAndNeverExposeSecrets(t *testing.T) {
 		if slices.Equal(cmd.Args, []string{"version"}) {
 			return runner.Result{Stdout: []byte(Version)}
 		}
-		for _, required := range []string{"--redact=100", "--log-level=error", "--max-archive-depth=0", "--max-decode-depth=0", "--", name} {
+		for _, required := range []string{"--redact=100", "--log-level=error", "--max-archive-depth=0", "--max-decode-depth=0", "--", "."} {
 			if !slices.Contains(cmd.Args, required) {
 				t.Fatalf("unsafe invocation: missing %s", required)
 			}
@@ -188,6 +188,9 @@ func TestActualGitleaksConfigBaselineAndLineFilter(t *testing.T) {
 		}
 		return result
 	})
+	write(t, root, "shared.toml", "[[rules]]\nid='phpwarden-test'\nregex='''PHPWARDEN_TEST_[A-Z0-9]{16}'''\n")
+	write(t, root, ".gitleaks.toml", "[extend]\npath='shared.toml'\n")
+	cfg.ExtraInputs = []string{"shared.toml"}
 	result := run(context.Background(), root, ".", selected, cfg, binary, process)
 	if result.Check.Status != "failed" || len(result.Findings) != 1 || *result.Findings[0].Line != 3 {
 		t.Fatalf("actual Gitleaks: %+v", result)
@@ -200,5 +203,30 @@ func TestActualGitleaksConfigBaselineAndLineFilter(t *testing.T) {
 	result = run(context.Background(), root, ".", selected, cfg, binary, runner.Exec{})
 	if result.Check.Status != "passed" || len(result.Findings) != 0 || len(result.Diagnostics) != 0 {
 		t.Fatalf("native baseline not applied: %+v", result)
+	}
+}
+
+func TestMultipleSelectedFilesShareNativeScan(t *testing.T) {
+	binary, err := exec.LookPath("gitleaks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	write(t, root, ".gitleaks.toml", "[[rules]]\nid='fixture'\nregex='''PHPWARDEN_TEST_[A-Z0-9]{16}'''\n")
+	secret := "PHPWARDEN_TEST_" + strings.Repeat("B", 16)
+	for _, name := range []string{"src/a file.txt", "src/b.txt", "not-selected.txt"} {
+		write(t, root, name, secret+"\n")
+	}
+	selected := scope.Selection{Mode: "full", Files: []string{"src/a file.txt", "src/b.txt"}, LineMap: map[string][]scope.Range{"src/a file.txt": nil, "src/b.txt": nil}}
+	calls := 0
+	process := processFunc(func(ctx context.Context, cmd runner.Command) runner.Result {
+		if cmd.Args[0] == "dir" {
+			calls++
+		}
+		return (runner.Exec{}).Run(ctx, cmd)
+	})
+	result := run(context.Background(), root, ".", selected, settings(t), binary, process)
+	if result.Check.Status != "failed" || len(result.Findings) != 2 || calls != 1 {
+		t.Fatalf("selected files were not scanned together: calls=%d result=%+v", calls, result)
 	}
 }

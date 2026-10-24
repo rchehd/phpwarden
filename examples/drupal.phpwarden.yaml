@@ -39,6 +39,7 @@ tools:
       all: true
       rules: {}
   twig-cs-fixer:
+    autoload: ""  # use auto for project configs that load Drupal token parsers
     enabled: true
     required: true
     fail_on: error

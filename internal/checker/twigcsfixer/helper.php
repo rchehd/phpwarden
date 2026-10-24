@@ -13,9 +13,18 @@ use TwigCsFixer\Token\Tokenizer;
 
 try {
     $bundle = $argv[1];
-    require $bundle . '/vendor/autoload.php';
+    $bundleLoader = require $bundle . '/vendor/autoload.php';
+    $versions = [
+        'vincentlanglet/twig-cs-fixer' => ltrim(InstalledVersions::getPrettyVersion('vincentlanglet/twig-cs-fixer'), 'v'),
+        'twig/twig' => ltrim(InstalledVersions::getPrettyVersion('twig/twig'), 'v'),
+    ];
     $request = json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);
     ob_start();
+    if ('' !== ($request['autoload'] ?? '')) {
+        require $request['autoload'];
+        $bundleLoader->unregister();
+        $bundleLoader->register(true);
+    }
     if (null !== $request['config']) {
         $config = (static fn (string $path): mixed => require $path)($request['config']);
         if (!$config instanceof Config) {
@@ -63,10 +72,7 @@ try {
         'version' => 1,
         'runtime' => PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION,
         'php_version' => PHP_VERSION,
-        'tools' => [
-            'vincentlanglet/twig-cs-fixer' => ltrim(InstalledVersions::getPrettyVersion('vincentlanglet/twig-cs-fixer'), 'v'),
-            'twig/twig' => ltrim(InstalledVersions::getPrettyVersion('twig/twig'), 'v'),
-        ],
+        'tools' => $versions,
         'files' => (object) $files,
         'edits' => $edits,
     ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE), "\n";

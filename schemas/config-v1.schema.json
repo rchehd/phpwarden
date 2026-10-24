@@ -404,6 +404,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "autoload": {"type": "string", "default": ""},
             "enabled": {
               "type": "boolean",
               "default": true

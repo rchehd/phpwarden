@@ -181,7 +181,8 @@ class LauncherCLITest(unittest.TestCase):
                 self.assertIn("UTF-8", completed.stdout)
                 self.assertIn("Result: FAIL", completed.stdout)
                 outputs[output] = completed.stdout
-            self.assertIn("yaml — 1 error", outputs["text"])
+            self.assertIn("yaml / yaml.syntax", outputs["text"])
+            self.assertIn("1 finding · 1 file", outputs["text"])
             self.assertRegex(outputs["text"], r"\n  \S*encoding\.yaml\n")
             self.assertRegex(outputs["compact"], r"\n\S*encoding\.yaml  error  .*\[yaml: ")
 
@@ -191,6 +192,48 @@ class LauncherCLITest(unittest.TestCase):
         if "--fix" not in arguments:
             self.assertEqual(snapshot(scenario.root), before)
         return result
+
+    def test_rule_groups_and_all_preserve_complete_machine_reports(self):
+        with materialize(FIXTURES / "clean-debug") as scenario:
+            self.configure(scenario.root, scenario.base)
+            path = "web/modules/custom/demo/many.js"
+            (scenario.root / path).write_text("console.log('demo');\n" * 15)
+            before = snapshot(scenario.root)
+            for output, extra in (("text", []), ("text", ["--all"]), ("compact", []), ("json", [])):
+                with self.subTest(output=output, extra=extra):
+                    completed = subprocess.run(
+                        [
+                            str(self.binary),
+                            "check",
+                            path,
+                            "--only",
+                            "debug",
+                            "--format",
+                            output,
+                            *extra,
+                        ],
+                        cwd=scenario.root,
+                        env=scenario.env,
+                        capture_output=True,
+                        text=True,
+                        timeout=60,
+                    )
+                    self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+                    self.assertEqual(completed.stderr, "")
+                    if output == "json":
+                        result = json.loads(completed.stdout)
+                        self.assertTrue(result["complete"])
+                        self.assertEqual(len(result["findings"]), 15)
+                    elif output == "compact":
+                        self.assertEqual(completed.stdout.count("[debug: debug.js_call]"), 15)
+                        self.assertIn(f"{path}:15:", completed.stdout)
+                    else:
+                        self.assertIn("15 errors", completed.stdout)
+                        self.assertIn("1 rule group", completed.stdout)
+                        self.assertIn("debug / debug.js_call", completed.stdout)
+                        self.assertEqual("5 more findings" in completed.stdout, not extra)
+                        self.assertEqual("13 · 14 · 15" in completed.stdout, bool(extra))
+            self.assertEqual(snapshot(scenario.root), before)
 
     def test_whitespace_fixtures(self):
         check_whitespace_fixtures(
@@ -436,7 +479,7 @@ class LauncherCLITest(unittest.TestCase):
                         self.assertEqual(result["exit_code"], 1 if verdict == "fail" else 0)
                         self.assertTrue(result["complete"])
                         self.assertTrue(result["environment"]["image"].startswith("sha256:"))
-                        self.assertEqual(result["environment"]["toolset"], "static-dev-v20-php8.4")
+                        self.assertEqual(result["environment"]["toolset"], "static-dev-v21-php8.4")
                         expected = sorted(
                             (row["checker"], row["path"], row["line"])
                             for row in scenario.spec["findings"]

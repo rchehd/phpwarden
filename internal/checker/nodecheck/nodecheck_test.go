@@ -3,6 +3,7 @@ package nodecheck
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -208,5 +209,42 @@ func TestActualNodeTools(t *testing.T) {
 				t.Fatalf("actual %s: %+v", id, result)
 			}
 		})
+	}
+}
+
+func TestJscpdRepeatedYamlBlocksKeepContiguousCloneRanges(t *testing.T) {
+	root := t.TempDir()
+	bundle, _ := filepath.Abs("../../../tools/node")
+	seed := uint32(9)
+	rand := func(n uint32) uint32 { seed = seed*1664525 + 1013904223; return seed % n }
+	names := []string{"src/a.yml", "src/b.yml", "src/c.yml"}
+	for _, name := range names {
+		var text strings.Builder
+		text.WriteString("root:\n")
+		for range 20 {
+			fmt.Fprintf(&text, "  block_%d:\n", rand(5))
+			for k := range 12 {
+				fmt.Fprintf(&text, "    field_%d: value_%d\n", k, rand(3))
+			}
+		}
+		write(t, root, name, text.String())
+	}
+	cfg := settings(t)
+	cfg.Tools.JSCPD.MinTokens = 10
+	cfg.Tools.JSCPD.MinLines = 2
+	result := run(context.Background(), root, selection(names...), cfg, "jscpd", bundle, runner.Exec{})
+	if result.Check.Status != "passed" || len(result.Diagnostics) > 0 || len(result.Findings) == 0 {
+		t.Fatalf("repeated YAML clone ranges failed: %+v", result)
+	}
+}
+
+func TestMissingFlatConfigImportIsDependencyFailure(t *testing.T) {
+	root := t.TempDir()
+	bundle, _ := filepath.Abs("../../../tools/node")
+	write(t, root, "eslint.config.mjs", "import plugin from 'phpwarden-missing-fixture-plugin'; export default [plugin];\n")
+	write(t, root, "src/a.js", "let value = 1;\n")
+	result := run(context.Background(), root, selection("src/a.js"), settings(t), "eslint", bundle, runner.Exec{})
+	if result.Check.Status != "unavailable" || result.Diagnostics[0].Code != "dependencies_missing" || !strings.Contains(result.Diagnostics[0].Message, "npm ci") {
+		t.Fatalf("missing project plugin was misclassified: %+v", result)
 	}
 }

@@ -123,3 +123,35 @@ func TestContextHashCoversConfigsAndExtraInputs(t *testing.T) {
 		t.Fatal("symlinked extra input accepted")
 	}
 }
+
+func TestProjectTokenParserLoadsFromComposerAutoloadWithoutReplacingBundledTwig(t *testing.T) {
+	root := t.TempDir()
+	bundle, _ := filepath.Abs("../../../tools/twig-cs-fixer")
+	write(t, root, "platform/vendor/autoload.php", `<?php
+spl_autoload_register(static function (string $class): void {
+ if ($class === 'ProjectParser') {require __DIR__ . '/parser.php';}
+});
+`)
+	write(t, root, "platform/vendor/parser.php", `<?php
+class ProjectParser extends Twig\TokenParser\AbstractTokenParser {
+ public function parse(Twig\Token $token): Twig\Node\Node { $this->parser->getStream()->expect(Twig\Token::BLOCK_END_TYPE);return new Twig\Node\Node(); }
+ public function getTag(): string {return 'project';}
+}
+`)
+	write(t, root, "platform/.twig-cs-fixer.php", `<?php
+return (new TwigCsFixer\Config\Config())->addTokenParser(new ProjectParser());
+`)
+	write(t, root, "templates/demo.twig", "{% project %}\n")
+	selection := scope.Selection{Mode: "full", Files: []string{"templates/demo.twig"}, LineMap: map[string][]scope.Range{"templates/demo.twig": nil}}
+	cfg := settings(t)
+	cfg.Autoload = "auto"
+	result := run(context.Background(), root, "platform", selection, cfg, "drupal", bundle, runner.Exec{})
+	if result.Check.Status != "passed" || len(result.Diagnostics) > 0 {
+		t.Fatalf("project parser could not load: %+v", result)
+	}
+	before := ContextHash(root, "platform", cfg)
+	write(t, root, "platform/vendor/autoload.php", "<?php\n")
+	if before == ContextHash(root, "platform", cfg) {
+		t.Fatal("project autoloader did not invalidate context")
+	}
+}

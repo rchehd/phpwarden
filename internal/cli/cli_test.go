@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -48,6 +49,8 @@ func TestConfigCommands(t *testing.T) {
 
 func TestUsageErrorsNeverReturnSuccess(t *testing.T) {
 	cases := [][]string{
+		{"scope", "--all"}, {"config", "show", "--all"}, {"check", "--all", "--all"}, {"--version", "--all"},
+		{"check", "--all", "--format", "compact"}, {"check", "--all", "--format", "json"}, {"init", "--all"},
 		{"config", "show", "--no-cache"}, {"worker", "check", "--no-cache"}, {"check", "--no-cache", "--no-cache"}, {"--version", "--no-cache"},
 		{"scope", "--fix"}, {"config", "show", "--fix"}, {"check", "--fix", "--fix"}, {"--version", "--fix"},
 		{"check"}, {"init"}, {"config"}, {"config", "shwo"}, {"config", "show", "extra"},
@@ -91,6 +94,16 @@ func TestHelpAndVersionDoNotNeedConfig(t *testing.T) {
 		var stdout, stderr bytes.Buffer
 		if code := Run(args, t.TempDir(), &stdout, &stderr); code != 0 || stdout.Len() == 0 || stderr.Len() != 0 {
 			t.Fatalf("unexpected help/version output: exit=%d stdout=%s stderr=%s", code, &stdout, &stderr)
+		}
+	}
+}
+
+func TestAllFlagAcceptedForReportCommands(t *testing.T) {
+	for _, command := range [][]string{{"check"}, {"fix"}, {"worker", "check"}} {
+		args := append(append([]string{}, command...), "--all", "--help")
+		var stdout, stderr bytes.Buffer
+		if code := Run(args, t.TempDir(), &stdout, &stderr); code != 0 || stderr.Len() != 0 {
+			t.Fatalf("--all was rejected for %v: exit=%d %s %s", command, code, &stdout, &stderr)
 		}
 	}
 }
@@ -155,8 +168,44 @@ func TestGlobalYAMLFailureIsVisibleInText(t *testing.T) {
 	result.Findings = []report.Finding{{Checker: "yaml", Rule: "yaml.syntax", Kind: "global", Severity: "error", Message: `YAML file "config.yml": invalid UTF-8`}}
 	result.Finalize()
 	var stdout, stderr bytes.Buffer
-	if code := writeReport(&stdout, &stderr, "text", "never", result); code != 1 || !strings.Contains(stdout.String(), "  config.yml\n") || !strings.Contains(stdout.String(), "invalid UTF-8") || stderr.Len() != 0 {
+	if code := writeReport(&stdout, &stderr, "text", "never", result, false); code != 1 || !strings.Contains(stdout.String(), "  config.yml\n") || !strings.Contains(stdout.String(), "invalid UTF-8") || stderr.Len() != 0 {
 		t.Fatalf("global finding is not visible: exit=%d %s %s", code, &stdout, &stderr)
+	}
+}
+
+func TestReportDisplayLimitsNeverLimitJSONOrCompact(t *testing.T) {
+	result := report.New()
+	result.Checks = []report.Check{{ID: "debug", Status: "failed", Required: true, FailOn: "error"}}
+	for line := 1; line <= 15; line++ {
+		result.Findings = append(result.Findings, report.Finding{Checker: "debug", Rule: "debug.function", Kind: "code", Severity: "error", Message: "Debug function dpm() is called", Path: new("demo.module"), Line: new(line)})
+	}
+	result.Finalize()
+	for _, variant := range []struct {
+		format string
+		all    bool
+	}{{"text", false}, {"text", true}, {"compact", false}, {"json", false}} {
+		t.Run(fmt.Sprintf("%s/all=%v", variant.format, variant.all), func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if code := writeReport(&stdout, &stderr, variant.format, "never", result, variant.all); code != 1 || stderr.Len() != 0 {
+				t.Fatalf("wrong exit or diagnostic: %d %s", code, &stderr)
+			}
+			text := stdout.String()
+			switch variant.format {
+			case "json":
+				var decoded report.Report
+				if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil || len(decoded.Findings) != 15 {
+					t.Fatalf("display truncated JSON: %s %v", text, err)
+				}
+			case "compact":
+				if !strings.Contains(text, "demo.module:15:1") || strings.Count(text, "[debug: debug.function]") != 15 {
+					t.Fatalf("display truncated compact: %s", text)
+				}
+			case "text":
+				if strings.Contains(text, "5 more findings") == variant.all || !strings.Contains(text, "15 errors") {
+					t.Fatalf("--all not forwarded or total truncated: %s", text)
+				}
+			}
+		})
 	}
 }
 

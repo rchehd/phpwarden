@@ -211,3 +211,38 @@ func TestDisabledEmptyAndCancelledRectorNeverExecutes(t *testing.T) {
 		t.Fatalf("cancelled Rector: %+v", result)
 	}
 }
+
+func TestMonorepoRunsFromComposerRoot(t *testing.T) {
+	root, bundle := t.TempDir(), t.TempDir()
+	write(t, root, "demo.module", original)
+	write(t, root, "platform/composer.json", `{"require":{}}`)
+	write(t, bundle, "vendor/rector/rector/bin/rector.php", "<?php")
+	write(t, bundle, "vendor/autoload.php", "<?php")
+	process := processFunc(func(_ context.Context, cmd runner.Command) runner.Result {
+		if slices.Contains(cmd.Args, "--dry-run") {
+			if cmd.Directory != filepath.Join(root, "platform") {
+				t.Errorf("wrong Composer context: %s", cmd.Directory)
+			}
+			return runner.Result{ExitCode: 2, Stdout: nativeReport(filepath.Join(root, "demo.module"))}
+		}
+		return runner.Result{Stdout: metadata()}
+	})
+	result := run(context.Background(), root, "platform", "8.4", selection(nil), settings(t), bundle, process)
+	if result.Check.Status != "passed" || len(result.Findings) != 1 {
+		t.Fatal(result)
+	}
+}
+
+func TestNativeChangedFileListMayIncludeUnchangedVisitedFile(t *testing.T) {
+	data := strings.Replace(string(nativeReport("demo.module")), `"changed_files":["demo.module"]`, `"changed_files":["demo.module","unchanged.php"]`, 1)
+	selected := scope.Selection{Files: []string{"demo.module", "unchanged.php"}, LineMap: map[string][]scope.Range{"demo.module": nil, "unchanged.php": nil}}
+	contents := map[string][]byte{"demo.module": []byte(original), "unchanged.php": []byte("<?php\n")}
+	findings, err := decode([]byte(data), 2, "/project", selected, contents)
+	if err != nil || len(findings) != 1 {
+		t.Fatalf("native visited-file list was treated as an incomplete report: %v", err)
+	}
+	delete(contents, "unchanged.php")
+	if _, err := decode([]byte(data), 2, "/project", selected, contents); err == nil {
+		t.Fatal("unknown visited path accepted")
+	}
+}

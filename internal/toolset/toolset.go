@@ -14,7 +14,7 @@ import (
 
 const minimumPHP = "8.1"
 
-func DevelopmentID(runtime string) string { return "static-dev-v20-php" + runtime }
+func DevelopmentID(runtime string) string { return "static-dev-v21-php" + runtime }
 
 type Selection struct {
 	Release          string            `json:"release"`

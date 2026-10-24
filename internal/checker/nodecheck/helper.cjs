@@ -132,12 +132,41 @@ async function stylelint(request, batch, loaded) {
   return files;
 }
 
+async function contiguousClones(tokenMap, store) {
+  const clones = [];
+  let clone = null;
+  let previous = null;
+  let windowIndex = 0;
+  const flush = () => {
+    if (clone && this.validate(clone)) clones.push(clone);
+    clone = null;
+  };
+  for (const frame of tokenMap) {
+    frame.windowIndex = windowIndex++;
+    let matched;
+    try {
+      matched = await store.get(frame.id);
+    } catch {
+      flush();
+      await store.set(frame.id, frame);
+      previous = null;
+      continue;
+    }
+    // Pinned JSCPD joins repeated hashes even when the reference jumps backwards or to another file.
+    if (previous && (previous.sourceId !== matched.sourceId || previous.windowIndex + 1 !== matched.windowIndex)) flush();
+    clone = clone ? this.constructor.enlargeClone(clone, frame, matched) : this.constructor.createClone(tokenMap.getFormat(), frame, matched);
+    previous = matched;
+  }
+  flush();
+  return clones;
+}
+
 async function duplicates(request, batch, loaded) {
   if (loaded.pkg.version !== '4.3.0') throw failure('version_mismatch', 'Expected jscpd 4.3.0');
   const from = createRequire(loaded.entry);
   const core = from('@jscpd/core');
   const tokenizer = from('@jscpd/tokenizer');
-  const { InFilesDetector } = from('@jscpd/finder');
+  const { SkipLocalValidator } = from('@jscpd/finder');
   const matches = createRequire(path.join(request.bundle, 'package.json'))('picomatch');
   let native = {};
   if (batch.config) {
@@ -176,8 +205,11 @@ async function duplicates(request, batch, loaded) {
   const store = new core.MemoryStore();
   let clones;
   try {
-    const detector = new InFilesDetector(new tokenizer.Tokenizer(), store, new core.Statistic(), options);
-    clones = await detector.detect(entries);
+    const validators = options.skipLocal ? [new SkipLocalValidator()] : [];
+    const detector = new core.Detector(new tokenizer.Tokenizer(), store, validators, options);
+    detector.algorithm.run = contiguousClones;
+    clones = [];
+    for (const entry of entries.reverse()) clones.push(...await detector.detect(entry.path, entry.content, entry.detectedFormat));
   } finally {
     store.close();
   }
@@ -206,6 +238,12 @@ async function main() {
     }
   } catch (error) {
     result.files = [];
+    if (['MODULE_NOT_FOUND', 'ERR_MODULE_NOT_FOUND'].includes(error.code)) {
+      const directory = request.groups.find((group) => group.config)?.config;
+      const relative = directory ? path.relative(request.root, path.dirname(directory)) || '.' : request.composer_root;
+      error.code = 'dependencies_missing';
+      error.message += `; restore the project's locked dependencies with npm ci --prefix ${JSON.stringify(relative)}`;
+    }
     result.code = ['dependencies_missing', 'version_mismatch', 'config_invalid'].includes(error.code) ? error.code : 'analysis_failed';
     result.error = error.message || String(error);
   }

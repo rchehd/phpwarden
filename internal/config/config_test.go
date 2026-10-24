@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -533,5 +534,18 @@ func TestPackageAndParallelSyntaxSettings(t *testing.T) {
 	effective, err = Parse([]byte(minimal + "tools: {syntax: {backend: parallel-lint, parallel_jobs: 2}, composer-unused: {enabled: true, composer_root: package, exclude_packages: [acme/demo]}, composer-require-checker: {scan_files: [demo.module], allowed_symbols: ['Drupal\\demo\\Plugin']}}\n"))
 	if err != nil || effective.Config.Tools.Syntax.Backend != "parallel-lint" || effective.Provenance["tools.syntax.backend"] != "project_config" {
 		t.Fatalf("tool settings: %+v %v", effective, err)
+	}
+}
+
+func TestTwigExplicitProjectAutoload(t *testing.T) {
+	for _, setting := range []string{"", "auto", "platform/vendor/autoload.php"} {
+		text := minimal + "tools: {twig-cs-fixer: {autoload: " + strconv.Quote(setting) + "}}\n"
+		cfg, err := Parse([]byte(text))
+		if err != nil || cfg.Config.Tools.TwigCSFixer.Autoload != setting || cfg.Provenance["tools.twig-cs-fixer.autoload"] != "project_config" {
+			t.Fatalf("autoload override rejected: %+v %v", cfg, err)
+		}
+	}
+	if _, err := Parse([]byte(minimal + "tools: {twig-cs-fixer: {autoload: ../outside.php}}\n")); err == nil {
+		t.Fatal("external autoloader accepted")
 	}
 }

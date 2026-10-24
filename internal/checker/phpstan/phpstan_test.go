@@ -115,3 +115,14 @@ func TestNativeConfigIncludesBaselineAndContext(t *testing.T) {
 		t.Fatal("retargeted symlink was not fingerprinted")
 	}
 }
+
+func TestTraitContextReportsMergeIntoSelectedPhysicalFile(t *testing.T) {
+	data := []byte(`{"totals":{"errors":0,"file_errors":3},"errors":[],"files":{"/project/src/Trait.php":{"errors":1,"messages":[{"message":"base","line":2,"ignorable":true,"identifier":"return.type"}]},"/project/src/Trait.php (in context of class App\\One)":{"errors":1,"messages":[{"message":"one","line":3,"ignorable":true,"identifier":"return.type"}]},"/project/src/Trait.php (in context of class App\\Two)":{"errors":1,"messages":[{"message":"two","line":3,"ignorable":true,"identifier":"return.type"}]}}}`)
+	files, globals, err := decode(data, 1, "/project", []string{"src/Trait.php"})
+	if err != nil || len(globals) != 0 || len(files) != 1 || len(files["src/Trait.php"].Messages) != 3 {
+		t.Fatalf("trait contexts rejected or lost: %+v %v", files, err)
+	}
+	if _, _, err := decode(data, 1, "/project", []string{"src/Other.php"}); err == nil {
+		t.Fatal("foreign trait accepted")
+	}
+}

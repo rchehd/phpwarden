@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/rchehd/phpwarden/internal/checker"
+	"github.com/rchehd/phpwarden/internal/checker/phpstan"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/projectpath"
@@ -33,6 +34,9 @@ func InputRequired(cfg config.Config, selection scope.Selection, only []string) 
 
 func ContextHash(root, composerRoot string, cfg config.TwigCSFixer) string {
 	_, inputs, err := prepare(root, composerRoot, cfg)
+	if cfg.Autoload != "" {
+		inputs["project_context"] = phpstan.ContextHash(root)
+	}
 	message := ""
 	if err != nil {
 		message = err.Error()
@@ -128,10 +132,67 @@ func prepare(root, composerRoot string, cfg config.TwigCSFixer) (string, map[str
 			}
 		}
 	}
+	if cfg.Autoload != "" {
+		loader, err := projectAutoload(root, composerRoot, cfg.Autoload)
+		if err != nil {
+			return "", inputs, err
+		}
+		name := path.Join(composerRoot, "composer.json")
+		if err := record(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return "", inputs, err
+		}
+		if loader != "" {
+			if err := record(loader); err != nil {
+				return "", inputs, err
+			}
+		}
+	}
 	for _, name := range cfg.ExtraInputs {
 		if err := record(name); err != nil {
 			return "", inputs, err
 		}
 	}
 	return selected, inputs, nil
+}
+
+func projectAutoload(root, composerRoot, setting string) (string, error) {
+	if setting == "" {
+		return "", nil
+	}
+	name := setting
+	if setting == "auto" {
+		vendor := "vendor"
+		metadata := path.Join(composerRoot, "composer.json")
+		if err := projectpath.Within(root, metadata); err != nil {
+			return "", err
+		}
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(metadata)))
+		if err != nil && !os.IsNotExist(err) {
+			return "", err
+		}
+		if err == nil {
+			var doc struct {
+				Config struct {
+					Vendor string `json:"vendor-dir"`
+				} `json:"config"`
+			}
+			if err = json.Unmarshal(data, &doc); err != nil {
+				return "", err
+			}
+			if doc.Config.Vendor != "" {
+				vendor = doc.Config.Vendor
+			}
+		}
+		if err := projectpath.Validate(vendor); err != nil {
+			return "", err
+		}
+		name = path.Join(composerRoot, vendor, "autoload.php")
+	}
+	if err := projectpath.Validate(name); err != nil {
+		return "", err
+	}
+	if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(name))); setting == "auto" && os.IsNotExist(err) {
+		return "", nil
+	}
+	return name, nil
 }

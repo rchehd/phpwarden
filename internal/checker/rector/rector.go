@@ -89,7 +89,7 @@ func run(ctx context.Context, root, composerRoot, targetPHP string, selected sco
 	}
 	phpArgs := []string{"-d", "auto_prepend_file=", "-d", "auto_append_file=", "-d", "display_errors=stderr", "-d", "log_errors=0", "-d", fmt.Sprintf("memory_limit=%dM", cfg.MemoryLimitMB)}
 	runPHP := func(arguments ...string) runner.Result {
-		return process.Run(ctx, runner.Command{Name: "php", Args: append(slices.Clone(phpArgs), arguments...), Directory: root, Env: environment})
+		return process.Run(ctx, runner.Command{Name: "php", Args: append(slices.Clone(phpArgs), arguments...), Directory: config.ComposerDir(root, config.Config{ComposerRoot: composerRoot}), Env: environment})
 	}
 	metadata := runPHP(filepath.Join(temporary, "helper.php"), bundle)
 	if metadata.Unavailable {
@@ -186,8 +186,22 @@ func decode(data []byte, exit int, root string, selected scope.Selection, conten
 		Errors []json.RawMessage `json:"errors"`
 		Unused []string          `json:"unused_skips"`
 	}
-	if strictJSON(data, &response) != nil || response.Totals == nil || response.Totals.Changed == nil || response.Totals.Errors == nil || *response.Totals.Errors != 0 || len(response.Errors) > 0 || *response.Totals.Changed != len(response.Changed) || len(response.Changed) != len(response.Diffs) || (exit == 0) != (len(response.Changed) == 0) {
+	if strictJSON(data, &response) != nil || response.Totals == nil || response.Totals.Changed == nil || response.Totals.Errors == nil || *response.Totals.Errors != 0 || len(response.Errors) > 0 || *response.Totals.Changed != len(response.Diffs) || (exit == 0) != (*response.Totals.Changed == 0) {
 		return failure()
+	}
+	visited := map[string]bool{}
+	for _, name := range response.Changed {
+		if filepath.IsAbs(name) {
+			relative, err := filepath.Rel(root, name)
+			if err != nil {
+				return failure()
+			}
+			name = filepath.ToSlash(relative)
+		}
+		if _, ok := contents[name]; !ok || visited[name] {
+			return failure()
+		}
+		visited[name] = true
 	}
 	result := []report.Finding{}
 	seen := map[string]bool{}

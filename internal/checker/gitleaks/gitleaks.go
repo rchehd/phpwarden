@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -85,10 +87,10 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 			environment = append(environment, name+"="+value)
 		}
 	}
-	invoke := func(args []string) runner.Result {
-		return process.Run(ctx, runner.Command{Name: binary, Args: args, Directory: root, Env: environment})
+	invoke := func(args []string, directory string) runner.Result {
+		return process.Run(ctx, runner.Command{Name: binary, Args: args, Directory: directory, Env: environment})
 	}
-	version := invoke([]string{"version"})
+	version := invoke([]string{"version"}, root)
 	if version.Unavailable || version.Err != nil && os.IsNotExist(version.Err) {
 		return fail("unavailable", "executable_missing", "Gitleaks is unavailable beside the worker; rebuild or reinstall the toolset")
 	}
@@ -115,23 +117,66 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 		return fail("error", "helper_prepare", "Cannot prepare Gitleaks ignore configuration")
 	}
 	reportFile := filepath.Join(temporary, "findings.json")
-	for _, name := range selected.Files {
-		if err := regular(root, name); err != nil {
-			return fail("error", "input_read", "A selected Gitleaks input is missing, unreadable or unsafe")
+	for start := 0; start < len(selected.Files); {
+		end, size := start, 0
+		for end < len(selected.Files) && end-start < 128 && (end == start || size+len(selected.Files[end])+1 <= 64<<10) {
+			name := selected.Files[end]
+			if err := regular(root, name); err != nil {
+				return fail("error", "input_read", "A selected Gitleaks input is missing, unreadable or unsafe")
+			}
+			size += len(name) + 1
+			end++
 		}
+		names := selected.Files[start:end]
+		stage := filepath.Join(temporary, fmt.Sprintf("batch-%d", start))
+		for _, name := range names {
+			source, err := os.Open(absolute(name))
+			if err != nil {
+				return fail("error", "input_read", "Cannot copy selected Gitleaks input")
+			}
+			target := filepath.Join(stage, filepath.FromSlash(name))
+			err = os.MkdirAll(filepath.Dir(target), 0700)
+			var destination *os.File
+			if err == nil {
+				destination, err = os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+			}
+			if err == nil {
+				_, err = io.Copy(destination, source)
+				closeErr := destination.Close()
+				if err == nil {
+					err = closeErr
+				}
+			}
+			source.Close()
+			if err != nil {
+				return fail("error", "helper_prepare", "Cannot prepare private Gitleaks inputs")
+			}
+		}
+		for _, name := range cfg.ExtraInputs {
+			target := filepath.Join(stage, filepath.FromSlash(name))
+			if _, err := os.Lstat(target); os.IsNotExist(err) {
+				if err = os.MkdirAll(filepath.Dir(target), 0700); err == nil {
+					err = os.Symlink(absolute(name), target)
+				}
+				if err != nil {
+					return fail("error", "helper_prepare", "Cannot prepare Gitleaks config dependencies")
+				}
+			}
+		}
+		start = end
 		if err := os.Remove(reportFile); err != nil && !os.IsNotExist(err) {
 			return fail("error", "helper_prepare", "Cannot reset the private Gitleaks report")
 		}
 		args := []string{"dir", "--config=" + configFile, "--gitleaks-ignore-path=" + ignoreFile, "--report-format=json", "--report-path=" + reportFile,
 			"--redact=100", "--no-banner", "--no-color", "--log-level=error", "--exit-code=" + strconv.Itoa(findingsExit), "--timeout=" + strconv.Itoa(cfg.TimeoutSeconds),
-			"--max-archive-depth=0", "--max-decode-depth=0", "--max-target-megabytes=0"}
+			"--max-archive-depth=0", "--max-decode-depth=0", "--max-target-megabytes=0", "--follow-symlinks=false"}
 		if prepared.Baseline != "" {
 			args = append(args, "--baseline-path="+absolute(prepared.Baseline))
 		}
 		for _, id := range cfg.Rules {
 			args = append(args, "--enable-rule="+id)
 		}
-		execution := invoke(append(args, "--", name))
+		execution := invoke(append(args, "--", "."), stage)
 		if execution.TimedOut || ctx.Err() != nil {
 			return fail("error", "checker_timeout", "Gitleaks did not complete within its execution context")
 		}
@@ -145,11 +190,13 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 		if err != nil {
 			return fail("error", "invalid_report", "Gitleaks did not produce a readable private report")
 		}
-		rows, ok := decode(data, execution.ExitCode, name)
+		rows, ok := decode(data, execution.ExitCode, names)
 		if !ok {
 			return fail("error", "invalid_report", "Gitleaks returned an invalid, unredacted or out-of-scope report")
 		}
+		os.RemoveAll(stage)
 		for _, row := range rows {
+			name := filepath.ToSlash(filepath.Clean(row.File))
 			line := overlappingLine(selected, name, row.StartLine, row.EndLine)
 			if line == 0 {
 				continue
@@ -164,7 +211,7 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 	return result
 }
 
-func decode(data []byte, exitCode int, name string) ([]finding, bool) {
+func decode(data []byte, exitCode int, names []string) ([]finding, bool) {
 	var rows []finding
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
@@ -175,7 +222,7 @@ func decode(data []byte, exitCode int, name string) ([]finding, bool) {
 		return nil, false
 	}
 	for _, row := range rows {
-		if filepath.ToSlash(filepath.Clean(row.File)) != name || !ruleID.MatchString(row.RuleID) || row.SymlinkFile != "" || row.Commit != "" ||
+		if !slices.Contains(names, filepath.ToSlash(filepath.Clean(row.File))) || !ruleID.MatchString(row.RuleID) || row.SymlinkFile != "" || row.Commit != "" ||
 			row.StartLine < 0 || row.EndLine < row.StartLine || row.StartColumn < 0 || row.EndColumn < 0 ||
 			row.StartLine == 0 && row.EndLine != 0 || row.Secret != "" && row.Secret != "REDACTED" {
 			return nil, false

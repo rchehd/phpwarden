@@ -41,8 +41,9 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
 Options:
   --project PATH       Project root
   --config PATH        Configuration file, relative to caller directory
-  --format FORMAT      text (grouped, default), compact (one path:line:col per finding; check only), or json
+  --format FORMAT      text (by rule, default), compact (one path:line:col per finding; check only), or json
   --color MODE         auto (default; terminals without NO_COLOR), always, or never
+  --all                Show every finding in text reports (default: first 10 per rule group)
   --help               Show help
   --version            Show version
 
@@ -70,6 +71,7 @@ var minorVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
 
 type options struct {
 	noCache      bool
+	all          bool
 	project      string
 	config       string
 	format       string
@@ -129,17 +131,17 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	}
 	if len(args.command) == 2 && args.command[0] == "worker" && (args.command[1] == "execute" || args.command[1] == "prepare-fix") {
 		if len(arguments) != 2 {
-			return writeReport(stdout, stderr, "json", "never", report.InputError("request", fmt.Errorf("worker execute accepts only its stdin request")))
+			return writeReport(stdout, stderr, "json", "never", report.InputError("request", fmt.Errorf("worker execute accepts only its stdin request")), false)
 		}
 		decoder := json.NewDecoder(io.LimitReader(stdin, 32<<20))
 		decoder.DisallowUnknownFields()
 		var request runrequest.Request
 		if err := decoder.Decode(&request); err != nil {
-			return writeReport(stdout, stderr, "json", "never", report.InputError("request", err))
+			return writeReport(stdout, stderr, "json", "never", report.InputError("request", err), false)
 		}
 		var extra any
 		if err := decoder.Decode(&extra); err != io.EOF {
-			return writeReport(stdout, stderr, "json", "never", report.InputError("request", fmt.Errorf("expected one run request")))
+			return writeReport(stdout, stderr, "json", "never", report.InputError("request", fmt.Errorf("expected one run request")), false)
 		}
 		if args.command[1] == "prepare-fix" {
 			prepared := worker.PrepareFix(ctx, cwd, request, runner.Exec{})
@@ -149,7 +151,7 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 			}
 			return prepared.Report.ExitCode
 		}
-		return writeReport(stdout, stderr, "json", "never", worker.Execute(ctx, cwd, request, runner.Exec{}))
+		return writeReport(stdout, stderr, "json", "never", worker.Execute(ctx, cwd, request, runner.Exec{}), false)
 	}
 	isInit := len(args.command) == 1 && args.command[0] == "init"
 	isScope := len(args.command) > 0 && args.command[0] == "scope"
@@ -162,6 +164,9 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		(args.command[1] == "validate" || args.command[1] == "show")
 	if args.format == "compact" && !isWorker && !isCheck {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--format compact applies only to check and worker check"))
+	}
+	if args.all && ((!isWorker && !isCheck) || args.format != "text") {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("--all applies only to text reports from check, fix or worker check; compact and JSON already include every finding"))
 	}
 	if !isInit && !isScope && !isConfig && !isWorker && !isCheck && !isResolve {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("expected init, config validate/show, resolve, scope, check, fix, or worker check; use --help"))
@@ -229,7 +234,7 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		} else {
 			result = worker.Check(ctx, location, effective, options, only, runner.Exec{})
 		}
-		return writeReport(stdout, stderr, args.format, args.color, result)
+		return writeReport(stdout, stderr, args.format, args.color, result, args.all)
 	}
 	result := response{
 		Version: 1, Command: strings.Join(args.command, " "), Valid: true,
@@ -303,6 +308,13 @@ func parse(arguments []string) (options, error) {
 			result.fix = true
 			continue
 		}
+		if argument == "--all" {
+			if result.all {
+				return result, fmt.Errorf("duplicate option --all")
+			}
+			result.all = true
+			continue
+		}
 		if !strings.HasPrefix(argument, "-") {
 			result.command = append(result.command, argument)
 			continue
@@ -368,7 +380,7 @@ func parse(arguments []string) (options, error) {
 			result.color = value
 		}
 	}
-	if result.version && (len(result.command) != 0 || len(seen) != 0 || result.help || result.wholeFiles || result.fix || result.noCache) {
+	if result.version && (len(result.command) != 0 || len(seen) != 0 || result.help || result.wholeFiles || result.fix || result.noCache || result.all) {
 		return result, fmt.Errorf("--version cannot be combined with a command or options")
 	}
 	return result, nil
@@ -473,7 +485,7 @@ func writeScope(args options, location config.Location, selection scope.Selectio
 
 func fail(stdout, stderr io.Writer, args options, stage string, err error) int {
 	if workerCommand(args) || len(args.command) > 0 && (args.command[0] == "check" || args.command[0] == "fix") {
-		return writeReport(stdout, stderr, args.format, args.color, report.InputError(stage, err))
+		return writeReport(stdout, stderr, args.format, args.color, report.InputError(stage, err), args.all)
 	}
 	if args.format == "json" {
 		result := response{
@@ -494,7 +506,7 @@ func workerCommand(args options) bool {
 	return len(args.command) >= 2 && args.command[0] == "worker" && args.command[1] == "check"
 }
 
-func writeReport(stdout, stderr io.Writer, format, color string, result report.Report) int {
+func writeReport(stdout, stderr io.Writer, format, color string, result report.Report, all bool) int {
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -514,7 +526,7 @@ func writeReport(stdout, stderr io.Writer, format, color string, result report.R
 			fmt.Fprintln(stderr, err)
 			return 3
 		}
-	} else if err := textreport.Write(stdout, result, textreport.Options{Compact: format == "compact", Color: useColor(color, stdout)}); err != nil {
+	} else if err := textreport.Write(stdout, result, textreport.Options{Compact: format == "compact", Color: useColor(color, stdout), All: all}); err != nil {
 		fmt.Fprintln(stderr, err)
 		return 3
 	}

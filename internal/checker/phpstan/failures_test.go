@@ -37,7 +37,7 @@ func TestPHPStanFailuresCannotPass(t *testing.T) {
 	t.Setenv("CLAUDECODE", "1")
 	cases := []string{"valid", "missing PHP", "helper timeout", "helper crash", "helper stderr", "malformed metadata", "version", "runtime",
 		"analysis timeout", "analysis crash", "malformed", "trailing document", "analysis stderr", "foreign file", "line zero", "totals",
-		"exit mismatch", "global error", "non-ignorable outside diff", "missing identifier"}
+		"exit mismatch", "global error", "internal error outside diff", "missing identifier"}
 	for _, name := range cases {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
@@ -99,8 +99,8 @@ func TestPHPStanFailuresCannotPass(t *testing.T) {
 					result.ExitCode, result.Err = 0, nil
 				case "global error":
 					result.Stdout = []byte(strings.Replace(strings.Replace(string(result.Stdout), `"errors":0`, `"errors":1`, 1), `"errors":[]`, `"errors":["Internal error"]`, 1))
-				case "non-ignorable outside diff":
-					result.Stdout = []byte(strings.Replace(string(result.Stdout), `"ignorable":true`, `"ignorable":false`, 1))
+				case "internal error outside diff":
+					result.Stdout = []byte(strings.Replace(strings.Replace(string(result.Stdout), `"ignorable":true`, `"ignorable":false`, 1), `return.type`, `phpstan.internal`, 1))
 				case "missing identifier":
 					result.Stdout = []byte(strings.Replace(string(result.Stdout), `"return.type"`, `""`, 1))
 				}
@@ -164,5 +164,23 @@ func TestMissingInputsAndCancellation(t *testing.T) {
 	result = run(ctx, root, ".", selection, cfg, config.Target{}, "", "", unused)
 	if result.Check.Status != "skipped" || *result.Check.Reason != "disabled" {
 		t.Fatalf("disabled checker ran: %+v", result)
+	}
+}
+
+func TestNonIgnorableCodeDiagnosticStillReportsFinding(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "demo.php", "<?php\nfunction demo(): int {}\n")
+	selected := scope.Selection{Files: []string{"demo.php"}, LineMap: map[string][]scope.Range{"demo.php": nil}}
+	process := processFunc(func(_ context.Context, cmd runner.Command) runner.Result {
+		if !slices.Contains(cmd.Args, "analyse") {
+			return runner.Result{Stdout: metadataResponse()}
+		}
+		data := strings.ReplaceAll(string(analysisResponse(filepath.Join(root, "demo.php"))), `"ignorable":true`, `"ignorable":false`)
+		data = strings.ReplaceAll(data, `return.type`, `return.missing`)
+		return runner.Result{ExitCode: 1, Stdout: []byte(data)}
+	})
+	result := run(context.Background(), root, ".", selected, settings(t), config.Target{Min: "8.4", Max: "8.4"}, "", fakeBundle(t), process)
+	if result.Check.Status != "failed" || len(result.Diagnostics) > 0 || len(result.Findings) != 1 {
+		t.Fatalf("non-ignorable rule error became analyzer failure: %+v", result)
 	}
 }

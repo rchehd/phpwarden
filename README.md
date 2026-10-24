@@ -88,6 +88,7 @@ phpwarden check web/modules/custom/my_module   # specific paths
 phpwarden check --only phpstan,phpcs           # selected checkers
 phpwarden check --format compact               # one path:line:col line per finding
 phpwarden check --format json                  # JSON report
+phpwarden check --all                          # every finding in each text rule group
 ```
 
 Changed code includes commits since the merge base, staged and unstaged edits, and new files not ignored by Git. Without `--base` or `scope.base`, PHPWarden uses `origin/HEAD`. It never fetches, so update the base branch yourself.
@@ -275,6 +276,8 @@ Gitleaks shares `scope.include` and `scope.exclude` with the other checkers. For
 
 Twig CS Fixer checks `.twig` templates. It uses `.twig-cs-fixer.php` or `.twig-cs-fixer.dist.php` from the project root. Without one it uses the default `TwigCsFixer` standard without `IncludeFunctionRule` and `CompactHashRule`, because Drupal templates use the `include` tag and long-form hashes. Other useful settings are `config`, `discover_config`, `extra_extensions`, and `extra_inputs` for files the project config loads.
 
+Set `tools.twig-cs-fixer.autoload: auto` when a project config uses Drupal or other project token parsers, or set a relative autoloader path explicitly. This executes the trusted project Composer autoloader; it is disabled by default. The bundled Twig loader retains priority and its tool versions are recorded before project autoload. Changes to project autoload/config inputs invalidate the request context.
+
 Twig CS Fixer checks style, not whether a template compiles. A template it cannot read at all is reported as `File.Invalid` even outside the changed lines.
 
 ### Composer validate
@@ -310,24 +313,26 @@ tools:
 
 ## Results
 
-The default text output groups findings by checker and file, then lists checks that could not run with a suggested fix, a table of all checks, and a result line that explains the exit code:
+The default text output starts with the result and analysis completeness, then groups findings by severity, checker and rule. Each group shows its full finding/file counts, files and compact position lists. Repeated explanations appear once; differing messages keep their details next to the relevant positions. Setup failures and coverage notes appear before the findings:
 
 ```text
 PHPWarden · changes against origin/main · 3 files · Drupal 11.3.16 · PHP 8.4.26
+Result: FAIL · 2 errors · exit 1 (blocking findings)
+Analysis: complete · 1 rule group
 
-twig-cs-fixer — 2 errors
-  web/themes/custom/demo/templates/card.html.twig
-     71:5  error  Expecting 1 whitespace after "{{"; found 0.  DelimiterSpacing.After
-    71:35  error  Expecting 1 whitespace before "}}"; found 0.  DelimiterSpacing.Before
+ERROR Duplicate spaces — 2 findings · 1 file
+  phpcs / SlevomatCodingStandard.Whitespaces.DuplicateSpaces.DuplicateSpaces
+
+  packages/ap-related-content/ap_related_content.module
+    71:24 · 72:23
 
 Checks
-  ✗ twig-cs-fixer                  failed       2 errors
-  ✓ debug, phpcs, phpstan, syntax  passed
-
-Result: FAIL · 2 errors · exit 1 (blocking findings)
+  ✗ phpcs  failed       2 errors
 ```
 
-`--format compact` prints each finding on one `path:line:col` line, which editors and terminals can open directly; the summary stays the same. If the check stops before any checker runs, the output says so instead of reporting zero findings. Colors are used only in a terminal; `--color always|never` overrides that, and `NO_COLOR` disables it.
+Text groups show the first 10 findings by default, with an explicit count of the remaining findings and affected files. `--all` shows every finding; this affects display only, never analysis, totals, caching or exit codes. Errors precede warnings and informational groups; groups of the same severity are ordered by checker and rule. Messages and position lists wrap at 100 characters where words allow it; paths and long identifiers remain intact.
+
+`--format compact` prints every finding on one `path:line:col` line, which editors and terminals can open directly, followed by its summary. If the check stops before any checker runs, the output says so instead of reporting zero findings. Colors are used only in a terminal; `--color always|never` overrides that, and `NO_COLOR` disables it.
 
 `--format json` prints one report that follows [schemas/report-v1.schema.json](schemas/report-v1.schema.json). Its content and the exit codes do not depend on the text format.
 
@@ -340,3 +345,11 @@ Result: FAIL · 2 errors · exit 1 (blocking findings)
 | `130` | Interrupted |
 
 `PARTIAL` in text output (`complete: false` in JSON) means an optional checker could not run. `Discovery warning` lines report problems in project metadata that did not stop the check, such as duplicate keys in `composer.json` or a `vendor` that does not match `composer.lock`.
+
+### Analyzer compatibility notes
+
+PHPStan trait diagnostics may name a file with a class-context suffix; PHPWarden validates the physical selected file and merges those contextual messages. Rector runs from `composer_root` so its installed-package resolver sees the correct Composer metadata in a monorepo. JSCPD 4.3.0 matching is constrained to consecutive reference token windows to avoid joining unrelated repeated YAML blocks into reversed ranges.
+
+Gitleaks scans bounded private copies of the selected files, retaining their relative paths for native baselines and allowlists. Declared `extra_inputs` are exposed as config-only symlinks, with native symlink scanning explicitly disabled. No unselected source files are added to the scan; private input copies and reports are removed after completion.
+
+ESLint and Stylelint project configs use installed project dependencies. When a Node config import is missing, the checker reports an unavailable dependency with the relevant `npm ci --prefix` command; it does not silently substitute a different plugin or treat the result as clean.

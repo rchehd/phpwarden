@@ -285,6 +285,7 @@ type ComposerAuditIgnore struct {
 }
 
 type TwigCSFixer struct {
+	Autoload        string   `json:"autoload"`
 	Enabled         bool     `json:"enabled"`
 	Required        bool     `json:"required"`
 	FailOn          string   `json:"fail_on"`
@@ -516,7 +517,7 @@ func Parse(data []byte) (Effective, error) {
 		result.Provenance["tools.phpstan."+field] = "core_default"
 	}
 	result.Provenance["tools.phpstan.enabled"], result.Provenance["tools.phpstan.drupal"] = "profile_default", "profile_default"
-	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "extra_extensions", "extra_inputs"} {
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "extra_extensions", "extra_inputs", "autoload"} {
 		result.Provenance["tools.twig-cs-fixer."+field] = "core_default"
 	}
 	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "rulesets", "exclude_rules", "extra_inputs", "extra_extensions", "memory_limit_mb"} {
@@ -705,7 +706,7 @@ func validateValues(cfg Config) error {
 	if err := projectpath.Validate(cfg.ComposerRoot); err != nil {
 		return fmt.Errorf("composer_root: %w", err)
 	}
-	for _, name := range []string{cfg.Tools.PHPStan.Config, cfg.Tools.PHPStan.Baseline, cfg.Tools.PHPStan.Autoload, cfg.Tools.TwigCSFixer.Config, cfg.Tools.PHPMD.Config, cfg.Tools.ESLint.Config, cfg.Tools.Stylelint.Config, cfg.Tools.JSCPD.Config,
+	for _, name := range []string{cfg.Tools.PHPStan.Config, cfg.Tools.PHPStan.Baseline, cfg.Tools.PHPStan.Autoload, cfg.Tools.TwigCSFixer.Autoload, cfg.Tools.TwigCSFixer.Config, cfg.Tools.PHPMD.Config, cfg.Tools.ESLint.Config, cfg.Tools.Stylelint.Config, cfg.Tools.JSCPD.Config,
 		cfg.Tools.Gitleaks.Config, cfg.Tools.Gitleaks.Baseline, cfg.Tools.Gitleaks.IgnoreFile, cfg.Tools.Semgrep.Config, cfg.Tools.Semgrep.Baseline, cfg.Tools.Rector.Config, cfg.Tools.Deptrac.Config, cfg.Tools.ComposerRequireChecker.Config, cfg.Tools.ComposerRequireChecker.ComposerRoot, cfg.Tools.ComposerUnused.Config, cfg.Tools.ComposerUnused.ComposerRoot} {
 		if name != "" && name != "auto" {
 			if err := projectpath.Validate(name); err != nil {

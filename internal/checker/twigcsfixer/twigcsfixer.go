@@ -106,8 +106,15 @@ func runMode(ctx context.Context, root, composerRoot string, selection scope.Sel
 	if selected != "" {
 		configPath = new(filepath.Join(root, filepath.FromSlash(selected)))
 	}
+	autoload, err := projectAutoload(root, composerRoot, cfg.Autoload)
+	if err != nil {
+		return fail("error", "config_invalid", err.Error())
+	}
+	if autoload != "" {
+		autoload = filepath.Join(root, filepath.FromSlash(autoload))
+	}
 	defaults, _ := profile.Lookup(profileID)
-	input, _ := json.Marshal(map[string]any{"config": configPath, "removed_rules": defaults.TwigCSFixerRemovedRules, "files": files, "fix": fixing})
+	input, _ := json.Marshal(map[string]any{"config": configPath, "autoload": autoload, "removed_rules": defaults.TwigCSFixerRemovedRules, "files": files, "fix": fixing})
 	execution := process.Run(ctx, runner.Command{Name: "php", Directory: root, Input: input, Args: []string{"-d", "auto_prepend_file=", "-d", "auto_append_file=", "-d", "display_errors=stderr", "-d", "log_errors=0", "-d", "memory_limit=256M", script, bundle}})
 	if execution.Unavailable {
 		return fail("unavailable", "executable_missing", "PHP executable is unavailable in the worker")

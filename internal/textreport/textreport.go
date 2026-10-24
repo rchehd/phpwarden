@@ -3,7 +3,6 @@ package textreport
 import (
 	"fmt"
 	"io"
-	"maps"
 	"regexp"
 	"slices"
 	"strconv"
@@ -16,12 +15,11 @@ import (
 type Options struct {
 	Compact bool
 	Color   bool
+	All     bool
 }
 
 // Global findings name their file in a message prefix because the report schema keeps their path null.
 var globalFile = regexp.MustCompile(`^(?:YAML file|Twig template|Composer file|Composer package|Config sync) ("(?:[^"\\]|\\.)*"): `)
-
-var trailingLink = regexp.MustCompile(`\s(https?://\S+)$`)
 
 type hint struct {
 	text, known string
@@ -53,7 +51,7 @@ func (w *writer) line(format string, args ...any) {
 }
 
 func (w *writer) paint(code, text string) string {
-	if !w.options.Color || text == "" {
+	if !w.options.Color || text == "" || code == "" {
 		return text
 	}
 	return "\x1b[" + code + "m" + text + "\x1b[0m"
@@ -83,6 +81,27 @@ func Write(out io.Writer, result report.Report, options Options) error {
 		return w.err
 	}
 	w.header(result)
+	if !options.Compact {
+		w.result(result)
+		complete := "complete"
+		if !result.Complete {
+			complete = "incomplete"
+		}
+		w.line("Analysis: %s · %s", complete, plural(len(ruleGroups(result.Findings)), "rule group"))
+		skipped := []string{}
+		for _, check := range result.Checks {
+			if check.Status == "skipped" {
+				name := check.ID
+				if check.Reason != nil {
+					name += " (" + strings.ReplaceAll(*check.Reason, "_", " ") + ")"
+				}
+				skipped = append(skipped, name)
+			}
+		}
+		if len(skipped) > 0 {
+			w.wrapped("", "Skipped: "+strings.Join(skipped, "; "), "")
+		}
+	}
 	if result.Environment != nil && (len(result.Environment.DiscoveryWarnings) > 0 || len(result.Environment.CompatibilityPending) > 0) {
 		w.line("")
 		w.line("%s", w.paint("1", "Project warnings"))
@@ -95,9 +114,20 @@ func Write(out io.Writer, result report.Report, options Options) error {
 	}
 	if options.Compact {
 		w.compact(result)
+		w.diagnostics(result)
 	} else {
+		w.diagnostics(result)
 		w.grouped(result)
 	}
+	w.checks(result)
+	if options.Compact {
+		w.line("")
+		w.result(result)
+	}
+	return w.err
+}
+
+func (w *writer) diagnostics(result report.Report) {
 	status := map[string]string{}
 	for _, check := range result.Checks {
 		status[check.ID] = check.Status
@@ -122,7 +152,9 @@ func Write(out io.Writer, result report.Report, options Options) error {
 			w.line("  %s %s: %s", w.paint("33", "!"), *note.Checker, note.Message)
 		}
 	}
-	w.checks(result)
+}
+
+func (w *writer) result(result report.Report) {
 	label := strings.ToUpper(result.Verdict)
 	color := map[string]string{"pass": "32;1", "fail": "31;1", "error": "31;1"}[result.Verdict]
 	if !result.Complete && result.ExitCode == 0 {
@@ -132,9 +164,7 @@ func Write(out io.Writer, result report.Report, options Options) error {
 	if total == "" {
 		total = "no findings"
 	}
-	w.line("")
 	w.line("Result: %s · %s · exit %d (%s)", w.paint(color, label), total, result.ExitCode, meaning(result))
-	return w.err
 }
 
 func against(base string) string {
@@ -213,67 +243,6 @@ func sortRows(rows []located) {
 		}
 		return a.column - b.column
 	})
-}
-
-func (w *writer) grouped(result report.Report) {
-	byChecker := map[string][]located{}
-	for _, finding := range result.Findings {
-		byChecker[finding.Checker] = append(byChecker[finding.Checker], locate(finding))
-	}
-	failed := map[string]bool{}
-	for _, check := range result.Checks {
-		failed[check.ID] = check.Status == "failed"
-	}
-	checkers := slices.Sorted(maps.Keys(byChecker))
-	slices.SortStableFunc(checkers, func(a, b string) int {
-		if failed[a] != failed[b] {
-			if failed[a] {
-				return -1
-			}
-			return 1
-		}
-		return strings.Compare(a, b)
-	})
-	for _, checker := range checkers {
-		rows := byChecker[checker]
-		findings := make([]report.Finding, len(rows))
-		for i, row := range rows {
-			findings[i] = row.finding
-		}
-		heading := w.paint("1", checker) + " — " + counts(findings)
-		if advisories := result.Environment; checker == "composer-audit" && advisories != nil && advisories.Advisories != nil {
-			heading += fmt.Sprintf(" · advisories from %s, %s", advisories.Advisories.Source, strings.Replace(strings.Replace(advisories.Advisories.FetchedAt, "T", " ", 1), "Z", " UTC", 1))
-		}
-		w.line("")
-		w.line("%s", heading)
-		sortRows(rows)
-		width := 0
-		for _, row := range rows {
-			width = max(width, len(position(row)))
-		}
-		for start := 0; start < len(rows); {
-			end := start
-			for end < len(rows) && rows[end].file == rows[start].file {
-				end++
-			}
-			w.line("  %s", rows[start].file)
-			for _, row := range rows[start:end] {
-				message, link := row.message, ""
-				if match := trailingLink.FindStringSubmatch(message); match != nil {
-					message, link = strings.TrimSuffix(message, match[0]), match[1]
-				}
-				lines := strings.Split(message, "\n")
-				indent := strings.Repeat(" ", 4+width+2+5+2)
-				w.line("    %*s  %s  %s  %s", width, position(row), w.severity(row.finding.Severity), lines[0], w.paint("2", row.finding.Rule))
-				for _, extra := range append(lines[1:], link) {
-					if strings.TrimSpace(extra) != "" {
-						w.line("%s%s", indent, extra)
-					}
-				}
-			}
-			start = end
-		}
-	}
 }
 
 func (w *writer) compact(result report.Report) {

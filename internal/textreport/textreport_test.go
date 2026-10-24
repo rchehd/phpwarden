@@ -2,12 +2,14 @@ package textreport
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/scope"
@@ -116,7 +118,7 @@ func TestColorOnlyWhenRequested(t *testing.T) {
 	if err := Write(&output, result, Options{Color: true}); err != nil {
 		t.Fatal(err)
 	}
-	for _, code := range []string{"\x1b[31merror\x1b[0m", "\x1b[33mwarn \x1b[0m", "\x1b[36minfo \x1b[0m", "\x1b[31;1mFAIL\x1b[0m"} {
+	for _, code := range []string{"\x1b[31mERROR ", "\x1b[33mWARNING ", "\x1b[36mINFO ", "\x1b[31;1mFAIL\x1b[0m"} {
 		if !strings.Contains(output.String(), code) {
 			t.Fatalf("colored output misses %q:\n%s", code, output.String())
 		}
@@ -133,5 +135,102 @@ func TestLastCommitsHeader(t *testing.T) {
 		if err := Write(&output, result, Options{}); err != nil || !strings.Contains(output.String(), want) {
 			t.Fatalf("header for %s misses %q: %s %v", ref, want, &output, err)
 		}
+	}
+}
+
+func TestRuleGroupsCollapseRepeatedMessagesAndKeepDistinctDetails(t *testing.T) {
+	result := base("a.php", "b.php")
+	result.Checks = []report.Check{check("phpstan", "failed", true, ""), check("other", "passed", true, "")}
+	result.Findings = []report.Finding{
+		{Checker: "phpstan", Rule: "method.notFound", Severity: "error", Message: "Call to undefined method A::run().", Path: new("a.php"), Line: new(12)},
+		{Checker: "phpstan", Rule: "method.notFound", Severity: "error", Message: "Call to undefined method A::run().", Path: new("a.php"), Line: new(24)},
+		{Checker: "phpstan", Rule: "method.notFound", Severity: "error", Message: "Call to undefined method B::stop().", Path: new("b.php"), Line: new(7)},
+		{Checker: "other", Rule: "method.notFound", Severity: "warning", Message: "Advisory only.", Path: new("a.php"), Line: new(3)},
+	}
+	result.Finalize()
+	var output bytes.Buffer
+	if err := Write(&output, result, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	text := output.String()
+	for _, want := range []string{"2 rule groups", "phpstan / method.notFound", "other / method.notFound", "12 · 24", "B::stop()"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Count(text, "Call to undefined method A::run().") != 1 {
+		t.Fatalf("repeated explanation was not collapsed:\n%s", text)
+	}
+	if strings.Index(text, "Result: FAIL") > strings.Index(text, "phpstan / method.notFound") || strings.Index(text, "phpstan / method.notFound") > strings.Index(text, "other / method.notFound") {
+		t.Fatalf("verdict and errors must precede advisory groups:\n%s", text)
+	}
+}
+
+func TestLargeRuleGroupShowsOmissionsWithoutChangingReport(t *testing.T) {
+	result := base("a.php", "b.php")
+	result.Checks = []report.Check{check("whitespace", "failed", true, "")}
+	for line := 1; line <= 15; line++ {
+		name := "a.php"
+		if line > 10 {
+			name = "b.php"
+		}
+		result.Findings = append(result.Findings, report.Finding{Checker: "whitespace", Rule: "whitespace.trailing", Severity: "error", Message: "Trailing spaces or tabs", Path: &name, Line: new(line)})
+	}
+	result.Finalize()
+	before, _ := json.Marshal(result)
+	var output bytes.Buffer
+	if err := Write(&output, result, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	text := output.String()
+	for _, want := range []string{"15 findings · 2 files", "5 more findings in 1 file", "--all", "15 errors"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing full totals or omission notice %q:\n%s", want, text)
+		}
+	}
+	after, _ := json.Marshal(result)
+	if strings.Contains(text, "    11") || len(result.Findings) != 15 || result.ExitCode != 1 || !bytes.Equal(before, after) {
+		t.Fatalf("display limit affected report or did not hide extra locations:\n%s", text)
+	}
+	output.Reset()
+	if err := Write(&output, result, Options{All: true}); err != nil || strings.Contains(output.String(), "more findings") || !strings.Contains(output.String(), "11 · 12 · 13 · 14 · 15") {
+		t.Fatalf("--all must show the hidden positions: %s %v", &output, err)
+	}
+}
+
+func TestCoverageAndToolFailuresPrecedeRuleGroups(t *testing.T) {
+	result := scenarios()["findings"]
+	result.Checks = append(result.Checks, check("eslint", "error", true, "dependencies_missing"))
+	result.Checks = append(result.Checks, check("deptrac", "skipped", true, "no_config"))
+	result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "dependencies_missing", Stage: "checker", Checker: new("eslint"), Message: "Install the locked project dependencies."})
+	result.Finalize()
+	var output bytes.Buffer
+	if err := Write(&output, result, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	text := output.String()
+	if !strings.Contains(text, "Analysis: incomplete") || !strings.Contains(text, "deptrac (no config)") || strings.Index(text, "deptrac (no config)") > strings.Index(text, "debug / debug.function") || strings.Index(text, "Install the locked") > strings.Index(text, "debug / debug.function") || strings.Index(text, "Notes") > strings.Index(text, "debug / debug.function") {
+		t.Fatalf("incomplete status and diagnostic details must be visible before findings:\n%s", text)
+	}
+}
+
+func TestRepeatedMessageWrappingPreservesWordsAndLinks(t *testing.T) {
+	message := strings.Repeat("Деталь перевірки ", 20) + "https://example.test/rule"
+	result := base("demo.php")
+	result.Checks = []report.Check{check("demo", "failed", true, "")}
+	result.Findings = []report.Finding{{Checker: "demo", Rule: "demo.rule", Kind: "code", Severity: "error", Message: message, Path: new("demo.php"), Line: new(12)}}
+	result.Finalize()
+	var output bytes.Buffer
+	if err := Write(&output, result, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	text := output.String()
+	for _, line := range strings.Split(text, "\n") {
+		if utf8.RuneCountInString(line) > 100 {
+			t.Fatalf("message was not wrapped: %q", line)
+		}
+	}
+	if strings.Count(text, "Деталь") != 20 || !strings.Contains(text, "https://example.test/rule") {
+		t.Fatalf("wrapping lost details: %s", text)
 	}
 }

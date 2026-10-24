@@ -10,6 +10,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -283,7 +284,7 @@ func analyse(ctx context.Context, root, composerRoot string, selection scope.Sel
 			if mode.identifier != "" && !strings.HasPrefix(row.Identifier, mode.identifier) {
 				continue
 			}
-			if !row.Ignorable || row.Line == nil || row.Identifier == "" {
+			if row.Line == nil || row.Identifier == "" || row.Identifier == "internalError" || strings.HasPrefix(row.Identifier, "phpstan.") || row.Identifier == "parseError" {
 				return fail("error", "analysis_failed", fmt.Sprintf("PHPStan could not complete analysis of %q: %s", name, row.Message))
 			}
 			if !selection.Contains(name, *row.Line) || !strings.HasPrefix(row.Identifier, mode.identifier) {
@@ -310,6 +311,8 @@ func strictJSON(data []byte, value any) error {
 	return nil
 }
 
+var traitContext = regexp.MustCompile(`^(.+) \(in context of class [A-Za-z_\\][A-Za-z0-9_\\]*\)$`)
+
 func decode(data []byte, exit int, root string, files []string) (map[string]fileReport, []string, error) {
 	var parsed nativeReport
 	if err := strictJSON(data, &parsed); err != nil {
@@ -326,7 +329,13 @@ func decode(data []byte, exit int, root string, files []string) (map[string]file
 	}
 	result := map[string]fileReport{}
 	count := 0
+	seen := map[string]bool{}
 	for name, file := range rows {
+		contextLabel := ""
+		if match := traitContext.FindStringSubmatch(name); match != nil {
+			contextLabel = strings.TrimPrefix(name, match[1])
+			name = match[1]
+		}
 		if filepath.IsAbs(name) {
 			name, _ = filepath.Rel(root, name)
 		}
@@ -334,15 +343,21 @@ func decode(data []byte, exit int, root string, files []string) (map[string]file
 		if !slices.ContainsFunc(files, func(selected string) bool { return name == selected || strings.HasPrefix(name, selected+"/") }) || file.Messages == nil || file.Errors != len(file.Messages) {
 			return nil, nil, fmt.Errorf("PHPStan file or totals do not match selected inputs")
 		}
-		if _, exists := result[name]; exists {
-			return nil, nil, fmt.Errorf("duplicate PHPStan file")
-		}
+
 		for _, row := range file.Messages {
 			if row.Message == "" || row.Line != nil && *row.Line < 1 {
 				return nil, nil, fmt.Errorf("invalid PHPStan finding")
 			}
 		}
-		result[name] = file
+		identity := name + contextLabel
+		if seen[identity] {
+			return nil, nil, fmt.Errorf("duplicate PHPStan file")
+		}
+		seen[identity] = true
+		previous := result[name]
+		previous.Errors += file.Errors
+		previous.Messages = append(previous.Messages, file.Messages...)
+		result[name] = previous
 		count += file.Errors
 	}
 	if count != parsed.Totals.FileErrors || (exit == 0) != (count+len(parsed.Errors) == 0) {

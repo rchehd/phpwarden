@@ -1,6 +1,6 @@
 PHPWarden · full scan · 1 file · PHP 8.4.26
+Result: PASS · no findings · exit 0 (no blocking findings)
+Analysis: complete · 0 rule groups
 
 Checks
   ✓ debug  passed
-
-Result: PASS · no findings · exit 0 (no blocking findings)

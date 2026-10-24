@@ -1,4 +1,7 @@
 PHPWarden · changes against origin/main · 1 file · Drupal 11.3.16 · PHP 8.4.26
+Result: PARTIAL · no findings · exit 0 (an optional check could not run)
+Analysis: incomplete · 0 rule groups
+Skipped: debug (no files)
 
 Problems
   ✗ composer-audit  unavailable (optional)
@@ -8,5 +11,3 @@ Problems
 Checks
   ✗ composer-audit  unavailable  advisories unavailable
   - debug           skipped      no files
-
-Result: PARTIAL · no findings · exit 0 (an optional check could not run)
