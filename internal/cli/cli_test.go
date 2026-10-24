@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -49,6 +50,8 @@ func TestConfigCommands(t *testing.T) {
 
 func TestUsageErrorsNeverReturnSuccess(t *testing.T) {
 	cases := [][]string{
+		{"check", "--pre-commit"}, {"scope", "--pre-commit"}, {"config", "show", "--pre-commit"},
+		{"init", "--pre-commit", "--pre-commit"}, {"--version", "--pre-commit"},
 		{"scope", "--all"}, {"config", "show", "--all"}, {"check", "--all", "--all"}, {"--version", "--all"},
 		{"check", "--all", "--format", "compact"}, {"check", "--all", "--format", "json"}, {"init", "--all"},
 		{"config", "show", "--no-cache"}, {"worker", "check", "--no-cache"}, {"check", "--no-cache", "--no-cache"}, {"--version", "--no-cache"},
@@ -245,5 +248,130 @@ func TestInitWritesConfigurationOnce(t *testing.T) {
 	stdout.Reset()
 	if code := Run([]string{"config", "validate", "--project", root}, root, &stdout, &stderr); code != 0 {
 		t.Fatalf("generated configuration is invalid: %s %s", &stdout, &stderr)
+	}
+}
+
+func TestInitInstallsPreCommitForExistingProjectWithoutReplacingHooks(t *testing.T) {
+	for _, custom := range []bool{false, true} {
+		t.Run(fmt.Sprintf("custom=%v", custom), func(t *testing.T) {
+			root := project(t)
+			git := func(args ...string) {
+				t.Helper()
+				if data, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+					t.Fatalf("git %v: %v %s", args, err, data)
+				}
+			}
+			git("init", "--quiet")
+			name := ".git/hooks/pre-commit"
+			if custom {
+				git("config", "core.hooksPath", ".githooks")
+				name = ".githooks/pre-commit"
+			}
+			configBefore, _ := os.ReadFile(filepath.Join(root, ".phpwarden.yaml"))
+			for attempt := range 2 {
+				var stdout, stderr bytes.Buffer
+				if code := Run([]string{"init", "--pre-commit", "--format", "json"}, root, &stdout, &stderr); code != 0 || stderr.Len() != 0 {
+					t.Fatalf("hook init attempt %d: %d %s %s", attempt, code, &stdout, &stderr)
+				}
+				var decoded map[string]any
+				if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+					t.Fatal(err)
+				}
+				init := decoded["init"].(map[string]any)
+				hook, ok := init["pre_commit"].(map[string]any)
+				if !ok || hook["created"] != (attempt == 0) {
+					t.Fatalf("missing installation status: %s", &stdout)
+				}
+			}
+			info, err := os.Stat(filepath.Join(root, name))
+			if err != nil || info.Mode().Perm()&0o111 == 0 {
+				t.Fatalf("hook is not executable: %v %v", info, err)
+			}
+			configAfter, _ := os.ReadFile(filepath.Join(root, ".phpwarden.yaml"))
+			if !bytes.Equal(configBefore, configAfter) {
+				t.Fatal("installing a hook changed the existing configuration")
+			}
+			foreign := []byte("#!/bin/sh\nexit 17\n")
+			if err := os.WriteFile(filepath.Join(root, name), foreign, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			var stdout, stderr bytes.Buffer
+			if code := Run([]string{"init", "--pre-commit"}, root, &stdout, &stderr); code != 2 {
+				t.Fatalf("foreign hook accepted: %d %s %s", code, &stdout, &stderr)
+			}
+			if data, _ := os.ReadFile(filepath.Join(root, name)); !bytes.Equal(data, foreign) {
+				t.Fatal("foreign hook was overwritten")
+			}
+		})
+	}
+}
+
+func TestPreCommitWithNoStagedFilesDoesNotRequireConfigOrDocker(t *testing.T) {
+	root := t.TempDir()
+	if data, err := exec.Command("git", "-C", root, "init", "--quiet").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, data)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"hook", "pre-commit"}, root, &stdout, &stderr); code != 0 || stderr.Len() != 0 || !strings.Contains(stdout.String(), "no staged files") {
+		t.Fatalf("empty index should skip checking: %d %s %s", code, &stdout, &stderr)
+	}
+}
+
+func TestPreCommitRejectsFixAndScopeOptionsBeforeReadingTheProject(t *testing.T) {
+	for _, extra := range [][]string{{"--fix"}, {"--mode", "full"}, {"--base", "main"}, {"--only", "debug"}, {"--format", "json"}, {"--config", "custom.yaml"}, {"--no-cache"}, {"--pre-commit"}} {
+		var stdout, stderr bytes.Buffer
+		if code := Run(append([]string{"hook", "pre-commit"}, extra...), t.TempDir(), &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "accepts only") {
+			t.Fatalf("hook accepted unsupported arguments %v: %d %s %s", extra, code, &stdout, &stderr)
+		}
+	}
+}
+
+func TestCancelledPreCommitReturnsInterrupt(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var stdout, stderr bytes.Buffer
+	if code := RunContext(ctx, []string{"hook", "pre-commit"}, t.TempDir(), strings.NewReader(""), &stdout, &stderr); code != 130 {
+		t.Fatalf("cancelled hook returned %d: %s %s", code, &stdout, &stderr)
+	}
+}
+
+func TestPreCommitRejectsPartiallyStagedOrLocallyDeletedFiles(t *testing.T) {
+	for _, deleted := range []bool{false, true} {
+		t.Run(fmt.Sprintf("deleted=%v", deleted), func(t *testing.T) {
+			root := project(t)
+			filename := filepath.Join(root, "src", "demo.php")
+			if err := os.Mkdir(filepath.Dir(filename), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			for name, content := range map[string]string{
+				"composer.json": `{"require":{"drupal/core":"^11"}}`,
+				"composer.lock": `{"packages":[{"name":"drupal/core","version":"11.3.16","require":{"php":">=8.1"}}],"packages-dev":[]}`,
+				"src/demo.php":  "<?php\nvar_dump('staged');\n",
+			} {
+				if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			configuration, _ := os.ReadFile(filepath.Join(root, ".phpwarden.yaml"))
+			if err := os.WriteFile(filepath.Join(root, ".phpwarden.yaml"), append(configuration, []byte("scope: {include: [src]}\n")...), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			for _, args := range [][]string{{"init", "--quiet"}, {"add", "--", "src/demo.php"}} {
+				if data, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+					t.Fatalf("git %v: %v %s", args, err, data)
+				}
+			}
+			if deleted {
+				if err := os.Remove(filename); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.WriteFile(filename, []byte("<?php\n// clean working copy\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			var stdout, stderr bytes.Buffer
+			if code := Run([]string{"hook", "pre-commit"}, root, &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "unstaged changes") {
+				t.Fatalf("partial staged input was accepted: %d %s %s", code, &stdout, &stderr)
+			}
+		})
 	}
 }

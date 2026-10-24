@@ -160,6 +160,42 @@ func TestNeverOverwritesConfiguration(t *testing.T) {
 	}
 }
 
+func TestPreCommitOptInCreatesConfigAndHookTogether(t *testing.T) {
+	root := drupalProject(t, ">=8.1", nil)
+	gitRepository(t, root)
+	result, err := Run(context.Background(), Options{CWD: root, PreCommit: true})
+	if err != nil || !result.Created || result.PreCommit == nil || !result.PreCommit.Created {
+		t.Fatalf("initialization with hook: %+v %v", result, err)
+	}
+	before, err := os.ReadFile(result.PreCommit.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withoutHook, err := Run(context.Background(), Options{CWD: root})
+	if err != nil || withoutHook.Created || withoutHook.PreCommit != nil {
+		t.Fatalf("plain init changed hook installation state: %+v %v", withoutHook, err)
+	}
+	if after, _ := os.ReadFile(result.PreCommit.Path); string(before) != string(after) {
+		t.Fatal("plain init changed the installed hook")
+	}
+}
+
+func TestHookConflictIsDetectedBeforeWritingNewConfiguration(t *testing.T) {
+	root := drupalProject(t, ">=8.1", nil)
+	gitRepository(t, root)
+	foreign := "#!/bin/sh\nexit 0\n"
+	writeFile(t, root, ".git/hooks/pre-commit", foreign)
+	if _, err := Run(context.Background(), Options{CWD: root, PreCommit: true}); err == nil || !strings.Contains(err.Error(), "existing pre-commit hook") {
+		t.Fatalf("hook conflict was not reported: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, config.Filename)); !os.IsNotExist(err) {
+		t.Fatal("a hook conflict still created the configuration")
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, ".git/hooks/pre-commit")); string(data) != foreign {
+		t.Fatal("hook conflict overwrote the existing hook")
+	}
+}
+
 func gitRepository(t *testing.T, repository string) {
 	t.Helper()
 	for _, args := range [][]string{{"init", "--quiet"}, {"add", "--all"}, {"-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "--quiet", "--allow-empty", "-m", "init"},

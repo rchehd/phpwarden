@@ -235,6 +235,147 @@ class LauncherCLITest(unittest.TestCase):
                         self.assertEqual("13 · 14 · 15" in completed.stdout, bool(extra))
             self.assertEqual(snapshot(scenario.root), before)
 
+    def test_pre_commit_hook_blocks_findings_and_partial_staging(self):
+        with materialize(FIXTURES / "clean-debug") as scenario:
+            self.configure(scenario.root, scenario.base)
+
+            def git(*arguments, env=None):
+                return subprocess.run(
+                    ["git", "-C", str(scenario.root), *arguments],
+                    env=env or scenario.env,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+
+            def source_snapshot():
+                return {
+                    name: digest
+                    for name, digest in snapshot(scenario.root).items()
+                    if not name.startswith(".git/")
+                }
+
+            installed = subprocess.run(
+                [str(self.binary), "init", "--pre-commit"],
+                cwd=scenario.root,
+                env=scenario.env,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            self.assertEqual(installed.returncode, 0, installed.stdout + installed.stderr)
+            name = "web/modules/custom/demo/pre commit's $file.js"
+            filename = scenario.root / name
+            filename.write_text("console.log('staged');\n")
+            self.assertEqual(git("add", "--", name).returncode, 0)
+            before = source_snapshot()
+            index = git("ls-files", "--stage", "-z").stdout
+            blocked = git("commit", "--quiet", "-m", "must block findings")
+            self.assertNotEqual(blocked.returncode, 0, blocked.stdout + blocked.stderr)
+            self.assertIn("Result: FAIL", blocked.stdout + blocked.stderr)
+            self.assertIn("staged file(s)", blocked.stdout + blocked.stderr)
+            self.assertEqual(git("ls-files", "--stage", "-z").stdout, index)
+            self.assertEqual(source_snapshot(), before)
+
+            filename.write_text("const safe = 1;\n")
+            blocked = git("commit", "--quiet", "-m", "must block partial staging")
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertIn("unstaged changes", blocked.stderr)
+            self.assertEqual(git("ls-files", "--stage", "-z").stdout, index)
+
+            self.assertEqual(git("add", "--", name).returncode, 0)
+            (scenario.root / "web/modules/custom/demo/unstaged.js").write_text(
+                "console.log('untracked');\n"
+            )
+            with tempfile.TemporaryDirectory(prefix="phpwarden-hook-no-docker-") as path:
+                (Path(path) / "git").symlink_to(shutil.which("git"))
+                blocked = git(
+                    "commit",
+                    "--quiet",
+                    "-m",
+                    "must block runner failure",
+                    env=scenario.env | {"PATH": path},
+                )
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertIn("docker", (blocked.stdout + blocked.stderr).lower())
+            before = source_snapshot()
+            allowed = git("commit", "--quiet", "-m", "allow clean staged file")
+            self.assertEqual(allowed.returncode, 0, allowed.stdout + allowed.stderr)
+            self.assertNotIn("unstaged.js", allowed.stdout + allowed.stderr)
+            self.assertEqual(source_snapshot(), before)
+
+            filename.write_text("console.log('commit -a');\n")
+            blocked = git("commit", "--all", "--quiet", "-m", "block temporary index")
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertIn("Result: FAIL", blocked.stdout + blocked.stderr)
+            filename.write_text("const safe = 2;\n")
+            allowed = git("commit", "--all", "--quiet", "-m", "allow temporary index")
+            self.assertEqual(allowed.returncode, 0, allowed.stdout + allowed.stderr)
+
+            filename.write_text("console.log('legacy');\n")
+            self.assertEqual(git("add", "--", name).returncode, 0)
+            legacy = git(
+                "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "-m", "legacy fixture"
+            )
+            self.assertEqual(legacy.returncode, 0, legacy.stdout + legacy.stderr)
+            filename.write_text("console.log('legacy');\nconst cleanChange = 1;\n")
+            self.assertEqual(git("add", "--", name).returncode, 0)
+            blocked = git("commit", "--quiet", "-m", "check entire staged file")
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertIn("Result: FAIL", blocked.stdout + blocked.stderr)
+
+    def test_pre_commit_first_commit_rename_delete_and_unrelated_files(self):
+        with (
+            materialize(FIXTURES / "clean-debug") as scenario,
+            tempfile.TemporaryDirectory(prefix="phpwarden-hook-first-") as directory,
+        ):
+            root = Path(directory)
+            shutil.copytree(
+                scenario.root, root, dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git")
+            )
+            self.configure(root, scenario.base)
+
+            def git(*arguments):
+                return subprocess.run(
+                    ["git", "-C", str(root), *arguments],
+                    env=scenario.env,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+
+            self.assertEqual(git("init", "--quiet").returncode, 0)
+            installed = subprocess.run(
+                [str(self.binary), "init", "--pre-commit"],
+                cwd=root,
+                env=scenario.env,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            self.assertEqual(installed.returncode, 0, installed.stdout + installed.stderr)
+            self.assertEqual(git("add", "--all").returncode, 0)
+            committed = git("commit", "--quiet", "-m", "first commit")
+            self.assertEqual(committed.returncode, 0, committed.stdout + committed.stderr)
+
+            old = "web/modules/custom/demo/demo.module"
+            renamed = "web/modules/custom/demo/renamed\nfile.module"
+            self.assertEqual(git("mv", "--", old, renamed).returncode, 0)
+            committed = git("commit", "--quiet", "-m", "rename")
+            self.assertEqual(committed.returncode, 0, committed.stdout + committed.stderr)
+            self.assertEqual(git("rm", "--", renamed).returncode, 0)
+            committed = git("commit", "--quiet", "-m", "delete")
+            self.assertEqual(committed.returncode, 0, committed.stdout + committed.stderr)
+            self.assertIn("no staged files", committed.stdout + committed.stderr)
+
+            (root / "README.md").write_text("Only documentation changed.\n")
+            self.assertEqual(git("add", "README.md").returncode, 0)
+            committed = git("commit", "--quiet", "-m", "documentation")
+            self.assertEqual(committed.returncode, 0, committed.stdout + committed.stderr)
+            self.assertIn(
+                "no staged files in the configured scope", committed.stdout + committed.stderr
+            )
+
     def test_whitespace_fixtures(self):
         check_whitespace_fixtures(
             self, lambda scenario: self.configure(scenario.root, scenario.base), self.run_check

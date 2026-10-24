@@ -37,6 +37,7 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
        phpwarden check [PATH...] [options]
        phpwarden fix [PATH...] [options]
        phpwarden worker check [PATH...] [options]
+       phpwarden hook pre-commit [--project PATH]
 
 Options:
   --project PATH       Project root
@@ -48,6 +49,7 @@ Options:
   --version            Show version
 
 Init options:
+  --pre-commit         Install a Git pre-commit hook for staged files; preserve existing hooks
   --composer-root DIR  Directory with composer.json inside the project (default: detected)
   --php-runtime X.Y    PHP the project runs on; selects the image (default: .ddev, Composer platform, composer.lock)
   --php-target X.Y     PHP the code must support (default: Composer platform, else the runtime)
@@ -72,6 +74,7 @@ var minorVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
 type options struct {
 	noCache      bool
 	all          bool
+	preCommit    bool
 	project      string
 	config       string
 	format       string
@@ -129,6 +132,9 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		fmt.Fprintln(stdout, "phpwarden dev")
 		return 0
 	}
+	if len(args.command) == 2 && args.command[0] == "hook" && args.command[1] == "pre-commit" {
+		return preCommit(ctx, args, cwd, stdout, stderr)
+	}
 	if len(args.command) == 2 && args.command[0] == "worker" && (args.command[1] == "execute" || args.command[1] == "prepare-fix") {
 		if len(arguments) != 2 {
 			return writeReport(stdout, stderr, "json", "never", report.InputError("request", fmt.Errorf("worker execute accepts only its stdin request")), false)
@@ -169,10 +175,13 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--all applies only to text reports from check, fix or worker check; compact and JSON already include every finding"))
 	}
 	if !isInit && !isScope && !isConfig && !isWorker && !isCheck && !isResolve {
-		return fail(stdout, stderr, args, "usage", fmt.Errorf("expected init, config validate/show, resolve, scope, check, fix, or worker check; use --help"))
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("expected init, config validate/show, resolve, scope, check, fix, worker check, or hook pre-commit; use --help"))
 	}
 	if !isInit && (args.phpRuntime != "" || args.phpTarget != "" || args.composerRoot != "") {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--composer-root, --php-runtime and --php-target require the init command"))
+	}
+	if args.preCommit && !isInit {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("--pre-commit requires init"))
 	}
 	if isInit && args.config != "" {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("init always writes %s in the project root; use --project", config.Filename))
@@ -315,6 +324,13 @@ func parse(arguments []string) (options, error) {
 			result.all = true
 			continue
 		}
+		if argument == "--pre-commit" {
+			if result.preCommit {
+				return result, fmt.Errorf("duplicate option --pre-commit")
+			}
+			result.preCommit = true
+			continue
+		}
 		if !strings.HasPrefix(argument, "-") {
 			result.command = append(result.command, argument)
 			continue
@@ -380,7 +396,7 @@ func parse(arguments []string) (options, error) {
 			result.color = value
 		}
 	}
-	if result.version && (len(result.command) != 0 || len(seen) != 0 || result.help || result.wholeFiles || result.fix || result.noCache || result.all) {
+	if result.version && (len(result.command) != 0 || len(seen) != 0 || result.help || result.wholeFiles || result.fix || result.noCache || result.all || result.preCommit) {
 		return result, fmt.Errorf("--version cannot be combined with a command or options")
 	}
 	return result, nil

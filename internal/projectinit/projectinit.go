@@ -23,6 +23,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/checker/twigcsfixer"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
+	"github.com/rchehd/phpwarden/internal/githook"
 	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/profile/drupal"
 	"github.com/rchehd/phpwarden/internal/toolset"
@@ -44,6 +45,8 @@ type Options struct {
 	ComposerRoot string
 	Runtime      string
 	Target       string
+	PreCommit    bool
+	Executable   string
 }
 
 type Choice struct {
@@ -57,15 +60,16 @@ type NativeConfig struct {
 }
 
 type Result struct {
-	Created       bool            `json:"created"`
-	Location      config.Location `json:"location"`
-	ComposerRoot  string          `json:"composer_root,omitempty"`
-	Runtime       *Choice         `json:"runtime,omitempty"`
-	Target        *Choice         `json:"target,omitempty"`
-	Image         string          `json:"image,omitempty"`
-	Project       *profile.Facts  `json:"project,omitempty"`
-	Base          *string         `json:"base,omitempty"`
-	NativeConfigs []NativeConfig  `json:"native_configs,omitempty"`
+	Created       bool                  `json:"created"`
+	Location      config.Location       `json:"location"`
+	ComposerRoot  string                `json:"composer_root,omitempty"`
+	Runtime       *Choice               `json:"runtime,omitempty"`
+	Target        *Choice               `json:"target,omitempty"`
+	Image         string                `json:"image,omitempty"`
+	Project       *profile.Facts        `json:"project,omitempty"`
+	Base          *string               `json:"base,omitempty"`
+	NativeConfigs []NativeConfig        `json:"native_configs,omitempty"`
+	PreCommit     *githook.Installation `json:"pre_commit,omitempty"`
 }
 
 // Run writes a minimal configuration for the Drupal project, or validates the one already there.
@@ -74,6 +78,26 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	var hook githook.Plan
+	if options.PreCommit {
+		hook, err = githook.PrepareInstall(ctx, root, options.Executable)
+		if err != nil {
+			return Result{}, err
+		}
+	}
+	result, err := configure(ctx, root, options)
+	if err != nil || !options.PreCommit {
+		return result, err
+	}
+	installed, err := hook.Install()
+	if err != nil {
+		return result, fmt.Errorf("configuration is ready, but pre-commit installation failed: %w", err)
+	}
+	result.PreCommit = &installed
+	return result, nil
+}
+
+func configure(ctx context.Context, root string, options Options) (Result, error) {
 	location := config.Location{Root: root, Path: filepath.Join(root, config.Filename)}
 	result := Result{Location: location}
 	if _, err := os.Lstat(location.Path); err == nil {

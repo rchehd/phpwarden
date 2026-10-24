@@ -55,6 +55,28 @@ php:
 
 If the versions cannot be detected or conflict with `composer.lock`, init stops with exit code 2 and says what to pass, for example `phpwarden init --php-runtime 8.1`. Use `--php-runtime` and `--php-target` to set them yourself. Init never overwrites an existing `.phpwarden.yaml`.
 
+### Git pre-commit hook
+
+To configure a project and install its pre-commit hook:
+
+```sh
+phpwarden init --pre-commit
+```
+
+This also works when `.phpwarden.yaml` already exists. Repeating the command keeps the configuration and reports whether the hook was newly installed or already present. Plain `init` does not install a hook.
+
+The hook checks whole staged files within the configured source roots and project-file scope, using the project's enabled checks and policies. It does not compare against a remote branch, so it works for a first commit and honors Git's temporary index for `git commit -a`. Blocking findings or a required runner/checker failure abort the commit. Deleted files and staged files outside the configured scope are skipped.
+
+Selected files must match their staged versions. If one also has unstaged edits or was deleted only from the working tree, the hook stops and explains how to resolve the mismatch. It does not stash, fix, stage or rewrite project files. Tool configs, dependencies and cross-file analysis use the current working-tree context. Changes to the index during checking invalidate the result.
+
+Installation uses Git's effective hooks directory, including a project-local `core.hooksPath` and the common hooks directory of linked worktrees. Conflicts with an existing hook are checked before configuration generation; a different hook is preserved. To integrate with an existing hook manager, invoke this command from its pre-commit hook:
+
+```sh
+phpwarden hook pre-commit
+```
+
+Other shared hook directories outside the project are left for manual integration. The generated hook records the absolute path of the CLI used to install it, so Git clients do not need `phpwarden` on their `PATH`; keep that executable at the recorded location. If moving it, remove the generated PHPWarden hook and install again. Git and Docker must still be available to the checking process. Install hooks per clone; linked worktrees share the default hook directory. Existing project configuration, Docker images and policy settings are reused.
+
 ### Monorepo
 
 When the Drupal project is in a subdirectory, init records it as `composer_root`:

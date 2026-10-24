@@ -10,7 +10,7 @@ import (
 )
 
 func initProject(ctx context.Context, args options, cwd string, stdout, stderr io.Writer) int {
-	result, err := projectinit.Run(ctx, projectinit.Options{CWD: cwd, Project: args.project, ComposerRoot: args.composerRoot, Runtime: args.phpRuntime, Target: args.phpTarget})
+	result, err := projectinit.Run(ctx, projectinit.Options{CWD: cwd, Project: args.project, ComposerRoot: args.composerRoot, Runtime: args.phpRuntime, Target: args.phpTarget, PreCommit: args.preCommit})
 	if err != nil {
 		return fail(stdout, stderr, args, "init", err)
 	}
@@ -23,7 +23,9 @@ func initProject(ctx context.Context, args options, cwd string, stdout, stderr i
 		return 0
 	}
 	if !result.Created {
-		fmt.Fprintf(stdout, "Configuration already exists: %s\n\nNext: phpwarden check\n", result.Location.Path)
+		fmt.Fprintf(stdout, "Configuration already exists: %s\n", result.Location.Path)
+		writeHookInstallation(stdout, result)
+		fmt.Fprintln(stdout, "\nNext: phpwarden check")
 		return 0
 	}
 	fmt.Fprintf(stdout, "Created %s\n\n", result.Location.Path)
@@ -71,6 +73,18 @@ func initProject(ctx context.Context, args options, cwd string, stdout, stderr i
 	if len(facts.Warnings) > 0 {
 		row("Warnings", facts.Warnings...)
 	}
+	writeHookInstallation(stdout, result)
 	fmt.Fprintln(stdout, "\nNext: phpwarden check")
 	return 0
+}
+
+func writeHookInstallation(stdout io.Writer, result projectinit.Result) {
+	if result.PreCommit == nil {
+		return
+	}
+	verb := "Installed"
+	if !result.PreCommit.Created {
+		verb = "Already installed"
+	}
+	fmt.Fprintf(stdout, "%s pre-commit hook: %s\n", verb, result.PreCommit.Path)
 }
