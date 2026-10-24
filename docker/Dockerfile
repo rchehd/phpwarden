@@ -6,6 +6,7 @@ FROM golang:1.26.5-alpine3.23@sha256:622e56dbc11a8cfe87cafa2331e9a201877271cbff9
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
+COPY buildinfo.go docker-bake.json ./
 COPY cmd ./cmd
 COPY internal ./internal
 COPY schemas ./schemas
@@ -104,7 +105,9 @@ ARG REQUIRE_CHECKER_VERSION=4.16.1
 
 ARG PHP_VERSION
 ARG PHP_RUNTIME
+ARG TOOLSET_ID
 
+RUN test -n "$TOOLSET_ID" || { echo "TOOLSET_ID is required; use docker buildx bake" >&2; exit 1; }
 RUN apk add --no-cache git ca-certificates libstdc++ python3 \
     && addgroup -S -g 10001 phpwarden \
     && adduser -S -D -H -u 10001 -G phpwarden phpwarden \
@@ -131,7 +134,7 @@ COPY --from=build /out/phpwarden /usr/local/bin/phpwarden
 LABEL org.opencontainers.image.title="PHPWarden static worker" \
     org.opencontainers.image.source="https://github.com/rchehd/phpwarden" \
     io.phpwarden.protocol="2" \
-    io.phpwarden.toolset="static-dev-v22-php${PHP_RUNTIME}" \
+    io.phpwarden.toolset="${TOOLSET_ID}" \
     io.phpwarden.php-version="${PHP_VERSION}" \
     io.phpwarden.checkers="composer-audit,composer-require-checker,composer-unused,composer-validate,dead-code,debug,deptrac,drupal-config,eslint,eventhorizon,gitleaks,jscpd,phpcs,phpmd,phpstan,rector,semgrep,stylelint,syntax,twig-cs-fixer,whitespace,yaml" \
     io.phpwarden.symfony-yaml-version="6.4.48" \

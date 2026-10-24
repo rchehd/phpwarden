@@ -21,7 +21,13 @@
     "entry": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "profile", "preset", "framework", "php", "toolset", "tools", "capabilities", "development", "images"],
+      "required": ["id", "profile", "preset", "framework", "php", "tools", "capabilities", "development", "images"],
+      "allOf": [
+        {
+          "if": {"properties": {"development": {"const": false}}},
+          "then": {"required": ["toolset"]}
+        }
+      ],
       "properties": {
         "id": {"$ref": "#/$defs/id"},
         "profile": {"enum": ["drupal"]},

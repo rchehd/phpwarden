@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	buildinfo "github.com/rchehd/phpwarden"
 	"github.com/rchehd/phpwarden/internal/compatibility"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/phpconstraint"
@@ -14,7 +15,7 @@ import (
 
 const minimumPHP = "8.1"
 
-func DevelopmentID(runtime string) string { return "static-dev-v22-php" + runtime }
+func DevelopmentID(runtime string) string { return buildinfo.DevelopmentToolset() + "-php" + runtime }
 
 type Selection struct {
 	Release          string            `json:"release"`

@@ -31,6 +31,25 @@ done
 
 Rebuild or pull again after every update: the CLI rejects an image from another version.
 
+The development toolset revision is defined once in `docker-bake.json` (`PHPWARDEN_TOOLSET`). The CLI embeds that file, development manifest entries derive their IDs from it, and Docker Bake passes the matching ID to the image label. Change this value when worker/toolset compatibility changes, then rebuild the CLI and images together. Published release manifests still specify explicit toolset IDs.
+
+The images are ready-to-run PHPWarden installations: they contain the same CLI binary, the worker, PHP and the analyzers. Their PHP version tags select the execution runtime. Docker's intermediate build stages are not published.
+
+There are two ways to run a check:
+
+| Installation | How it runs |
+|---|---|
+| Standalone CLI | The host binary reads config and launches the matching local worker image |
+| Docker image directly | The image runs `phpwarden worker check` inside the mounted project |
+
+For example, with a Git project configured for PHP 8.4 and its dependencies installed, run from that project's Git root:
+
+```sh
+docker run --rm -v "$PWD:/workspace:ro" ghcr.io/rchehd/phpwarden:static-php8.4-dev worker check --commits 2
+```
+
+Without command arguments, the image defaults to `worker check`; include `worker check` explicitly when passing options as above. Image-only execution selects the PHP runtime through the image tag; the standalone CLI selects it from `.phpwarden.yaml`.
+
 ### CI builds and distribution
 
 The **Checks** workflow runs linters, Go/native tests and fixture checks automatically on branch pushes and pull requests. It can also be run manually without building Docker images or packaging downloads.
@@ -54,6 +73,8 @@ gh workflow run build.yml --repo rchehd/phpwarden --ref main -f target=cli
 Use `-f target=all -f publish_images=true` to build both targets and publish the images.
 
 Build runs that include the CLI produce a `phpwarden-linux-amd64-<commit>` Actions artifact containing `phpwarden-linux-amd64.tar.gz` and `SHA256SUMS`. Extract the downloaded artifact, run `sha256sum -c SHA256SUMS`, then extract the tarball. It contains the executable, README and source commit SHA.
+
+The standalone CLI archive is uploaded to Actions artifacts, not GHCR. GHCR receives the ready-to-run PHP runtime images when publication is enabled; those images already contain PHPWarden and the analysis tools.
 
 These are development builds: the CLI still requires locally named matching images, reports `dev` as its version and does not download images automatically. GitHub Releases, automatic image pulls, a ready-to-use Compose service, and Composer/npm packages are planned in [the distribution and installation UX plan](DISTRIBUTION-PLAN.md).
 

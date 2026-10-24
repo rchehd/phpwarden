@@ -236,6 +236,51 @@ func TestBundledDevelopmentAndConcurrentSelections(t *testing.T) {
 	}
 }
 
+func TestDevelopmentIdentityIsDerivedAndCannotBeOverridden(t *testing.T) {
+	var source map[string]any
+	if err := json.Unmarshal(bundledManifest, &source); err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range source["entries"].([]any) {
+		item := value.(map[string]any)
+		if _, exists := item["toolset"]; exists {
+			t.Fatal("bundled development entry duplicates the shared toolset revision")
+		}
+	}
+	item := source["entries"].([]any)[0].(map[string]any)
+	for _, id := range []string{DevelopmentID("8.1"), "static-dev-v999999-php8.1", DevelopmentID("8.4")} {
+		item["toolset"] = id
+		data, err := json.Marshal(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = ParseManifest(data)
+		if (err == nil) != (id == DevelopmentID("8.1")) {
+			t.Fatalf("explicit toolset %q: %v", id, err)
+		}
+	}
+}
+
+func TestPublishedManifestStillRequiresExplicitToolset(t *testing.T) {
+	source := manifest{Version: 1, Protocol: 2, Release: "fixture-1", Entries: []entry{fixtureEntry("d11", ">=11 <12", "8.4", "8.4.26", "8.3", "8.4")}}
+	data, err := json.Marshal(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	delete(document["entries"].([]any)[0].(map[string]any), "toolset")
+	data, err = json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseManifest(data); err == nil {
+		t.Fatal("published manifest silently inherited a development identity")
+	}
+}
+
 func TestBundledYAMLVersionsMatchDependencyLock(t *testing.T) {
 	catalog, err := bundled()
 	if err != nil {

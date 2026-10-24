@@ -105,6 +105,9 @@ func ParseManifest(data []byte) (Catalog, error) {
 	toolsets := make(map[string]string)
 	images := make(map[string]string)
 	for _, item := range source.Entries {
+		if item.Development && item.Toolset == "" {
+			item.Toolset = DevelopmentID(item.PHP.Runtime)
+		}
 		if seen[item.ID] {
 			return Catalog{}, fmt.Errorf("duplicate manifest entry %q", item.ID)
 		}

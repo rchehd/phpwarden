@@ -70,7 +70,7 @@ jobs:
         run: node --check internal/checker/nodecheck/helper.cjs
       - name: Check formatting
         run: |
-          files=$(gofmt -l cmd internal schemas)
+          files=$(gofmt -l buildinfo.go cmd internal schemas)
           if [ -n "$files" ]; then
             printf '%s\n' "$files"
             exit 1

@@ -624,7 +624,10 @@ class LauncherCLITest(unittest.TestCase):
                         self.assertEqual(result["exit_code"], 1 if verdict == "fail" else 0)
                         self.assertTrue(result["complete"])
                         self.assertTrue(result["environment"]["image"].startswith("sha256:"))
-                        self.assertEqual(result["environment"]["toolset"], "static-dev-v22-php8.4")
+                        resolved = self.run_cli(scenario.root, ["resolve"], scenario.env)
+                        self.assertEqual(
+                            result["environment"]["toolset"], resolved["selection"]["id"]
+                        )
                         expected = sorted(
                             (row["checker"], row["path"], row["line"])
                             for row in scenario.spec["findings"]

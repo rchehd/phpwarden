@@ -18,6 +18,7 @@ target "php" {
     PHP_IMAGE   = item.image
     PHP_VERSION = item.version
     PHP_RUNTIME = item.runtime
+    TOOLSET_ID  = "${PHPWARDEN_TOOLSET}-php${item.runtime}"
     REQUIRE_CHECKER_VERSION = item.runtime == "8.1" ? "4.7.1" : "4.16.1"
   }
   tags = ["phpwarden:static-php${item.runtime}-dev"]
