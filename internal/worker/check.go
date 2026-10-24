@@ -119,8 +119,7 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 	if err := checker.ValidateOnly(only); err != nil {
 		return report.InputError("selection", err)
 	}
-	for _, id := range checker.Requested(only) {
-		progress.Stage(ctx, "Checking "+id)
+	outcomes := runCheckers(ctx, checker.Requested(only), cfg.Runner.Concurrency, func(id string) checker.Outcome {
 		var outcome checker.Outcome
 		if id == "phpstan" {
 			settings := cfg.Tools.PHPStan
@@ -232,6 +231,9 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
 			outcome = debug.Run(ctx, location.Root, debug.Select(selection, settings, cfg.Profile), settings, process)
 		}
+		return outcome
+	})
+	for _, outcome := range outcomes {
 		result.Checks = append(result.Checks, outcome.Check)
 		result.Findings = append(result.Findings, outcome.Findings...)
 		result.Diagnostics = append(result.Diagnostics, outcome.Diagnostics...)
@@ -241,13 +243,16 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 		if outcome.Runtime != nil {
 			if *outcome.Runtime != cfg.PHP.Runtime || result.Environment.PHPRuntime != nil && *outcome.Runtime != *result.Environment.PHPRuntime ||
 				result.Environment.PHPVersion != nil && outcome.PHPVersion != nil && *result.Environment.PHPVersion != *outcome.PHPVersion {
-				result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "runtime_mismatch", Stage: "worker", Message: fmt.Sprintf("%s checker PHP runtime does not match the configured runtime or other checkers", id)})
+				result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "runtime_mismatch", Stage: "worker", Message: fmt.Sprintf("%s checker PHP runtime does not match the configured runtime or other checkers", outcome.Check.ID)})
 			}
 			result.Environment.PHPRuntime = outcome.Runtime
 			if outcome.PHPVersion != nil {
 				result.Environment.PHPVersion = outcome.PHPVersion
 			}
 		}
+	}
+	if ctx.Err() != nil {
+		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "worker_cancelled", Stage: "worker", Message: ctx.Err().Error()})
 	}
 	result.Finalize()
 	return result

@@ -81,28 +81,18 @@ func Write(out io.Writer, result report.Report, options Options) error {
 		return w.err
 	}
 	w.header(result)
+	var categories []category
 	if !options.Compact {
+		categories = reportCategories(result)
 		w.result(result)
 		complete := "complete"
 		if !result.Complete {
 			complete = "incomplete"
 		}
-		w.line("Analysis: %s · %s", complete, plural(len(ruleGroups(result.Findings)), "rule group"))
-		skipped := []string{}
-		for _, check := range result.Checks {
-			if check.Status == "skipped" {
-				name := check.ID
-				if check.Reason != nil {
-					name += " (" + strings.ReplaceAll(*check.Reason, "_", " ") + ")"
-				}
-				skipped = append(skipped, name)
-			}
-		}
-		if len(skipped) > 0 {
-			w.wrapped("", "Skipped: "+strings.Join(skipped, "; "), "")
-		}
+		w.line("Analysis: %s · %s", complete, plural(len(categories), "category"))
 	}
-	if result.Environment != nil && (len(result.Environment.DiscoveryWarnings) > 0 || len(result.Environment.CompatibilityPending) > 0) {
+
+	if options.Compact && result.Environment != nil && (len(result.Environment.DiscoveryWarnings) > 0 || len(result.Environment.CompatibilityPending) > 0) {
 		w.line("")
 		w.line("%s", w.paint("1", "Project warnings"))
 		for _, warning := range result.Environment.DiscoveryWarnings {
@@ -115,11 +105,11 @@ func Write(out io.Writer, result report.Report, options Options) error {
 	if options.Compact {
 		w.compact(result)
 		w.diagnostics(result)
+		w.checks(result)
 	} else {
-		w.diagnostics(result)
-		w.grouped(result)
+		w.categoryDetails(categories)
+		w.categoryChecks(categories)
 	}
-	w.checks(result)
 	if options.Compact {
 		w.line("")
 		w.result(result)
@@ -382,6 +372,9 @@ func counts(findings []report.Finding) string {
 func plural(count int, word string) string {
 	if count == 1 {
 		return "1 " + word
+	}
+	if word == "category" {
+		return strconv.Itoa(count) + " categories"
 	}
 	return strconv.Itoa(count) + " " + word + "s"
 }

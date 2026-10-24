@@ -97,6 +97,13 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "concurrency": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647,
+          "default": 1,
+          "description": "Maximum concurrent analyzers; 1 runs sequentially, 0 runs all requested analyzers concurrently."
+        },
         "timeout_seconds": {
           "type": "integer",
           "minimum": 1,
@@ -632,7 +639,7 @@
           "properties": {
             "enabled": {
               "type": "boolean",
-              "default": false
+              "default": true
             },
             "required": {
               "type": "boolean",
@@ -744,7 +751,7 @@
           "properties": {
             "enabled": {
               "type": "boolean",
-              "default": false
+              "default": true
             },
             "required": {
               "type": "boolean",

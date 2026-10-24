@@ -36,10 +36,12 @@ def check_semgrep(test, configure, run):
                 finding["path"], filename.relative_to(scenario.root).as_posix(), result
             )
             test.assertEqual(len(finding["fingerprint"]), 64, result)
-        config["tools"]["semgrep"] = {"enabled": True, "fail_on": "error"}
+        config["tools"]["semgrep"] = {}
         config_path.write_text(json.dumps(config))
         result = run(scenario, [filename.relative_to(scenario.root).as_posix()])
         test.assertEqual(result["exit_code"], 1, result)
+        test.assertTrue(result["complete"], result)
+        test.assertEqual(len(result["findings"]), 1, result)
         baseline = scenario.root / "semgrep-baseline.json"
         baseline.write_text(
             json.dumps(

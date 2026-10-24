@@ -46,23 +46,7 @@ def check_syntax_settings(test, configure, run):
         configure(scenario)
         filename = scenario.root / ".phpwarden.yaml"
         config = json.loads(filename.read_text())
-        config["tools"] = {
-            "composer-audit": {"enabled": False},
-            "composer-validate": {"enabled": False},
-            "debug": {"enabled": False},
-            "phpcs": {"enabled": False},
-            "phpmd": {"enabled": False},
-            "eslint": {"enabled": False},
-            "gitleaks": {"enabled": False},
-            "stylelint": {"enabled": False},
-            "jscpd": {"enabled": False},
-            "phpstan": {"enabled": False},
-            "twig-cs-fixer": {"enabled": False},
-            "drupal-config": {"enabled": False},
-            "syntax": {"enabled": False},
-            "yaml": {"enabled": False},
-            "whitespace": {"enabled": False},
-        }
+        config["tools"] = {tool: {"enabled": False} for tool in TOOLS}
         filename.write_text(json.dumps(config))
         test.assertEqual(run(scenario, [])["exit_code"], 0)
         result = run(scenario, ["--only", "syntax"])

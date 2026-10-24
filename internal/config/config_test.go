@@ -26,8 +26,12 @@ func TestSemgrepDefaultsLocalRulesAndConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings := effective.Config.Tools.Semgrep
-	if settings.Enabled || !settings.Required || settings.FailOn != "error" || !settings.UseDefaults || !settings.DiscoverConfig || len(settings.Severities) != 3 || settings.MemoryLimitMB != 1024 || settings.RuleTimeoutSeconds != 5 || effective.Provenance["tools.semgrep.rules"] != "core_default" {
+	if !settings.Enabled || !settings.Required || settings.FailOn != "error" || !settings.UseDefaults || !settings.DiscoverConfig || len(settings.Severities) != 3 || settings.MemoryLimitMB != 1024 || settings.RuleTimeoutSeconds != 5 || effective.Provenance["tools.semgrep.enabled"] != "profile_default" || effective.Provenance["tools.semgrep.rules"] != "core_default" {
 		t.Fatalf("Semgrep defaults: %+v", settings)
+	}
+	disabled, err := Parse([]byte(minimal + "tools: {semgrep: {enabled: false}}\n"))
+	if err != nil || disabled.Config.Tools.Semgrep.Enabled || disabled.Provenance["tools.semgrep.enabled"] != "project_config" {
+		t.Fatalf("explicit Semgrep disable was ignored: %+v, %v", disabled, err)
 	}
 	effective, err = Parse([]byte(minimal + `tools:
   semgrep:
@@ -60,8 +64,12 @@ func TestEventHorizonDefaultsAndConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings := effective.Config.Tools.EventHorizon
-	if settings.Enabled || !settings.Required || settings.FailOn != "never" || !settings.Caching || settings.ConfigSync == nil || settings.ExcludeRules == nil || effective.Provenance["tools.eventhorizon.caching"] != "core_default" {
+	if !settings.Enabled || !settings.Required || settings.FailOn != "never" || !settings.Caching || settings.ConfigSync == nil || settings.ExcludeRules == nil || effective.Provenance["tools.eventhorizon.enabled"] != "profile_default" || effective.Provenance["tools.eventhorizon.caching"] != "core_default" {
 		t.Fatalf("EventHorizon defaults: %+v", settings)
+	}
+	disabled, err := Parse([]byte(minimal + "tools: {eventhorizon: {enabled: false}}\n"))
+	if err != nil || disabled.Config.Tools.EventHorizon.Enabled {
+		t.Fatalf("explicit EventHorizon opt-out was ignored: %+v, %v", disabled, err)
 	}
 	effective, err = Parse([]byte(minimal + `tools:
   eventhorizon:

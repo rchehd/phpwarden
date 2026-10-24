@@ -176,6 +176,21 @@ phpwarden fix --only twig-cs-fixer web/themes/custom/my_theme
 
 Fixes may change any line in the selected files, including lines outside diff hunks. The final check covers all lines of the original selection. Formatters prepare edits with the project still mounted read-only; the launcher validates input hashes and applies replacements on the host, preserving permission bits. Concurrent changes detected before writing abort the operation. Each file replacement is atomic; a later write failure can leave earlier replacements applied. JSON reports list those files in `fixed_files`, and text reports show the same list. Other findings can remain after formatting and determine the final exit code.
 
+## Analyzer concurrency
+
+Worker analyzers run sequentially by default. Set the maximum number running at once in the project's configuration:
+
+```yaml
+runner:
+  concurrency: 4
+```
+
+`1` keeps sequential execution; a larger integer sets a limit; `0` runs all requested worker analyzers concurrently. Disabled checkers and checks without applicable files still skip. `init` includes this setting as a commented example. The isolated Composer advisory request performed by the launcher remains a separate phase.
+
+Parallel execution preserves the result ordering, findings, failure policies and input validation. Global and per-checker timeouts still apply; the global timeout includes time waiting for a worker slot. This controls concurrency between analyzers; `tools.syntax.parallel_jobs` separately controls processes inside the optional Parallel Lint backend. More concurrent analyzers can consume more CPU and memory.
+
+Rebuild or pull matching worker images together with the CLI to use this setting; an older worker does not support it.
+
 ## Repeated and concurrent runs
 
 Checks use separate temporary directories and analyzer caches for every run. Shared Composer advisories use a private cache, an interprocess lock, and atomic replacement. A cancelled process releases its locks; checker subprocess groups and Docker containers are cleaned up on exit. Fixes on the same project wait for one another without creating lock files in the source tree. Input hashes and the selected Git scope are checked again before accepting a result.
@@ -195,7 +210,18 @@ Use `phpwarden check --no-cache` to force live analysis. `--fix` always prepares
 
 ## Checkers
 
-All checkers except `composer-require-checker`, `composer-unused`, `dead-code`, `deptrac`, `eventhorizon`, `rector`, and `semgrep` are enabled by default. `composer-audit` is the only one that uses the network, and it is optional by default.
+All checkers except `composer-require-checker`, `composer-unused`, `dead-code`, `deptrac`, and `rector` are enabled by default in the Drupal profile. `composer-audit` is the only one that uses the network, and it is optional by default.
+
+These five checks require an explicit choice for the project:
+
+| Checker | Why it starts disabled |
+|---|---|
+| `composer-require-checker`, `composer-unused` | Inspect a whole standalone Composer package in full mode; Drupal installer layouts are unsupported |
+| `dead-code` | Runs an additional PHPStan analysis; dynamic Drupal callbacks can need project-specific exceptions |
+| `deptrac` | Needs the project's architecture layers and dependency rules |
+| `rector` | Upgrade suggestions need chosen targets or rules |
+
+Enable one with `tools.<id>.enabled: true`, or select it for a single run using `--only`. `disabled` means configuration turned a checker off; `no files` means it has no applicable files in the selected scope; `no config` means a required native rules file was not found. Enabling a checker does not widen the selected scope or bypass its prerequisites.
 
 | ID | Checks |
 |---|---|
@@ -208,7 +234,7 @@ All checkers except `composer-require-checker`, `composer-unused`, `dead-code`, 
 | `whitespace` | Trailing whitespace and unresolved merge conflict markers |
 | `drupal-config` | Top-level `uuid` and `_core` keys in module `config/install`, `config/optional`, `config/schema` |
 | `eslint` | JavaScript lint using the nearest project config; skipped without a config |
-| `eventhorizon` | Drupal caching heuristics and exported config relationships; opt-in, advisory |
+| `eventhorizon` | Drupal caching heuristics and exported config relationships; enabled, advisory |
 | `gitleaks` | Potential secrets in selected files; values and source text are redacted |
 | `stylelint` | CSS/SCSS/Sass/Less lint using the nearest project config; skipped without a config |
 | `jscpd` | Duplicate code across custom source roots, reported as warnings |
@@ -219,7 +245,7 @@ All checkers except `composer-require-checker`, `composer-unused`, `dead-code`, 
 | `composer-unused` | Dependency removal candidates; opt-in, advisory, full only |
 | `deptrac` | Project-defined architecture layers and dependency rules; opt-in, skips without config |
 | `rector` | Drupal/PHP upgrade suggestions from an isolated Drupal Rector bundle; opt-in dry-run |
-| `semgrep` | Local PHP security search/taint rules using Semgrep CE; opt-in |
+| `semgrep` | Local PHP security search/taint rules using Semgrep CE; enabled in the Drupal profile |
 | `twig-cs-fixer` | Twig template style with Twig CS Fixer |
 
 Every checker accepts these settings under `tools.<id>`:
@@ -273,7 +299,9 @@ Loading this extension also changes core PHPStan parameters. `enabled: true, all
 
 ### EventHorizon
 
-`eventhorizon` is opt-in: `phpwarden check --only eventhorizon` or `tools.eventhorizon.enabled: true`. It uses the caching and config APIs from [QED42 EventHorizon](https://github.com/qed42/eventhorizon-cli-mode), pinned to 0.1.0 commit `ae11df1cd8e4e2b843c6c53bac60026ef344935f`, with PyYAML 6.0.3. Python and the sources are bundled in the worker; Drupal bootstrap, Composer dependencies, and a site database are not required. The integration includes caching detectors and config relationship checks. General regex security rules and code metrics are outside this adapter.
+`eventhorizon` is enabled by default in the Drupal profile, with advisory findings (`fail_on: never`). Disable it with `tools.eventhorizon.enabled: false`, or run it on its own with `phpwarden check --only eventhorizon`. An explicit `enabled: false` in an existing project config retains precedence over the profile default.
+
+It uses the caching and config APIs from [QED42 EventHorizon](https://github.com/qed42/eventhorizon-cli-mode), pinned to 0.1.0 commit `ae11df1cd8e4e2b843c6c53bac60026ef344935f`, with PyYAML 6.0.3. Python and the sources are bundled in the worker; Drupal bootstrap, Composer dependencies, and a site database are not required. The integration includes caching detectors and config relationship checks. General regex security rules and code metrics are outside this adapter.
 
 Caching checks use whole selected PHP/Drupal files, then filter findings to selected lines. Exported config requires explicit project-relative `config_sync` directories. Include those directories in `scope.include` as well as your source roots. When a selected `.yml` file belongs to one of them, all top-level `.yml` files in that directory are analyzed and fingerprinted, including files outside the diff and checker include/exclude filters. Relationship findings describe the directory as a whole and remain visible in a deletion-only diff. Config sync paths are not discovered by executing `settings.php`.
 
@@ -281,15 +309,19 @@ Defaults are `caching: true`, `config_sync: []`, `exclude_rules: []`, `timeout_s
 
 Analysis uses private copies of inputs. Symlinks, unreadable files, invalid text, malformed/duplicate-key/non-mapping config YAML, analyzer warnings/errors, unexpected output, and inputs totaling over 32 MiB are rejected. No source files or CSV/XLSX reports are written to the project. Accuracy and performance still need validation on real Drupal projects before considering wider use.
 
-### Deptrac
+### Composer dependency checks
 
-`composer-require-checker` and `composer-unused` are disabled by default. Enable them explicitly, or use `--only composer-require-checker,composer-unused --mode full`. Other modes return `full_scan_required`. They inspect the whole selected Composer package, including dependencies, regardless of diff or source include patterns. Both default to advisory `fail_on: never`; use `warning` to block on candidates. Neither removes packages or supports `--fix`.
+`composer-require-checker` and `composer-unused` are disabled by default. Enable them explicitly, or use `--only composer-require-checker,composer-unused --mode full`. Other modes report `skipped: full_scan_required`. They inspect the whole selected Composer package, including dependencies, regardless of diff or source include patterns. Both default to advisory `fail_on: never`; use `warning` to block on candidates. Neither removes packages or supports `--fix`.
 
-Set each tool's `composer_root` to choose a standalone package; otherwise the global Composer root applies. Composer 2 installed metadata and all direct dependencies must exist. The supported layout is `<vendor-dir>/<vendor>/<package>` with regular local files. Drupal installer paths such as `web/core`, virtual/replaced packages and linked dependencies return `unsupported_layout`. No blanket Drupal exclusions are supplied. In particular, YAML, plugin discovery and dynamically referenced services can make composer-unused candidates false positives: review them before removal.
+Set each tool's `composer_root` to choose a standalone package; otherwise the global Composer root applies. Composer 2 installed metadata and all direct dependencies must exist; missing dependencies produce `unavailable: dependencies_missing`. The supported layout is `<vendor-dir>/<vendor>/<package>` with regular local files. Drupal installer paths such as `web/core`, virtual/replaced packages and linked dependencies report `skipped: unsupported_layout`. No blanket Drupal exclusions are supplied. In particular, YAML, plugin discovery and dynamically referenced services can make composer-unused candidates false positives: review them before removal.
 
 ComposerRequireChecker is pinned to 4.7.1 on PHP 8.1 and 4.16.1 on PHP 8.2–8.4. Configure native JSON through `config`/`discover_config`, `scan_files` relative to the package root, and `allowed_symbols`. Native JSON accepts `scan-files`, `symbol-whitelist` and `php-core-extensions`. Root autoload sources and direct dependency symbols are analyzed; `autoload-dev` is not included automatically. `composer-unused` 0.9.7 supports native PHP `config`, `exclude_packages` and package-relative `exclude_directories`. Config discovery checks the project root, then the selected Composer root (`composer-require-checker.json` or `composer-unused.php`). PHP config and Composer's `installed.php` are trusted executable inputs inside the worker. List additional config inputs in `extra_inputs`. Both tools support timeout/memory limits and reject incomplete native reports.
 
+### Parallel syntax checking
+
 `tools.syntax.backend: parallel-lint` selects the isolated PHP Parallel Lint 1.4.0 backend; `parallel_jobs` defaults to 4 (range 1–32). It lints exactly the selected Drupal PHP files, without executing source/autoload. Native lint skip directives produce an incomplete result, never a clean pass. File names containing semicolons or line breaks require the default `php` backend. Parallel Lint is optional; no performance advantage has been established. The check ID and rule remain `syntax` / `php.syntax`.
+
+### Deptrac
 
 `deptrac` checks the architecture defined by your project. It is disabled by default; enable `tools.deptrac.enabled: true` or pass `--only deptrac`. Without a discovered configuration it reports `skipped: no_config`, including with `--only`. A missing explicitly configured file is an error. PHPWarden does not supply default Drupal layers or create architecture rules.
 
@@ -309,6 +341,8 @@ Forbidden dependencies are `deptrac.violation` errors. `report_uncovered` expose
 
 Supply a project `rector.php` / `rector.dist.php`, `config`, `target_php`, `target_drupal`, `sets`, or `rules`. Discovery checks the project root before the Composer root. Upgrade targets are independent of the current project's `php.runtime`, `php.target`, and `framework.version`; they never change image selection or the normal compatibility checks. Without an explicit PHP upgrade target, Rector uses the current PHP target maximum as its feature ceiling and adds no PHP upgrade sets.
 
+With applicable PHP files, setting only `enabled: true` without any of those rules or targets produces `error: config_invalid`; Rector cannot choose the intended upgrade. With its default `required: true`, this makes the run incomplete with exit code 3. With no applicable files, it reports `skipped: no_files`.
+
 `target_php` enables cumulative PHP sets through the chosen version (8.1–8.5). `target_drupal` selects the pinned minor deprecation sets through the chosen target, including older Drupal sets. Supported targets are 10.0–10.6, 11.0–11.4, and 12.0. This sets Drupal Rector's assumed destination and minimum supported version; suggested code may drop compatibility with older Drupal. The tool's rule coverage is incomplete and a successful check does not prove upgrade readiness. Future minor sets and the upstream opt-in breaking sets are not enabled automatically.
 
 `sets` accepts bundled names such as `drupal-10.3` and `drupal-11.0`, or local PHP set files. `rules` and `skip_rules` accept fully qualified Rector class names. Configure rules needing options, custom rules/autoloading, extra sets, and native skipped paths inside project PHP config. `include`, `exclude`, and `extra_extensions` restrict selected files. `extra_inputs` validates additional local files; project context fingerprints also track metadata for imports, custom rules, and dependencies. Native PHP configs and project autoloaders execute project code, as they do for the other PHP analyzers.
@@ -317,7 +351,9 @@ The adapter always passes `--dry-run`, forces selected files and PHP extensions 
 
 ### Semgrep CE
 
-`semgrep` is opt-in through `tools.semgrep.enabled: true` or `phpwarden check --only semgrep`. The worker includes the pinned Semgrep CE 1.182.0 engine. PHPWarden uses its native protocol directly; it does not install the Python CLI, contact the registry, send telemetry, or use Pro analysis. The bundled ruleset `1.0.0` contains four PHPWarden-authored taint rules for request data reaching shell commands, SQL query text, HTML/trusted markup, and `unserialize`. These rules cover `$_GET`, `$_POST`, `$_REQUEST`, `$_COOKIE`, and request `query`/`request` accessors. They do not treat every Drupal `#markup` value as an XSS vulnerability.
+`semgrep` is enabled by default in the Drupal profile and runs with bundled rules without a project config. Disable it explicitly with `tools.semgrep.enabled: false`, or run it on its own with `phpwarden check --only semgrep`. Existing configurations that explicitly set `enabled: false` retain that choice, including files generated by older versions of `init`.
+
+The worker includes the pinned Semgrep CE 1.182.0 engine. PHPWarden uses its native protocol directly; it does not install the Python CLI, contact the registry, send telemetry, or use Pro analysis. The bundled ruleset `1.0.0` contains four PHPWarden-authored taint rules for request data reaching shell commands, SQL query text, HTML/trusted markup, and `unserialize`. These rules cover `$_GET`, `$_POST`, `$_REQUEST`, `$_COOKIE`, and request `query`/`request` accessors. They do not treat every Drupal `#markup` value as an XSS vulnerability.
 
 CE taint analysis operates within a function or top-level body. It does not track flows through other functions or files. PHPWarden analyzes whole selected files, including Drupal extensions, and reports matches intersecting selected lines. A newly changed taint source may feed a sink outside the diff; use `phpwarden check --only semgrep --whole-files` or a full scan when reviewing security changes. Findings indicate potential problems; they do not prove exploitability or complete security coverage.
 
@@ -380,26 +416,40 @@ tools:
 
 Interactive text runs show a live stage and elapsed time on stderr while preparing the project, running Docker checks and fetching Composer advisories. The status line is cleared before the final report. Redirected output, CI, JSON, compact output and `TERM=dumb` do not animate. The Docker worker currently returns its checks together, so the launcher shows the Docker analysis stage rather than individual checker progress or a percentage.
 
-The default text output starts with the result and analysis completeness, then groups findings by severity, checker and rule. Each group shows its full finding/file counts, files and compact position lists. Repeated explanations appear once; differing messages keep their details next to the relevant positions. Setup failures and coverage notes appear before the findings:
+The default text output starts with the result and analysis completeness, then organizes findings and execution problems into categories. Each analyzer belongs to one category; the category is used for both details and the final checklist. Tool names and native rule identifiers are omitted from headings and checklist rows. Diagnostic messages retain the configuration paths and details needed to resolve a problem.
+
+| Category | Checks |
+|---|---|
+| Security | Secrets, security rules, dependency advisories |
+| Code standards | PHP, JavaScript, stylesheet and Twig standards; whitespace |
+| Correctness | Syntax, types, API usage and debug leftovers |
+| Dependencies | Package validity, undeclared and unused dependencies |
+| Maintainability | Duplication, complexity and dead code |
+| Drupal quality | Module configuration and caching |
+| Architecture | Dependency boundaries |
+| Upgrades | Modernization and deprecation replacements |
+
+Project and execution-wide problems appear under Environment. Within each category, errors precede warnings and informational findings. Repeated explanations appear once; differing messages keep their details next to the relevant positions:
 
 ```text
 PHPWarden · changes against origin/main · 3 files · Drupal 11.3.16 · PHP 8.4.26
 Result: FAIL · 2 errors · exit 1 (blocking findings)
-Analysis: complete · 1 rule group
+Analysis: complete · 1 category
 
-ERROR Duplicate spaces — 2 findings · 1 file
-  phpcs / SlevomatCodingStandard.Whitespaces.DuplicateSpaces.DuplicateSpaces
+Code standards
 
-  packages/ap-related-content/ap_related_content.module
-    71:24 · 72:23
+  ERROR Duplicate spaces — 2 findings · 1 file
+
+    packages/ap-related-content/ap_related_content.module
+      71:24 · 72:23
 
 Checks
-  ✗ phpcs  failed       2 errors
+  ✗ Code standards  failed       2 errors
 ```
 
-Text groups show the first 10 findings by default, with an explicit count of the remaining findings and affected files. `--all` shows every finding; this affects display only, never analysis, totals, caching or exit codes. Errors precede warnings and informational groups; groups of the same severity are ordered by checker and rule. Messages and position lists wrap at 100 characters where words allow it; paths and long identifiers remain intact.
+Within a category, each rule group shows the first 10 findings by default, with an explicit count of the remaining findings and affected files. `--all` shows every finding; this affects display only, never analysis, totals, caching or exit codes. Category status preserves required failures, optional failures and skipped coverage: a successful subcheck never hides a failing one. A missing native configuration makes mixed coverage partial; disabled or inapplicable checks are listed as skips. Messages and position lists wrap at 100 characters where words allow it; paths and long identifiers remain intact.
 
-`--format compact` prints every finding on one `path:line:col` line, which editors and terminals can open directly, followed by its summary. If the check stops before any checker runs, the output says so instead of reporting zero findings. Colors are used only in a terminal; `--color always|never` overrides that, and `NO_COLOR` disables it.
+`--format compact` retains technical checker/rule identifiers and prints every finding on one `path:line:col` line, which editors and terminals can open directly, followed by its summary. If the check stops before any checker runs, the output says so instead of reporting zero findings. Colors are used only in a terminal; `--color always|never` overrides that, and `NO_COLOR` disables it.
 
 `--format json` prints one report that follows [schemas/report-v1.schema.json](schemas/report-v1.schema.json). Its content and the exit codes do not depend on the text format.
 

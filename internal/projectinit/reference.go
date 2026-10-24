@@ -38,6 +38,9 @@ func configurationReference(cfg config.Config) ([]byte, error) {
 			if err != nil {
 				return err
 			}
+			if field.name == "concurrency" {
+				value += "  # 0 = all, 1 = sequential, N = limit"
+			}
 			if active[field.name] {
 				fmt.Fprintf(&output, "%s%s: %s\n", indent, field.name, value)
 				comments = 0

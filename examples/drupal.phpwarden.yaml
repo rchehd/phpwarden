@@ -56,7 +56,7 @@ tools:
     enabled: false
     fail_on: error
   eventhorizon:
-    enabled: false
+    enabled: true
     required: true
     fail_on: never
     caching: true
@@ -113,7 +113,7 @@ tools:
     memory_limit_mb: 1024
     exclude: []
   semgrep:
-    enabled: false
+    enabled: true
     required: true
     fail_on: error
     discover_config: true

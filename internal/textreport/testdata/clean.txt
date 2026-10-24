@@ -1,9 +1,8 @@
 PHPWarden · changes against origin/main · 1 file · Drupal 11.3.16 · PHP 8.4.26
 Result: PASS · no findings · exit 0 (no blocking findings)
-Analysis: complete · 0 rule groups
-Skipped: composer-audit (disabled); twig-cs-fixer (no files); yaml (no files)
+Analysis: complete · 3 categories
 
 Checks
-  ✓ debug, phpcs         passed
-  - composer-audit       skipped      disabled
-  - twig-cs-fixer, yaml  skipped      no files
+  ✓ Code standards  passed       1 skipped: no files
+  ✓ Correctness     passed       1 skipped: no files
+  - Security        skipped      disabled

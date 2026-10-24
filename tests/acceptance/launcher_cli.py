@@ -96,6 +96,8 @@ class LauncherCLITest(unittest.TestCase):
                 "jscpd": {"enabled": False},
                 "phpstan": {"enabled": False},
                 "twig-cs-fixer": {"enabled": False},
+                "semgrep": {"enabled": False},
+                "eventhorizon": {"enabled": False},
             },
         }
         (root / ".phpwarden.yaml").write_text(json.dumps(config))
@@ -229,8 +231,9 @@ class LauncherCLITest(unittest.TestCase):
                         self.assertIn(f"{path}:15:", completed.stdout)
                     else:
                         self.assertIn("15 errors", completed.stdout)
-                        self.assertIn("1 rule group", completed.stdout)
-                        self.assertIn("debug / debug.js_call", completed.stdout)
+                        self.assertIn("1 category", completed.stdout)
+                        self.assertIn("\nCorrectness\n", completed.stdout)
+                        self.assertNotIn("debug / debug.js_call", completed.stdout)
                         self.assertEqual("5 more findings" in completed.stdout, not extra)
                         self.assertEqual("13 · 14 · 15" in completed.stdout, bool(extra))
             self.assertEqual(snapshot(scenario.root), before)
@@ -620,7 +623,7 @@ class LauncherCLITest(unittest.TestCase):
                         self.assertEqual(result["exit_code"], 1 if verdict == "fail" else 0)
                         self.assertTrue(result["complete"])
                         self.assertTrue(result["environment"]["image"].startswith("sha256:"))
-                        self.assertEqual(result["environment"]["toolset"], "static-dev-v21-php8.4")
+                        self.assertEqual(result["environment"]["toolset"], "static-dev-v22-php8.4")
                         expected = sorted(
                             (row["checker"], row["path"], row["line"])
                             for row in scenario.spec["findings"]

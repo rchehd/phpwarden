@@ -35,7 +35,16 @@ def check_eventhorizon(test, configure, run):
                 ),
                 result,
             )
-        config["tools"]["eventhorizon"] = {"enabled": True, "fail_on": "warning"}
+        config["tools"]["eventhorizon"] = {}
+        config_path.write_text(json.dumps(config))
+        result = run(scenario, [name])
+        test.assertEqual(result["exit_code"], 0, result)
+        test.assertTrue(result["complete"], result)
+        test.assertTrue(
+            any(row["rule"] == "caching.missing_cache_metadata" for row in result["findings"]),
+            result,
+        )
+        config["tools"]["eventhorizon"] = {"fail_on": "warning"}
         config_path.write_text(json.dumps(config))
         result = run(scenario, [filename.relative_to(scenario.root).as_posix()])
         test.assertEqual(result["exit_code"], 1, result)

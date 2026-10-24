@@ -122,6 +122,8 @@ class WorkerCLITest(unittest.TestCase):
                 "jscpd": {"enabled": False},
                 "phpstan": {"enabled": False},
                 "twig-cs-fixer": {"enabled": False},
+                "semgrep": {"enabled": False},
+                "eventhorizon": {"enabled": False},
             },
         }
         (scenario.root / ".phpwarden.yaml").write_text(json.dumps(config))
@@ -171,6 +173,35 @@ class WorkerCLITest(unittest.TestCase):
                         )
                         self.assertEqual(actual, expected)
                         self.assertFalse((scenario.root / "vendor").exists())
+
+    def test_parallel_analyzers_preserve_real_results(self):
+        for directory in sorted(FIXTURES.iterdir()):
+            with self.subTest(scenario=directory.name), materialize(directory) as scenario:
+                self.configure(scenario)
+                path = scenario.root / ".phpwarden.yaml"
+                config = json.loads(path.read_text())
+                baseline = None
+                for concurrency in (1, 2, 0):
+                    config["runner"] = {"concurrency": concurrency}
+                    path.write_text(json.dumps(config))
+                    report = self.run_worker(scenario, ["--mode", "full"])
+                    actual = {
+                        key: report[key]
+                        for key in (
+                            "verdict",
+                            "exit_code",
+                            "complete",
+                            "checks",
+                            "findings",
+                            "diagnostics",
+                            "environment",
+                        )
+                    }
+                    if baseline is None:
+                        baseline = actual
+                        self.assertTrue(report["complete"], report)
+                    else:
+                        self.assertEqual(actual, baseline, f"concurrency={concurrency}")
 
     def test_syntax_findings_include_errors_outside_diff(self):
         check_syntax_fixtures(self, self.configure, self.run_worker)

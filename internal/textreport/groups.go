@@ -58,7 +58,7 @@ var ruleTitles = map[string]string{
 	"UnusedLocalVariable":                                    "Unused local variables",
 }
 
-func (w *writer) grouped(result report.Report) {
+func (w *writer) grouped(result report.Report, indent string) {
 	for _, group := range ruleGroups(result.Findings) {
 		rows := group.rows
 		sortRows(rows)
@@ -69,7 +69,14 @@ func (w *writer) grouped(result report.Report) {
 				break
 			}
 		}
-		title := group.rule
+		title := map[string]string{
+			"Security": "Security issue", "Code standards": "Code standard violation", "Correctness": "Code correctness issue",
+			"Dependencies": "Package configuration", "Maintainability": "Maintainability issue", "Drupal quality": "Drupal quality issue",
+			"Architecture": "Dependency rule violation", "Upgrades": "Upgrade suggestion",
+		}[categoryName(group.checker)]
+		if title == "" {
+			title = "Code issue"
+		}
 		if value, ok := ruleTitles[group.rule]; ok {
 			title = value
 		}
@@ -87,14 +94,13 @@ func (w *writer) grouped(result report.Report) {
 		if len(files) > 0 {
 			totals += " · " + plural(len(files), "file")
 		}
-		w.wrapped("", strings.ToUpper(group.severity)+"  "+title+" — "+totals, group.severity)
-		w.wrapped("  ", group.checker+" / "+group.rule, "")
+		w.wrapped(indent, strings.ToUpper(group.severity)+"  "+title+" — "+totals, group.severity)
 		if environment := result.Environment; group.checker == "composer-audit" && environment != nil && environment.Advisories != nil {
 			advisories := environment.Advisories
-			w.wrapped("  ", fmt.Sprintf("advisories from %s, %s", advisories.Source, strings.Replace(strings.Replace(advisories.FetchedAt, "T", " ", 1), "Z", " UTC", 1)), "")
+			w.wrapped(indent+"  ", fmt.Sprintf("advisories from %s, %s", advisories.Source, strings.Replace(strings.Replace(advisories.FetchedAt, "T", " ", 1), "Z", " UTC", 1)), "")
 		}
 		if common != "" && common != title {
-			w.wrapped("  ", common, "")
+			w.wrapped(indent+"  ", common, "")
 		}
 		limit := len(rows)
 		if !w.options.All {
@@ -106,7 +112,7 @@ func (w *writer) grouped(result report.Report) {
 				end++
 			}
 			w.line("")
-			w.line("  %s", rows[start].file)
+			w.line("%s%s", indent+"  ", rows[start].file)
 			messages := map[string][]string{}
 			order := []string{}
 			for _, row := range rows[start:end] {
@@ -118,10 +124,10 @@ func (w *writer) grouped(result report.Report) {
 			for _, message := range order {
 				positions := slices.DeleteFunc(messages[message], func(value string) bool { return value == "" })
 				if len(positions) > 0 {
-					w.wrapped("    ", strings.Join(positions, " · "), "")
+					w.wrapped(indent+"    ", strings.Join(positions, " · "), "")
 				}
 				if common == "" {
-					w.wrapped("    ", message, "")
+					w.wrapped(indent+"    ", message, "")
 				}
 			}
 			start = end
@@ -137,7 +143,7 @@ func (w *writer) grouped(result report.Report) {
 			if len(hiddenFiles) > 0 {
 				note += " in " + plural(len(hiddenFiles), "file")
 			}
-			w.wrapped("  ", note+"; use --all to show all", "")
+			w.wrapped(indent+"  ", note+"; use --all to show all", "")
 		}
 	}
 }

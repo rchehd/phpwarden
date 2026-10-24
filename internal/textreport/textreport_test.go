@@ -153,7 +153,7 @@ func TestRuleGroupsCollapseRepeatedMessagesAndKeepDistinctDetails(t *testing.T) 
 		t.Fatal(err)
 	}
 	text := output.String()
-	for _, want := range []string{"2 rule groups", "phpstan / method.notFound", "other / method.notFound", "12 · 24", "B::stop()"} {
+	for _, want := range []string{"2 categories", "\nCorrectness\n", "\nOther checks\n", "Undefined methods", "12 · 24", "B::stop()"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing %q:\n%s", want, text)
 		}
@@ -161,7 +161,7 @@ func TestRuleGroupsCollapseRepeatedMessagesAndKeepDistinctDetails(t *testing.T) 
 	if strings.Count(text, "Call to undefined method A::run().") != 1 {
 		t.Fatalf("repeated explanation was not collapsed:\n%s", text)
 	}
-	if strings.Index(text, "Result: FAIL") > strings.Index(text, "phpstan / method.notFound") || strings.Index(text, "phpstan / method.notFound") > strings.Index(text, "other / method.notFound") {
+	if strings.Index(text, "Result: FAIL") > strings.Index(text, "\nCorrectness\n") || strings.Index(text, "\nCorrectness\n") > strings.Index(text, "\nOther checks\n") {
 		t.Fatalf("verdict and errors must precede advisory groups:\n%s", text)
 	}
 }
@@ -198,7 +198,7 @@ func TestLargeRuleGroupShowsOmissionsWithoutChangingReport(t *testing.T) {
 	}
 }
 
-func TestCoverageAndToolFailuresPrecedeRuleGroups(t *testing.T) {
+func TestCoverageAndExecutionFailuresStayInTheirCategory(t *testing.T) {
 	result := scenarios()["findings"]
 	result.Checks = append(result.Checks, check("eslint", "error", true, "dependencies_missing"))
 	result.Checks = append(result.Checks, check("deptrac", "skipped", true, "no_config"))
@@ -209,8 +209,9 @@ func TestCoverageAndToolFailuresPrecedeRuleGroups(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := output.String()
-	if !strings.Contains(text, "Analysis: incomplete") || !strings.Contains(text, "deptrac (no config)") || strings.Index(text, "deptrac (no config)") > strings.Index(text, "debug / debug.function") || strings.Index(text, "Install the locked") > strings.Index(text, "debug / debug.function") || strings.Index(text, "Notes") > strings.Index(text, "debug / debug.function") {
-		t.Fatalf("incomplete status and diagnostic details must be visible before findings:\n%s", text)
+	start, end := strings.Index(text, "\nCode standards\n"), strings.Index(text, "\nCorrectness\n")
+	if !strings.Contains(text, "Analysis: incomplete") || !strings.Contains(text, "Architecture") || !strings.Contains(text, "no config") || start < 0 || end <= start || !strings.Contains(text[start:end], "Install the locked") || !strings.Contains(text, "Using Composer advisories") {
+		t.Fatalf("category output lost coverage or execution details:\n%s", text)
 	}
 }
 

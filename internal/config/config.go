@@ -52,6 +52,7 @@ type Scope struct {
 }
 
 type Runner struct {
+	Concurrency    int  `json:"concurrency"`
 	ResultCache    bool `json:"result_cache"`
 	TimeoutSeconds int  `json:"timeout_seconds"`
 }
@@ -448,17 +449,17 @@ func Parse(data []byte) (Effective, error) {
 			ComposerRoot: ".",
 			Framework:    Framework{Version: "auto"},
 			Scope:        Scope{Mode: "diff", Exclude: []string{}},
-			Runner:       Runner{TimeoutSeconds: 300},
+			Runner:       Runner{Concurrency: 1, TimeoutSeconds: 300},
 			Tools: Tools{PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
 				Includes: []string{}, BootstrapFiles: []string{}, ScanDirectories: []string{}, StubFiles: []string{}, Autoload: "auto",
 				Drupal: defaults.PHPStanDrupal, Deprecations: true, MemoryLimitMB: 512, ExtraExtensions: []string{}, StrictRules: StrictRules{All: true, Rules: map[string]bool{}}},
 				Gitleaks:               Gitleaks{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true, Rules: []string{}, ExtraInputs: []string{}},
-				EventHorizon:           EventHorizon{Enabled: false, Required: true, FailOn: "never", TimeoutSeconds: 120, Exclude: []string{}, Caching: true, ConfigSync: []string{}, ExcludeRules: []string{}},
+				EventHorizon:           EventHorizon{Enabled: defaults.EventHorizonEnabled, Required: true, FailOn: "never", TimeoutSeconds: 120, Exclude: []string{}, Caching: true, ConfigSync: []string{}, ExcludeRules: []string{}},
 				ComposerRequireChecker: ComposerRequireChecker{PackageTool: PackageTool{Enabled: false, Required: true, FailOn: "never", TimeoutSeconds: 300, DiscoverConfig: true, ExtraInputs: []string{}, MemoryLimitMB: 1024}, ScanFiles: []string{}, AllowedSymbols: []string{}},
 				ComposerUnused:         ComposerUnused{PackageTool: PackageTool{Enabled: false, Required: true, FailOn: "never", TimeoutSeconds: 300, DiscoverConfig: true, ExtraInputs: []string{}, MemoryLimitMB: 1024}, ExcludePackages: []string{}, ExcludeDirectories: []string{}},
 				Deptrac:                Deptrac{Enabled: false, Required: true, FailOn: "error", TimeoutSeconds: 300, Exclude: []string{}, DiscoverConfig: true, ExtraInputs: []string{}, MemoryLimitMB: 1024},
 				Rector:                 Rector{Enabled: false, Required: true, FailOn: "never", TimeoutSeconds: 600, Exclude: []string{}, DiscoverConfig: true, Sets: []string{}, Rules: []string{}, SkipRules: []string{}, ExtraInputs: []string{}, ExtraExtensions: []string{}, MemoryLimitMB: 1024, DryRun: true},
-				Semgrep:                Semgrep{Enabled: false, Required: true, FailOn: "error", TimeoutSeconds: 300, Exclude: []string{}, DiscoverConfig: true, UseDefaults: true, Rulesets: []string{}, Rules: []string{}, ExcludeRules: []string{}, Severities: []string{"ERROR", "WARNING", "INFO"}, ExtraInputs: []string{}, ExtraExtensions: []string{}, RuleTimeoutSeconds: 5, MemoryLimitMB: 1024},
+				Semgrep:                Semgrep{Enabled: defaults.SemgrepEnabled, Required: true, FailOn: "error", TimeoutSeconds: 300, Exclude: []string{}, DiscoverConfig: true, UseDefaults: true, Rulesets: []string{}, Rules: []string{}, ExcludeRules: []string{}, Severities: []string{"ERROR", "WARNING", "INFO"}, ExtraInputs: []string{}, ExtraExtensions: []string{}, RuleTimeoutSeconds: 5, MemoryLimitMB: 1024},
 				DeadCode:               DeadCode{Enabled: false, Required: true, FailOn: "error", TimeoutSeconds: 600, Exclude: []string{}, MemoryLimitMB: 1024},
 				ESLint:                 NodeLint{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{"**/*.min.js"}, DiscoverConfig: true, ExtraExtensions: []string{}, ExtraInputs: []string{}},
 				Stylelint:              NodeLint{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{"**/*.min.css"}, DiscoverConfig: true, ExtraExtensions: []string{}, ExtraInputs: []string{}},
@@ -486,7 +487,7 @@ func Parse(data []byte) (Effective, error) {
 		Provenance: map[string]string{
 			"framework.version": "core_default", "composer_root": "core_default", "scope.mode": "core_default",
 			"scope.exclude": "core_default", "scope.whole_files": "core_default",
-			"runner.result_cache": "core_default", "runner.timeout_seconds": "core_default", "tools.debug.enabled": "profile_default",
+			"runner.concurrency": "core_default", "runner.result_cache": "core_default", "runner.timeout_seconds": "core_default", "tools.debug.enabled": "profile_default",
 			"tools.debug.required": "core_default", "tools.debug.fail_on": "core_default",
 			"tools.debug.timeout_seconds": "core_default", "tools.debug.exclude": "core_default",
 			"tools.debug.functions": "profile_default", "tools.debug.js_functions": "profile_default", "tools.debug.twig_functions": "profile_default",
@@ -551,9 +552,11 @@ func Parse(data []byte) (Effective, error) {
 	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "caching", "config_sync", "exclude_rules"} {
 		result.Provenance["tools.eventhorizon."+field] = "core_default"
 	}
+	result.Provenance["tools.eventhorizon.enabled"] = "profile_default"
 	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "use_defaults", "rulesets", "rules", "exclude_rules", "severities", "baseline", "extra_inputs", "extra_extensions", "rule_timeout_seconds", "memory_limit_mb"} {
 		result.Provenance["tools.semgrep."+field] = "core_default"
 	}
+	result.Provenance["tools.semgrep.enabled"] = "profile_default"
 	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "baseline", "ignore_file", "rules", "extra_inputs"} {
 		result.Provenance["tools.gitleaks."+field] = "core_default"
 	}

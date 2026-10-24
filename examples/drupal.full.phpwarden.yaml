@@ -24,6 +24,7 @@ scope:
   # whole_files: false
 
 runner:
+  # concurrency: 1  # 0 = all, 1 = sequential, N = limit
   # result_cache: false
   timeout_seconds: 300
 
@@ -158,7 +159,7 @@ tools:
     # extra_inputs: []
 
   eventhorizon:
-    enabled: false
+    enabled: true
     required: true
     fail_on: never
     # timeout_seconds: 120
@@ -304,7 +305,7 @@ tools:
     # dry_run: true
 
   semgrep:
-    enabled: false
+    enabled: true
     required: true
     fail_on: error
     # timeout_seconds: 300

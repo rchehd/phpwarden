@@ -1,12 +1,12 @@
 PHPWarden · changes against origin/main · 1 file · Drupal 11.3.16 · PHP 8.4.26
 Result: ERROR · no findings · exit 3 (a required check could not run)
-Analysis: incomplete · 0 rule groups
+Analysis: incomplete · 1 category
 
-Problems
-  ✗ phpstan  error (required)
-      PHPStan did not complete within its execution context
-      Fix: Raise the checker's timeout_seconds or runner.timeout_seconds.
+Correctness
+
+  ERROR Analysis timed out (required)
+    PHPStan did not complete within its execution context
+    Fix: Raise the checker's timeout_seconds or runner.timeout_seconds.
 
 Checks
-  ✗ phpstan  error        checker timeout
-  ✓ debug    passed
+  ✗ Correctness  error        1 check could not run

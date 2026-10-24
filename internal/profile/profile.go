@@ -38,6 +38,8 @@ type Defaults struct {
 	ModuleConfigForbiddenKeys []string
 	PHPCSStandards            []string
 	PHPStanDrupal             bool
+	SemgrepEnabled            bool
+	EventHorizonEnabled       bool
 	PHPMDRulesets             []string
 	PHPMDExcludeRules         []string
 	TwigExtensions            []string
@@ -59,6 +61,8 @@ func Lookup(id string) (Defaults, bool) {
 		ModuleConfigForbiddenKeys: []string{"uuid", "_core"},
 		PHPCSStandards:            []string{"Drupal", "DrupalPractice"},
 		PHPStanDrupal:             true,
+		SemgrepEnabled:            true,
+		EventHorizonEnabled:       true,
 		PHPMDRulesets:             []string{"unusedcode", "codesize"},
 		// Drupal hooks and interface methods have fixed signatures.
 		PHPMDExcludeRules: []string{"UnusedFormalParameter"},

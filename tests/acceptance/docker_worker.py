@@ -96,6 +96,8 @@ class DockerWorkerTest(unittest.TestCase):
                 "jscpd": {"enabled": False},
                 "phpstan": {"enabled": False},
                 "twig-cs-fixer": {"enabled": False},
+                "semgrep": {"enabled": False},
+                "eventhorizon": {"enabled": False},
             },
         }
         (scenario.root / ".phpwarden.yaml").write_text(json.dumps(config))
@@ -423,6 +425,8 @@ class DockerWorkerTest(unittest.TestCase):
                     "jscpd": {"enabled": False},
                     "phpstan": {"enabled": False},
                     "twig-cs-fixer": {"enabled": False},
+                    "semgrep": {"enabled": False},
+                    "eventhorizon": {"enabled": False},
                 },
             }
             (project / ".phpwarden.yaml").write_text(json.dumps(config))
