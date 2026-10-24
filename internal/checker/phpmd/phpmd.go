@@ -91,6 +91,9 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 		return fail("error", "helper_prepare", err.Error())
 	}
 	defer os.RemoveAll(temporary)
+	environment := slices.DeleteFunc(os.Environ(), func(variable string) bool {
+		return strings.HasPrefix(variable, "GITHUB_ACTIONS=")
+	})
 	fallback := filepath.Join(temporary, "phpmd.xml")
 	if err := os.WriteFile(fallback, profileRuleset(cfg), 0o600); err != nil {
 		return fail("error", "helper_prepare", err.Error())
@@ -112,7 +115,7 @@ func run(ctx context.Context, root, composerRoot string, selection scope.Selecti
 			}
 		}
 		args = append(append(args, "--"), batch.Files...)
-		execution := process.Run(ctx, runner.Command{Name: "php", Directory: root, Args: args})
+		execution := process.Run(ctx, runner.Command{Name: "php", Directory: root, Args: args, Env: environment})
 		if execution.Unavailable {
 			return fail("unavailable", "executable_missing", "PHP executable is unavailable in the worker")
 		}

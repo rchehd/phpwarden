@@ -62,6 +62,7 @@ func summary(findings []report.Finding) []string {
 }
 
 func TestActualPHPMDProfileProjectRulesetAndParseErrors(t *testing.T) {
+	t.Setenv("GITHUB_ACTIONS", "true")
 	root := t.TempDir()
 	bundle, _ := filepath.Abs("../../../tools/phpmd")
 	name, broken := "modules/custom/demo/demo.module", "modules/custom/demo/broken.php"

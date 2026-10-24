@@ -18,7 +18,7 @@ docker buildx bake         # all four images
 docker buildx bake php83   # only PHP 8.3
 ```
 
-Instead of building the images, you can pull the ones CI built from `main` and give them the local names the CLI expects:
+Instead of building the images, you can pull the development images published by a manual CI run from `main` and give them the local names the CLI expects:
 
 ```sh
 for v in 8.1 8.2 8.3 8.4; do
@@ -28,6 +28,14 @@ done
 ```
 
 Rebuild or pull again after every update: the CLI rejects an image from another version.
+
+### CI builds and distribution
+
+Branch pushes and pull requests run Go/native and fixture checks automatically. Docker builds run only through **Actions → CI → Run workflow** or a pushed version tag such as `v0.1.0-rc.1`, after the base tests pass. A manual run builds and tests by default; enable `publish_images` on `main` to publish the tested development images. Version-tag pushes publish version-specific image tags such as `static-php8.4-v0.1.0-rc.1` without moving the floating development tags.
+
+Manual and version-tag runs also produce a `phpwarden-linux-amd64-<commit>` Actions artifact containing `phpwarden-linux-amd64.tar.gz` and `SHA256SUMS`. Extract the downloaded artifact, run `sha256sum -c SHA256SUMS`, then extract the tarball. It contains the executable, README and source commit SHA.
+
+These are development builds: the CLI still requires locally named matching images, reports `dev` as its version and does not download images automatically. GitHub Releases, automatic image pulls, a ready-to-use Compose service, and Composer/npm packages are planned in [the distribution and installation UX plan](DISTRIBUTION-PLAN.md).
 
 ## Configure a project
 
