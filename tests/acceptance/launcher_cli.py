@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import unittest
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from tests.acceptance.docker_worker import snapshot
@@ -360,6 +361,61 @@ class LauncherCLITest(unittest.TestCase):
             host_cache=True,
         )
 
+    def test_concurrent_fixes_serialize_without_source_artifacts(self):
+        with materialize(FIXTURES / "added-debug") as scenario:
+            self.configure(scenario.root, scenario.base)
+            path = "web/modules/custom/demo/fix.php"
+            php = scenario.root / path
+            php.write_text("<?php\nif (true) {\n\techo 1;\n}\n")
+            filename = scenario.root / ".phpwarden.yaml"
+            config = json.loads(filename.read_text())
+            config["runner"] = {"result_cache": True}
+            config["tools"]["phpcs"] = {
+                "standards": ["PSR12"],
+                "sniffs": ["Generic.WhiteSpace.DisallowTabIndent"],
+            }
+            filename.write_text(json.dumps(config))
+            args = ["check", "--fix", "--only", "phpcs", path]
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                futures = [
+                    pool.submit(self.run_cli, scenario.root, args, scenario.env) for _ in range(2)
+                ]
+                results = [future.result() for future in futures]
+            self.assertTrue(all(r["complete"] and r["exit_code"] == 0 for r in results), results)
+            self.assertEqual(sorted(len(r.get("fixed_files", [])) for r in results), [0, 1])
+            self.assertNotIn("\t", php.read_text())
+            self.assertFalse(any(scenario.root.glob("*.lock")))
+            self.assertTrue(all("cache" not in r["environment"] for r in results))
+
+    def test_concurrent_result_cache_and_fresh_override(self):
+        with (
+            materialize(FIXTURES / "added-debug") as scenario,
+            tempfile.TemporaryDirectory(prefix="phpwarden-result-cache-") as cache,
+        ):
+            self.configure(scenario.root, scenario.base)
+            filename = scenario.root / ".phpwarden.yaml"
+            config = json.loads(filename.read_text())
+            config["runner"] = {"result_cache": True}
+            filename.write_text(json.dumps(config))
+            before = snapshot(scenario.root)
+            env = scenario.env | {"XDG_CACHE_HOME": cache}
+            args = ["check", "--only", "debug"]
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                futures = [pool.submit(self.run_cli, scenario.root, args, env) for _ in range(2)]
+                results = [future.result() for future in futures]
+            self.assertEqual(
+                sorted(r["environment"]["cache"]["status"] for r in results), ["hit", "miss"]
+            )
+            self.assertNotEqual(results[0]["run_id"], results[1]["run_id"])
+            self.assertEqual(results[0]["findings"], results[1]["findings"])
+            self.assertTrue(all(r["complete"] and r["exit_code"] == 1 for r in results))
+            fresh = self.run_cli(scenario.root, [*args, "--no-cache"], env)
+            self.assertNotIn("cache", fresh["environment"])
+            self.assertEqual(fresh["findings"], results[0]["findings"])
+            self.assertEqual(snapshot(scenario.root), before)
+            entries = list((Path(cache) / "phpwarden/results").iterdir())
+            self.assertEqual(sorted(p.suffix for p in entries), [".json", ".lock"])
+
     def test_public_check_matches_all_fixture_modes_without_host_php_or_go(self):
         for directory in sorted(FIXTURES.iterdir()):
             for mode in ("diff", "full", "whole-files", "paths"):
@@ -380,7 +436,7 @@ class LauncherCLITest(unittest.TestCase):
                         self.assertEqual(result["exit_code"], 1 if verdict == "fail" else 0)
                         self.assertTrue(result["complete"])
                         self.assertTrue(result["environment"]["image"].startswith("sha256:"))
-                        self.assertEqual(result["environment"]["toolset"], "static-dev-v19-php8.4")
+                        self.assertEqual(result["environment"]["toolset"], "static-dev-v20-php8.4")
                         expected = sorted(
                             (row["checker"], row["path"], row["line"])
                             for row in scenario.spec["findings"]

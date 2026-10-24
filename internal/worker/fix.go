@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rchehd/phpwarden/internal/cache"
 	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/checker/phpcs"
 	"github.com/rchehd/phpwarden/internal/checker/twigcsfixer"
@@ -79,6 +80,17 @@ func Fix(ctx context.Context, location config.Location, effective config.Effecti
 	if err != nil {
 		return report.InputError("fix", err)
 	}
+	release, err := cache.LockProject(ctx, location.Root)
+	if err != nil {
+		result := report.New()
+		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "fix_lock", Stage: "fix", Message: err.Error()})
+		result.Finalize()
+		if ctx.Err() == context.Canceled {
+			result.ExitCode = 130
+		}
+		return result
+	}
+	defer release()
 	selected, err := scope.Build(ctx, options)
 	if err != nil {
 		return report.InputError("scope", err)

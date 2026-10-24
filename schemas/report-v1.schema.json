@@ -53,6 +53,14 @@
             "type": "object", "additionalProperties": false, "required": ["source", "fetched_at"],
             "properties": {"source": {"enum": ["network", "cache"]}, "fetched_at": {"type": "string", "format": "date-time"}}
           },
+          "cache": {
+            "type": "object", "additionalProperties": false, "required": ["status"],
+            "properties": {
+              "status": {"enum": ["hit", "miss", "bypass"]},
+              "key": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "reason": {"type": "string", "minLength": 1}
+            }
+          },
           "requested_runtime": {"type": "string"},
           "php_target_min": {"type": "string"}, "php_target_max": {"type": "string"},
           "image": {"type": ["string", "null"]}, "toolset": {"type": ["string", "null"]},

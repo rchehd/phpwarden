@@ -11,6 +11,8 @@ php:
 scope:
   mode: diff
   base: origin/main
+runner:
+  result_cache: false
 tools:
   composer-validate:
     enabled: true

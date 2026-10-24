@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rchehd/phpwarden/internal/cache"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/edit"
@@ -41,12 +42,17 @@ func Fix(ctx context.Context, location config.Location, effective config.Effecti
 	if err != nil {
 		return report.InputError("fix", err)
 	}
+	release, err := cache.LockProject(ctx, location.Root)
+	if err != nil {
+		return failure("fix_lock", err)
+	}
+	defer release()
 	selected, err := scope.Build(ctx, options)
 	if err != nil {
 		return report.InputError("scope", err)
 	}
 	if len(selected.Files) == 0 {
-		return Check(ctx, location, effective, options, only, process)
+		return CheckFresh(ctx, location, effective, options, only, process)
 	}
 	tool, err := toolset.Resolve(effective)
 	if err != nil {
@@ -121,7 +127,7 @@ func Fix(ctx context.Context, location config.Location, effective config.Effecti
 	if _, err := scope.Build(ctx, options); err != nil {
 		return failure("scope_invalid", err)
 	}
-	result := Check(ctx, location, effective, runrequest.Verification(options, selected), only, process)
+	result := CheckFresh(ctx, location, effective, runrequest.Verification(options, selected), only, process)
 	result.FixedFiles = changed
 	return result
 }

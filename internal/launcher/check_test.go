@@ -31,6 +31,7 @@ const testImage = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 func fixture(t *testing.T) (config.Location, config.Effective, scope.Options) {
 	t.Helper()
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	t.Setenv("DOCKER_HOST", "")
 	t.Setenv("DOCKER_CONTEXT", "")
 	root := filepath.Join(t.TempDir(), "project, with spaces")

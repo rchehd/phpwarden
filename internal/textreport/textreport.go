@@ -163,6 +163,9 @@ func (w *writer) header(result report.Report) {
 		parts = append(parts, plural(len(scope.Files), "file"))
 	}
 	if environment := result.Environment; environment != nil {
+		if environment.Cache != nil && environment.Cache.Status != "bypass" {
+			parts = append(parts, "cache "+environment.Cache.Status)
+		}
 		if environment.FrameworkVersion != nil && *environment.FrameworkVersion != "auto" {
 			parts = append(parts, "Drupal "+*environment.FrameworkVersion)
 		}

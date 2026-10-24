@@ -110,6 +110,23 @@ phpwarden fix --only twig-cs-fixer web/themes/custom/my_theme
 
 Fixes may change any line in the selected files, including lines outside diff hunks. The final check covers all lines of the original selection. Formatters prepare edits with the project still mounted read-only; the launcher validates input hashes and applies replacements on the host, preserving permission bits. Concurrent changes detected before writing abort the operation. Each file replacement is atomic; a later write failure can leave earlier replacements applied. JSON reports list those files in `fixed_files`, and text reports show the same list. Other findings can remain after formatting and determine the final exit code.
 
+## Repeated and concurrent runs
+
+Checks use separate temporary directories and analyzer caches for every run. Shared Composer advisories use a private cache, an interprocess lock, and atomic replacement. A cancelled process releases its locks; checker subprocess groups and Docker containers are cleaned up on exit. Fixes on the same project wait for one another without creating lock files in the source tree. Input hashes and the selected Git scope are checked again before accepting a result.
+
+The public `check` command can reuse complete results for selected file-only checks. Enable this explicitly:
+
+```yaml
+runner:
+  result_cache: true
+```
+
+This applies to `debug`, `syntax`, `yaml`, `whitespace`, and `drupal-config`. Composer audit can accompany them: its network/cache freshness policy is evaluated on every invocation. Any other enabled checker bypasses the result cache, because project configs, dependencies, and executable autoloaders need live analysis. Native analyzer caches remain private to each run.
+
+Keys include the canonical project root, file content hashes, raw and effective configuration, discovered project facts, selected files and line ranges, checker selection, toolset, runtime, and immutable local image digest. Entries expire after 24 hours. Incomplete, stale, interrupted, or invalid reports are never reused; complete reports containing findings may be reused. Cache hits receive a new run ID and are validated against the current request. JSON exposes `environment.cache` with `hit`, `miss`, or `bypass` and an optional reason; an unavailable result cache falls back to live analysis.
+
+Use `phpwarden check --no-cache` to force live analysis. `--fix` always prepares changes and rechecks without the result cache. Cache files live under `$XDG_CACHE_HOME/phpwarden` or the OS user cache directory, with private permissions. Existing non-private advisory entries are ignored and refreshed; a non-private cache directory must be removed or made private before caching can resume. Cache locks require local Unix advisory-lock support; unsupported filesystems cause live checks to bypass caching and fixes to stop explicitly.
+
 ## Checkers
 
 All checkers except `composer-require-checker`, `composer-unused`, `dead-code`, `deptrac`, `eventhorizon`, `rector`, and `semgrep` are enabled by default. `composer-audit` is the only one that uses the network, and it is optional by default.

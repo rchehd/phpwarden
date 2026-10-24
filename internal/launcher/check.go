@@ -37,6 +37,14 @@ import (
 )
 
 func Check(ctx context.Context, location config.Location, effective config.Effective, options scope.Options, only []string, process runner.Process) report.Report {
+	return check(ctx, location, effective, options, only, process, true)
+}
+
+func CheckFresh(ctx context.Context, location config.Location, effective config.Effective, options scope.Options, only []string, process runner.Process) report.Report {
+	return check(ctx, location, effective, options, only, process, false)
+}
+
+func check(ctx context.Context, location config.Location, effective config.Effective, options scope.Options, only []string, process runner.Process, allowCache bool) report.Report {
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(effective.Config.Runner.TimeoutSeconds)*time.Second)
 	defer cancel()
 	failure := func(code string, err error) report.Report {
@@ -82,32 +90,27 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 	if err != nil {
 		return failure("request_invalid", err)
 	}
-	name := "phpwarden-run-" + strings.ToLower(rand.Text())
-	defer func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		process.Run(cleanup, runner.Command{Name: "docker", Args: []string{"rm", "--force", name}})
-	}()
-	var mount bytes.Buffer
-	writer := csv.NewWriter(&mount)
-	if err := writer.Write([]string{"type=bind", "source=" + location.Root, "target=/workspace", "readonly"}); err != nil {
-		return failure("mount_invalid", err)
-	}
-	writer.Flush()
-	args := []string{"run", "--rm", "--interactive", "--pull=never", "--name", name,
-		"--network=none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges:true",
-		"--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777",
-		"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
-		"--mount", strings.TrimSuffix(mount.String(), "\n"),
-		"--entrypoint", "/usr/local/bin/phpwarden", image, "worker", "execute"}
-	execution := process.Run(ctx, runner.Command{Name: "docker", Args: args, Input: input})
-	if ctx.Err() != nil {
-		return failure("launcher_cancelled", ctx.Err())
-	}
-	result, err := decodeReport(execution, request)
+	cacheState, err := openResultCache(ctx, location, request, allowCache)
 	if err != nil {
-		return failure("worker_report_invalid", err)
+		return failure("launcher_cancelled", err)
 	}
+	defer cacheState.Close()
+	if cacheState.store != nil {
+		if err := request.Matches(location); err != nil {
+			return failure("stale", err)
+		}
+	}
+	result, hit := cacheState.Read(request, time.Now())
+	if !hit {
+		result, err = runWorker(ctx, location, request, input, process)
+		if ctx.Err() != nil {
+			return failure("launcher_cancelled", ctx.Err())
+		}
+		if err != nil {
+			return failure("worker_report_invalid", err)
+		}
+	}
+	pendingCache, _ := json.Marshal(result)
 	for i, check := range result.Checks {
 		if check.ID == "composer-audit" && check.Reason != nil && *check.Reason == "delegated" {
 			cacheDir, _ := composeraudit.CacheDir()
@@ -136,7 +139,46 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 	if ctx.Err() != nil {
 		return failure("launcher_cancelled", ctx.Err())
 	}
+	if err == nil {
+		var original report.Report
+		if json.Unmarshal(pendingCache, &original) == nil {
+			cacheState.Write(original, time.Now())
+		}
+	}
+	if result.Environment != nil {
+		result.Environment.Cache = cacheState.info
+	}
 	return result
+}
+
+func runWorker(ctx context.Context, location config.Location, request runrequest.Request, input []byte, process runner.Process) (report.Report, error) {
+	name := "phpwarden-run-" + strings.ToLower(rand.Text())
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		process.Run(cleanup, runner.Command{Name: "docker", Args: []string{"rm", "--force", name}})
+	}()
+	var mount bytes.Buffer
+	writer := csv.NewWriter(&mount)
+	if err := writer.Write([]string{"type=bind", "source=" + location.Root, "target=/workspace", "readonly"}); err != nil {
+		return report.Report{}, err
+	}
+	writer.Flush()
+	args := []string{"run", "--rm", "--interactive", "--pull=never", "--name", name,
+		"--network=none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges:true",
+		"--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777",
+		"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
+		"--mount", strings.TrimSuffix(mount.String(), "\n"),
+		"--entrypoint", "/usr/local/bin/phpwarden", request.Image, "worker", "execute"}
+	execution := process.Run(ctx, runner.Command{Name: "docker", Args: args, Input: input})
+	if ctx.Err() != nil {
+		return report.Report{}, ctx.Err()
+	}
+	result, err := decodeReport(execution, request)
+	if err != nil {
+		return report.Report{}, err
+	}
+	return result, nil
 }
 
 func auditSettings(cfg config.Config, only []string) config.ComposerAudit {

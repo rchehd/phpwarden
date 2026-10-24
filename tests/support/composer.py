@@ -276,7 +276,7 @@ def seed_cache(scenario, cache):
     composer_lock = (scenario.root / "composer.lock").read_bytes()
     key = cache_key(composer_json, composer_lock)
     directory = Path(cache) / "phpwarden" / "advisories"
-    directory.mkdir(parents=True)
+    directory.mkdir(parents=True, mode=0o700, exist_ok=True)
     entry = {
         "version": 1,
         "key": key,
@@ -284,6 +284,7 @@ def seed_cache(scenario, cache):
         "report": {"advisories": {"acme/lib": [ADVISORY]}, "abandoned": {"acme/lib": "acme/new"}},
     }
     (directory / f"{key}.json").write_text(json.dumps(entry))
+    (directory / f"{key}.json").chmod(0o600)
 
 
 def check_composer_audit_network(test, scenario, run):

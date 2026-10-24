@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rchehd/phpwarden/internal/cache"
 	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/report"
@@ -78,12 +79,35 @@ func Run(ctx context.Context, root string, cfg config.ComposerAudit, fetch Fetch
 		return fail("error", "config_invalid", "Composer audit cannot read composer.lock")
 	}
 	key := fmt.Sprintf("%x", sha256.Sum256(fmt.Appendf(nil, "%d:%s\x00%d:%s\x00%s\x00%t", len(composerJSON), composerJSON, len(composerLock), composerLock, ComposerVersion, cfg.NoDev)))
-	cacheFile := filepath.Join(cacheDir, key+".json")
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(cfg.TimeoutSeconds)*time.Second)
+	defer cancel()
+	var shared *cache.Store
+	cacheErr := fmt.Errorf("no user cache directory is available")
+	if cacheDir != "" {
+		shared, cacheErr = cache.Open(cacheDir)
+		if cacheErr == nil {
+			defer shared.Close()
+			release, lockErr := shared.Lock(ctx, key)
+			cacheErr = lockErr
+			if lockErr == nil {
+				defer release()
+			} else {
+				shared = nil
+			}
+		} else {
+			shared = nil
+		}
+	}
+	if ctx.Err() != nil {
+		return fail("error", "checker_timeout", "Composer audit cache wait was interrupted")
+	}
 	var cached *cacheEntry
-	if data, err := os.ReadFile(cacheFile); cacheDir != "" && err == nil {
-		var entry cacheEntry
-		if json.Unmarshal(data, &entry) == nil && entry.Version == 1 && entry.Key == key && !entry.FetchedAt.After(now) {
-			cached = &entry
+	if shared != nil {
+		if data, readErr := shared.Read(key); readErr == nil {
+			var entry cacheEntry
+			if json.Unmarshal(data, &entry) == nil && entry.Version == 1 && entry.Key == key && !entry.FetchedAt.After(now) {
+				cached = &entry
+			}
 		}
 	}
 	age := func(hours int) bool {
@@ -100,14 +124,18 @@ func Run(ctx context.Context, root string, cfg config.ComposerAudit, fetch Fetch
 			raw, fetchErr = fetch(fetchCtx, composerJSON, composerLock, cfg.NoDev)
 			cancel()
 		}
+		if ctx.Err() != nil {
+			return fail("error", "checker_timeout", "Composer audit execution was interrupted")
+		}
 		if fetchErr == nil {
 			if _, _, err := findings(raw, composerLock, cfg, now); err != nil {
 				return fail("error", "invalid_report", err.Error())
 			}
 			advisories.Source, advisories.FetchedAt = "network", now.UTC().Format(time.RFC3339)
-			err := fmt.Errorf("no user cache directory is available")
-			if cacheDir != "" {
-				err = store(cacheFile, cacheEntry{Version: 1, Key: key, FetchedAt: now.UTC(), Report: raw})
+			err := cacheErr
+			if shared != nil {
+				data, _ := json.Marshal(cacheEntry{Version: 1, Key: key, FetchedAt: now.UTC(), Report: raw})
+				err = shared.Write(key, data)
 			}
 			if err != nil {
 				result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "advisories_cache_unwritable", Stage: "checker", Checker: new("composer-audit"), Message: err.Error()})
@@ -129,26 +157,6 @@ func Run(ctx context.Context, root string, cfg config.ComposerAudit, fetch Fetch
 		result.Check.Status = "failed"
 	}
 	return result
-}
-
-func store(filename string, entry cacheEntry) error {
-	if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
-		return fmt.Errorf("cannot create the advisory cache: %w", err)
-	}
-	data, _ := json.Marshal(entry)
-	temporary, err := os.CreateTemp(filepath.Dir(filename), ".advisories-*")
-	if err != nil {
-		return fmt.Errorf("cannot write the advisory cache: %w", err)
-	}
-	defer os.Remove(temporary.Name())
-	if _, err := temporary.Write(data); err != nil {
-		temporary.Close()
-		return fmt.Errorf("cannot write the advisory cache: %w", err)
-	}
-	if err := temporary.Close(); err != nil {
-		return fmt.Errorf("cannot write the advisory cache: %w", err)
-	}
-	return os.Rename(temporary.Name(), filename)
 }
 
 // Composer encodes an empty map as [] and advisory lists either as arrays or as objects keyed by index.

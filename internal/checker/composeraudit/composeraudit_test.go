@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -41,6 +42,11 @@ func project(t *testing.T) string {
 	return root
 }
 
+func auditCacheDir(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(t.TempDir(), "cache")
+}
+
 func fetcher(calls *int, data string, err error) Fetcher {
 	return func(_ context.Context, composerJSON, composerLock []byte, noDev bool) ([]byte, error) {
 		*calls++
@@ -52,7 +58,7 @@ func fetcher(calls *int, data string, err error) Fetcher {
 }
 
 func TestAuditFindingsCacheAndFreshness(t *testing.T) {
-	root, cacheDir, calls := project(t), t.TempDir(), 0
+	root, cacheDir, calls := project(t), auditCacheDir(t), 0
 	now := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
 	cfg := settings(t)
 	result := Run(context.Background(), root, cfg, fetcher(&calls, auditReport, nil), cacheDir, now)
@@ -109,7 +115,7 @@ func TestAuditPolicies(t *testing.T) {
 	now := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
 	run := func(cfg config.ComposerAudit) []string {
 		t.Helper()
-		result := Run(context.Background(), root, cfg, fetcher(&calls, auditReport, nil), t.TempDir(), now)
+		result := Run(context.Background(), root, cfg, fetcher(&calls, auditReport, nil), auditCacheDir(t), now)
 		rules := []string{result.Check.Status}
 		for _, finding := range result.Findings {
 			rules = append(rules, finding.Rule)
@@ -141,17 +147,17 @@ func TestAuditSkipsAndRejectsInvalidReports(t *testing.T) {
 	now := time.Now()
 	cfg := settings(t)
 	cfg.Enabled = false
-	if result := Run(context.Background(), root, cfg, fetcher(&calls, auditReport, nil), t.TempDir(), now); *result.Check.Reason != "disabled" {
+	if result := Run(context.Background(), root, cfg, fetcher(&calls, auditReport, nil), auditCacheDir(t), now); *result.Check.Reason != "disabled" {
 		t.Fatalf("disabled audit ran: %+v", result)
 	}
 	if result := Delegated(root, settings(t)); *result.Check.Reason != "delegated" || result.Check.Status != "skipped" {
 		t.Fatalf("audit not delegated: %+v", result)
 	}
 	for _, data := range []string{`{`, `{"abandoned":[]}`, `{"advisories":{"acme/lib":[{"advisoryId":""}]}}`, `{"advisories":{"acme/lib":"x"}}`} {
-		cacheDir := t.TempDir()
+		cacheDir := auditCacheDir(t)
 		result := Run(context.Background(), root, settings(t), fetcher(&calls, data, nil), cacheDir, now)
 		entries, _ := os.ReadDir(cacheDir)
-		if result.Check.Status != "error" || result.Diagnostics[0].Code != "invalid_report" || len(entries) != 0 {
+		if result.Check.Status != "error" || result.Diagnostics[0].Code != "invalid_report" || slices.ContainsFunc(entries, func(entry os.DirEntry) bool { return strings.HasSuffix(entry.Name(), ".json") }) {
 			t.Fatalf("invalid report %s accepted or cached: %+v", data, result)
 		}
 	}
@@ -162,7 +168,7 @@ func TestAuditSkipsAndRejectsInvalidReports(t *testing.T) {
 	if err := os.Remove(filepath.Join(root, "composer.lock")); err != nil {
 		t.Fatal(err)
 	}
-	if result := Run(context.Background(), root, settings(t), fetcher(&calls, auditReport, nil), t.TempDir(), now); *result.Check.Reason != "no_files" {
+	if result := Run(context.Background(), root, settings(t), fetcher(&calls, auditReport, nil), auditCacheDir(t), now); *result.Check.Reason != "no_files" {
 		t.Fatalf("audit without composer.lock ran: %+v", result)
 	}
 }
@@ -220,5 +226,41 @@ func TestNativeFetcherIsolatesComposerFiles(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestConcurrentAuditsShareFetchAndCancelledWaiterDoesNotFetch(t *testing.T) {
+	root, directory := project(t), auditCacheDir(t)
+	var calls atomic.Int32
+	entered, unblock := make(chan struct{}), make(chan struct{})
+	fetch := func(context.Context, []byte, []byte, bool) ([]byte, error) {
+		if calls.Add(1) == 1 {
+			close(entered)
+			<-unblock
+		}
+		return []byte(auditReport), nil
+	}
+	now := time.Now()
+	done := make(chan struct{})
+	cfg := settings(t)
+	go func() {
+		defer close(done)
+		result := Run(context.Background(), root, cfg, fetch, directory, now)
+		if len(result.Diagnostics) > 0 {
+			t.Error(result.Diagnostics)
+		}
+	}()
+	<-entered
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	interrupted := Run(ctx, root, cfg, fetch, directory, now)
+	cancel()
+	if interrupted.Check.Status != "error" || interrupted.Diagnostics[0].Code != "checker_timeout" || calls.Load() != 1 {
+		t.Fatal("cancelled audit waiter fetched or passed", interrupted)
+	}
+	close(unblock)
+	<-done
+	second := Run(context.Background(), root, cfg, fetch, directory, now.Add(time.Second))
+	if second.Advisories == nil || second.Advisories.Source != "cache" || calls.Load() != 1 {
+		t.Fatal("concurrent audit ignored cache", second)
 	}
 }

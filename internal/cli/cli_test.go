@@ -48,6 +48,7 @@ func TestConfigCommands(t *testing.T) {
 
 func TestUsageErrorsNeverReturnSuccess(t *testing.T) {
 	cases := [][]string{
+		{"config", "show", "--no-cache"}, {"worker", "check", "--no-cache"}, {"check", "--no-cache", "--no-cache"}, {"--version", "--no-cache"},
 		{"scope", "--fix"}, {"config", "show", "--fix"}, {"check", "--fix", "--fix"}, {"--version", "--fix"},
 		{"check"}, {"init"}, {"config"}, {"config", "shwo"}, {"config", "show", "extra"},
 		{"config", "show", "--project"}, {"config", "show", "--config="},

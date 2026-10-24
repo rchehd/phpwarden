@@ -52,7 +52,8 @@ type Scope struct {
 }
 
 type Runner struct {
-	TimeoutSeconds int `json:"timeout_seconds"`
+	ResultCache    bool `json:"result_cache"`
+	TimeoutSeconds int  `json:"timeout_seconds"`
 }
 
 type Tools struct {
@@ -484,7 +485,7 @@ func Parse(data []byte) (Effective, error) {
 		Provenance: map[string]string{
 			"framework.version": "core_default", "composer_root": "core_default", "scope.mode": "core_default",
 			"scope.exclude": "core_default", "scope.whole_files": "core_default",
-			"runner.timeout_seconds": "core_default", "tools.debug.enabled": "profile_default",
+			"runner.result_cache": "core_default", "runner.timeout_seconds": "core_default", "tools.debug.enabled": "profile_default",
 			"tools.debug.required": "core_default", "tools.debug.fail_on": "core_default",
 			"tools.debug.timeout_seconds": "core_default", "tools.debug.exclude": "core_default",
 			"tools.debug.functions": "profile_default", "tools.debug.js_functions": "profile_default", "tools.debug.twig_functions": "profile_default",

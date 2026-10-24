@@ -56,6 +56,7 @@ Scope options:
   --base REF           Diff base ref
   --commits N          Diff against HEAD~N: the last N commits plus uncommitted changes
   --whole-files        Include all lines of selected diff files
+  --no-cache           Run public check without reusing a result cache
   --fix                Fix selected files with PHPCS/Twig CS Fixer, then check them again
   --only ID[,ID...]    Select composer-audit, composer-require-checker, composer-unused, composer-validate, dead-code, debug, deptrac, drupal-config, eslint, eventhorizon, gitleaks, jscpd, phpcs, phpmd, phpstan, rector, semgrep, stylelint, syntax, twig-cs-fixer, whitespace, yaml; enable selected checkers
 
@@ -68,6 +69,7 @@ Worker check requires PHP in its execution environment. Published images are not
 var minorVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
 
 type options struct {
+	noCache      bool
 	project      string
 	config       string
 	format       string
@@ -183,6 +185,9 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	if args.fix && !isCheck && !isWorker {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--fix requires check, fix or worker check"))
 	}
+	if args.noCache && !isCheck {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("--no-cache requires check or fix"))
+	}
 	if isInit {
 		return initProject(ctx, args, cwd, stdout, stderr)
 	}
@@ -217,6 +222,8 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 			result = launcher.Fix(ctx, location, effective, options, only, runner.Exec{})
 		} else if args.fix {
 			result = worker.Fix(ctx, location, effective, options, only, runner.Exec{})
+		} else if isCheck && args.noCache {
+			result = launcher.CheckFresh(ctx, location, effective, options, only, runner.Exec{})
 		} else if isCheck {
 			result = launcher.Check(ctx, location, effective, options, only, runner.Exec{})
 		} else {
@@ -280,6 +287,13 @@ func parse(arguments []string) (options, error) {
 				return result, fmt.Errorf("duplicate option --whole-files")
 			}
 			result.wholeFiles = true
+			continue
+		}
+		if argument == "--no-cache" {
+			if result.noCache {
+				return result, fmt.Errorf("duplicate option --no-cache")
+			}
+			result.noCache = true
 			continue
 		}
 		if argument == "--fix" {
@@ -354,7 +368,7 @@ func parse(arguments []string) (options, error) {
 			result.color = value
 		}
 	}
-	if result.version && (len(result.command) != 0 || len(seen) != 0 || result.help || result.wholeFiles || result.fix) {
+	if result.version && (len(result.command) != 0 || len(seen) != 0 || result.help || result.wholeFiles || result.fix || result.noCache) {
 		return result, fmt.Errorf("--version cannot be combined with a command or options")
 	}
 	return result, nil

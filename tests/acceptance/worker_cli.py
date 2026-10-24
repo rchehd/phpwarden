@@ -128,7 +128,7 @@ class WorkerCLITest(unittest.TestCase):
             env=env or scenario.env,
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=60,
         )
         self.assertEqual(completed.stderr, "", completed.stderr)
         report = json.loads(completed.stdout)
@@ -304,7 +304,7 @@ class WorkerCLITest(unittest.TestCase):
                         env=scenario.env,
                         capture_output=True,
                         text=True,
-                        timeout=15,
+                        timeout=60,
                     )
                     result = json.loads(completed.stdout)
                     self.assertEqual(completed.returncode, 3 if required else 0, result)

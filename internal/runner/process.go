@@ -33,6 +33,8 @@ type Exec struct{}
 
 func (Exec) Run(ctx context.Context, spec Command) Result {
 	command := exec.CommandContext(ctx, spec.Name, spec.Args...)
+	prepareProcess(command)
+	defer cleanupProcess(command)
 	command.Dir = spec.Directory
 	command.Env = spec.Env
 	command.Stdin = bytes.NewReader(spec.Input)

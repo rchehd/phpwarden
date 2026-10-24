@@ -224,6 +224,7 @@ scope:
   exclude: ["**/generated/**"]
 runner:
   timeout_seconds: 60
+  result_cache: true
 tools:
   debug:
     enabled: false
@@ -234,6 +235,9 @@ tools:
 `))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !result.Config.Runner.ResultCache || result.Provenance["runner.result_cache"] != "project_config" {
+		t.Fatal("cache setting or provenance lost")
 	}
 	debug := result.Config.Tools.Debug
 	if debug.Enabled || debug.Required || debug.FailOn != "never" || debug.TimeoutSeconds != 12 {
@@ -298,6 +302,7 @@ func TestInvalidConfigurations(t *testing.T) {
 		"traversing glob":       minimal + "scope: {exclude: ['../**']}\n",
 		"empty base":            minimal + "scope: {base: ''}\n",
 		"blank base":            minimal + "scope: {base: '  '}\n",
+		"cache type":            minimal + "runner: {result_cache: yes}\n",
 		"zero timeout":          minimal + "runner: {timeout_seconds: 0}\n",
 		"string bool":           minimal + "tools: {debug: {enabled: 'false'}}\n",
 		"YAML 1.1 bool":         minimal + "tools: {debug: {enabled: yes}}\n",

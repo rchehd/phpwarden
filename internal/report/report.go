@@ -23,7 +23,14 @@ type Report struct {
 	FixedFiles  []string         `json:"fixed_files,omitempty"`
 }
 
+type Cache struct {
+	Status string `json:"status"`
+	Key    string `json:"key,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+
 type Environment struct {
+	Cache                *Cache      `json:"cache,omitempty"`
 	FrameworkVersion     *string     `json:"framework_version,omitempty"`
 	PHPRuntime           *string     `json:"php_runtime"`
 	PHPVersion           *string     `json:"php_version,omitempty"`

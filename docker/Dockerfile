@@ -111,7 +111,6 @@ RUN apk add --no-cache git ca-certificates libstdc++ python3 \
     && git config --system --add safe.directory /workspace \
     && php -r 'if (!function_exists("token_get_all") || PHP_VERSION !== getenv("PHP_VERSION") || PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION !== getenv("PHP_RUNTIME")) { exit(1); }'
 
-COPY --from=build /out/phpwarden /usr/local/bin/phpwarden
 COPY --from=node-tools /usr/local/bin/node /usr/local/bin/node
 COPY --from=node-tools /opt/phpwarden/tools/node /usr/local/lib/phpwarden/node
 COPY --from=tools /opt/phpwarden/tools/yaml /usr/local/lib/phpwarden/yaml
@@ -128,10 +127,11 @@ COPY --from=tools /opt/phpwarden/tools/parallel-lint /usr/local/lib/phpwarden/pa
 COPY --from=tools /usr/local/bin/gitleaks /usr/local/bin/gitleaks
 COPY --from=tools /opt/phpwarden/tools/eventhorizon/vendor /usr/local/lib/phpwarden/eventhorizon/vendor
 COPY --from=semgrep-tools /opt/phpwarden/tools/semgrep/vendor /usr/local/lib/phpwarden/semgrep/vendor
+COPY --from=build /out/phpwarden /usr/local/bin/phpwarden
 LABEL org.opencontainers.image.title="PHPWarden static worker" \
     org.opencontainers.image.source="https://github.com/rchehd/phpwarden" \
     io.phpwarden.protocol="2" \
-    io.phpwarden.toolset="static-dev-v19-php${PHP_RUNTIME}" \
+    io.phpwarden.toolset="static-dev-v20-php${PHP_RUNTIME}" \
     io.phpwarden.php-version="${PHP_VERSION}" \
     io.phpwarden.checkers="composer-audit,composer-require-checker,composer-unused,composer-validate,dead-code,debug,deptrac,drupal-config,eslint,eventhorizon,gitleaks,jscpd,phpcs,phpmd,phpstan,rector,semgrep,stylelint,syntax,twig-cs-fixer,whitespace,yaml" \
     io.phpwarden.symfony-yaml-version="6.4.48" \
