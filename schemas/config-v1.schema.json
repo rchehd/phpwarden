@@ -892,7 +892,7 @@
           "properties": {
             "enabled": {
               "type": "boolean",
-              "default": false
+              "default": true
             },
             "required": {
               "type": "boolean",

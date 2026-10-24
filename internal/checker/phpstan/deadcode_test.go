@@ -15,7 +15,7 @@ import (
 func deadCodeConfig(t *testing.T) config.Config {
 	t.Helper()
 	cfg, err := config.Parse([]byte(`{"version":1,"profile":"drupal","php":{"runtime":"8.4","target":{"min":"8.4","max":"8.4"}},` +
-		`"scope":{"include":["src"]},"tools":{"dead-code":{"enabled":true},"phpstan":{"drupal":false}}}`))
+		`"scope":{"include":["src"]},"tools":{"phpstan":{"drupal":false}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}

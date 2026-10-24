@@ -40,6 +40,7 @@ type Defaults struct {
 	PHPStanDrupal             bool
 	SemgrepEnabled            bool
 	EventHorizonEnabled       bool
+	DeadCodeEnabled           bool
 	PHPMDRulesets             []string
 	PHPMDExcludeRules         []string
 	TwigExtensions            []string
@@ -63,6 +64,7 @@ func Lookup(id string) (Defaults, bool) {
 		PHPStanDrupal:             true,
 		SemgrepEnabled:            true,
 		EventHorizonEnabled:       true,
+		DeadCodeEnabled:           true,
 		PHPMDRulesets:             []string{"unusedcode", "codesize"},
 		// Drupal hooks and interface methods have fixed signatures.
 		PHPMDExcludeRules: []string{"UnusedFormalParameter"},

@@ -460,7 +460,7 @@ func Parse(data []byte) (Effective, error) {
 				Deptrac:                Deptrac{Enabled: false, Required: true, FailOn: "error", TimeoutSeconds: 300, Exclude: []string{}, DiscoverConfig: true, ExtraInputs: []string{}, MemoryLimitMB: 1024},
 				Rector:                 Rector{Enabled: false, Required: true, FailOn: "never", TimeoutSeconds: 600, Exclude: []string{}, DiscoverConfig: true, Sets: []string{}, Rules: []string{}, SkipRules: []string{}, ExtraInputs: []string{}, ExtraExtensions: []string{}, MemoryLimitMB: 1024, DryRun: true},
 				Semgrep:                Semgrep{Enabled: defaults.SemgrepEnabled, Required: true, FailOn: "error", TimeoutSeconds: 300, Exclude: []string{}, DiscoverConfig: true, UseDefaults: true, Rulesets: []string{}, Rules: []string{}, ExcludeRules: []string{}, Severities: []string{"ERROR", "WARNING", "INFO"}, ExtraInputs: []string{}, ExtraExtensions: []string{}, RuleTimeoutSeconds: 5, MemoryLimitMB: 1024},
-				DeadCode:               DeadCode{Enabled: false, Required: true, FailOn: "error", TimeoutSeconds: 600, Exclude: []string{}, MemoryLimitMB: 1024},
+				DeadCode:               DeadCode{Enabled: defaults.DeadCodeEnabled, Required: true, FailOn: "error", TimeoutSeconds: 600, Exclude: []string{}, MemoryLimitMB: 1024},
 				ESLint:                 NodeLint{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{"**/*.min.js"}, DiscoverConfig: true, ExtraExtensions: []string{}, ExtraInputs: []string{}},
 				Stylelint:              NodeLint{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{"**/*.min.css"}, DiscoverConfig: true, ExtraExtensions: []string{}, ExtraInputs: []string{}},
 				JSCPD:                  JSCPD{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 300, Exclude: []string{"**/*.min.js", "**/*.min.css"}, DiscoverConfig: true, MinTokens: 70, MinLines: 6, Mode: "mild"},
@@ -529,6 +529,7 @@ func Parse(data []byte) (Effective, error) {
 	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "memory_limit_mb"} {
 		result.Provenance["tools.dead-code."+field] = "core_default"
 	}
+	result.Provenance["tools.dead-code.enabled"] = "profile_default"
 	for _, field := range []string{"enabled", "all", "rules"} {
 		result.Provenance["tools.phpstan.strict_rules."+field] = "core_default"
 	}

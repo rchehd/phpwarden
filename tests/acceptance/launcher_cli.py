@@ -98,6 +98,7 @@ class LauncherCLITest(unittest.TestCase):
                 "twig-cs-fixer": {"enabled": False},
                 "semgrep": {"enabled": False},
                 "eventhorizon": {"enabled": False},
+                "dead-code": {"enabled": False},
             },
         }
         (root / ".phpwarden.yaml").write_text(json.dumps(config))

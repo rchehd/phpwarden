@@ -20,6 +20,23 @@ php:
     max: "8.4"
 `
 
+func TestDeadCodeDefaultsAndOptOut(t *testing.T) {
+	for _, override := range []string{"", "tools: {dead-code: {}}\n"} {
+		effective, err := Parse([]byte(minimal + override))
+		if err != nil {
+			t.Fatal(err)
+		}
+		settings := effective.Config.Tools.DeadCode
+		if !settings.Enabled || !settings.Required || settings.FailOn != "error" || settings.TimeoutSeconds != 600 || settings.MemoryLimitMB != 1024 || effective.Provenance["tools.dead-code.enabled"] != "profile_default" {
+			t.Fatalf("Dead code defaults: %+v", settings)
+		}
+	}
+	disabled, err := Parse([]byte(minimal + "tools: {dead-code: {enabled: false}}\n"))
+	if err != nil || disabled.Config.Tools.DeadCode.Enabled || disabled.Provenance["tools.dead-code.enabled"] != "project_config" {
+		t.Fatalf("explicit dead-code opt-out was ignored: %+v, %v", disabled, err)
+	}
+}
+
 func TestSemgrepDefaultsLocalRulesAndConfiguration(t *testing.T) {
 	effective, err := Parse([]byte(minimal))
 	if err != nil {

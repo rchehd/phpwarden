@@ -84,6 +84,9 @@ func TestDetectsRuntimeAndTarget(t *testing.T) {
 			if php.Runtime != test.runtime.Version || php.Target.Min != test.target.Version || php.Target.Max != test.target.Version {
 				t.Fatalf("written configuration differs: %+v", php)
 			}
+			if !effective.Config.Tools.DeadCode.Enabled {
+				t.Fatal("init disabled the profile's dead-code check")
+			}
 		})
 	}
 }

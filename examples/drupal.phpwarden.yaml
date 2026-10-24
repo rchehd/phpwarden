@@ -53,7 +53,7 @@ tools:
     compatibility:
       enabled: false
   dead-code:
-    enabled: false
+    enabled: true
     fail_on: error
   eventhorizon:
     enabled: true

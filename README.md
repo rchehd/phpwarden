@@ -210,14 +210,13 @@ Use `phpwarden check --no-cache` to force live analysis. `--fix` always prepares
 
 ## Checkers
 
-All checkers except `composer-require-checker`, `composer-unused`, `dead-code`, `deptrac`, and `rector` are enabled by default in the Drupal profile. `composer-audit` is the only one that uses the network, and it is optional by default.
+All checkers except `composer-require-checker`, `composer-unused`, `deptrac`, and `rector` are enabled by default in the Drupal profile. `composer-audit` is the only one that uses the network, and it is optional by default.
 
-These five checks require an explicit choice for the project:
+These four checks require an explicit choice for the project:
 
 | Checker | Why it starts disabled |
 |---|---|
 | `composer-require-checker`, `composer-unused` | Inspect a whole standalone Composer package in full mode; Drupal installer layouts are unsupported |
-| `dead-code` | Runs an additional PHPStan analysis; dynamic Drupal callbacks can need project-specific exceptions |
 | `deptrac` | Needs the project's architecture layers and dependency rules |
 | `rector` | Upgrade suggestions need chosen targets or rules |
 
@@ -227,7 +226,7 @@ Enable one with `tools.<id>.enabled: true`, or select it for a single run using 
 |---|---|
 | `composer-validate` | `composer.json` and `composer.lock` validity, like `composer validate` |
 | `composer-audit` | Known vulnerabilities and abandoned packages in `composer.lock`, like `composer audit` |
-| `dead-code` | Unused methods, properties, constants, and enum cases; off by default |
+| `dead-code` | Unused methods, properties, constants, and enum cases; enabled, advisory findings |
 | `debug` | Debug leftovers: PHP calls such as `var_dump`, `print_r` (not with `$return`), Devel's `dpm`/`kint`/`dd`, and `die`; `console.log` and `debugger` in JavaScript (not `*.min.js`); `dump()` and `kint()` in Twig |
 | `syntax` | PHP syntax (`php -l`, optional Parallel Lint) in `.php`, `.module`, `.inc`, `.install`, `.theme`, `.profile`, `.engine`, `.test` |
 | `yaml` | YAML syntax |
@@ -267,7 +266,7 @@ PHPMD uses the nearest `phpmd.xml`, `phpmd.xml.dist`, or `.phpmd.xml` in the pro
 
 ### Dead code
 
-`dead-code` is off by default; enable it with `tools.dead-code.enabled: true` or run `phpwarden check --only dead-code`. It uses PHPStan with [dead-code-detector](https://github.com/shipmonk-rnd/dead-code-detector), so it needs the same installed Composer dependencies and PHPStan settings. A member is dead only if nothing in the project uses it, so it analyses all custom code and reports only members declared in the checked files and lines. Findings are warnings; set `fail_on: warning` to block on them.
+`dead-code` is enabled by default in the Drupal profile; run it alone with `phpwarden check --only dead-code` or disable it with `tools.dead-code.enabled: false`. An explicit disable in an existing project config takes precedence over the profile default. It uses PHPStan with [dead-code-detector](https://github.com/shipmonk-rnd/dead-code-detector), so it needs the same installed Composer dependencies and PHPStan settings. A member is dead only if nothing in the project uses it, so it analyses all custom code and reports only members declared in the checked files and lines. Findings are warnings; set `fail_on: warning` to block on them. The checker is required by default, so an execution failure makes the run incomplete and unsuccessful.
 
 Drupal calls much of its code without a PHP call site, so these count as used: constructors, methods with Drupal hook or Drush attributes, `'::method'` and `[$this, 'method']` callbacks in the same class, any method name used as a string in event subscribers and trusted-callback classes, and `Class::method` or `service:method` in the module's routing and services YAML. Other entry points, such as callbacks in another module, can still show up as false positives. Settings are `timeout_seconds` (600) and `memory_limit_mb` (1024).
 

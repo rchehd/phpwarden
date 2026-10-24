@@ -89,7 +89,7 @@ tools:
     # strict: false
 
   dead-code:
-    enabled: false
+    enabled: true
     required: true
     fail_on: error
     # timeout_seconds: 600
