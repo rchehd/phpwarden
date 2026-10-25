@@ -199,6 +199,33 @@ func TestHookConflictIsDetectedBeforeWritingNewConfiguration(t *testing.T) {
 	}
 }
 
+func TestCompletionHooksPreflightAndCancellationDoNotPartiallyInstall(t *testing.T) {
+	root := drupalProject(t, ">=8.1", nil)
+	writeFile(t, root, ".codex/hooks.json", `{"hooks":[]}`)
+	if _, err := Run(context.Background(), Options{CWD: root, Agents: []string{"codex"}, Hooks: []string{"codex"}}); err == nil {
+		t.Fatal("invalid hook settings accepted")
+	}
+	for _, name := range []string{config.Filename, ".agents"} {
+		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
+			t.Fatalf("preflight wrote %s", name)
+		}
+	}
+	os.RemoveAll(filepath.Join(root, ".codex"))
+	_, err := Run(context.Background(), Options{CWD: root, Agents: []string{"codex"}, SelectHooks: func() ([]string, error) { return nil, context.Canceled }})
+	if err != context.Canceled {
+		t.Fatalf("cancellation: %v", err)
+	}
+	for _, name := range []string{config.Filename, ".agents"} {
+		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
+			t.Fatalf("cancel wrote %s", name)
+		}
+	}
+	result, err := Run(context.Background(), Options{CWD: root, Agents: []string{"codex", "cursor", "claude"}, Hooks: []string{"codex", "cursor", "claude"}, Executable: "/tmp/phpwarden"})
+	if err != nil || len(result.CompletionHooks) != 3 || result.AgentSkills == nil {
+		t.Fatalf("%+v %v", result, err)
+	}
+}
+
 func gitRepository(t *testing.T, repository string) {
 	t.Helper()
 	for _, args := range [][]string{{"init", "--quiet"}, {"add", "--all"}, {"-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "--quiet", "--allow-empty", "-m", "init"},

@@ -13,7 +13,9 @@ import (
 
 const Name = "phpwarden-architecture"
 
-//go:embed skills/phpwarden-architecture
+var Names = []string{Name, "phpwarden-review", "phpwarden-doctor", "phpwarden-upgrade"}
+
+//go:embed skills
 var content embed.FS
 
 var clients = []string{"codex", "cursor", "claude"}
@@ -24,6 +26,8 @@ type Installation struct {
 	Created       bool     `json:"created"`
 	ClaudePath    string   `json:"claude_path,omitempty"`
 	ClaudeCreated bool     `json:"claude_created,omitempty"`
+	Paths         []string `json:"paths"`
+	ClaudePaths   []string `json:"claude_paths,omitempty"`
 }
 
 type Plan struct {
@@ -75,14 +79,14 @@ func (plan Plan) files() (map[string][]byte, error) {
 	if len(plan.clients) == 0 {
 		return files, nil
 	}
-	prefix := "skills/" + Name + "/"
-	err := fs.WalkDir(content, "skills/"+Name, func(name string, entry fs.DirEntry, err error) error {
+	prefix := "skills/"
+	err := fs.WalkDir(content, "skills", func(name string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}
 		data, err := content.ReadFile(name)
 		if err == nil {
-			files[filepath.Join(".agents", "skills", Name, filepath.FromSlash(strings.TrimPrefix(name, prefix)))] = data
+			files[filepath.Join(".agents", "skills", filepath.FromSlash(strings.TrimPrefix(name, prefix)))] = data
 		}
 		return err
 	})
@@ -107,7 +111,11 @@ func (plan Plan) check() error {
 		if err := plan.parents(filepath.Join(".claude", "skills"), false); err != nil {
 			return err
 		}
-		_, err = plan.claudeLink(false)
+		for _, name := range Names {
+			if _, err = plan.claudeLink(name, false); err != nil {
+				return err
+			}
+		}
 	}
 	return err
 }
@@ -155,9 +163,9 @@ func (plan Plan) parents(name string, create bool) error {
 	return nil
 }
 
-func (plan Plan) claudeLink(create bool) (bool, error) {
-	filename := filepath.Join(plan.root, ".claude", "skills", Name)
-	target := filepath.Join("..", "..", ".agents", "skills", Name)
+func (plan Plan) claudeLink(name string, create bool) (bool, error) {
+	filename := filepath.Join(plan.root, ".claude", "skills", name)
+	target := filepath.Join("..", "..", ".agents", "skills", name)
 	if create {
 		if err := os.Symlink(target, filename); err == nil {
 			return true, nil
@@ -183,6 +191,9 @@ func (plan Plan) Install() (*Installation, error) {
 		return nil, err
 	}
 	result := &Installation{Path: filepath.Join(plan.root, ".agents", "skills", Name), Clients: slices.Clone(plan.clients)}
+	for _, name := range Names {
+		result.Paths = append(result.Paths, filepath.Join(plan.root, ".agents", "skills", name))
+	}
 	files, err := plan.files()
 	if err != nil {
 		return nil, err
@@ -203,7 +214,14 @@ func (plan Plan) Install() (*Installation, error) {
 			return result, err
 		}
 		result.ClaudePath = filepath.Join(plan.root, ".claude", "skills", Name)
-		result.ClaudeCreated, err = plan.claudeLink(true)
+		for _, name := range Names {
+			created, linkErr := plan.claudeLink(name, true)
+			if linkErr != nil {
+				return result, linkErr
+			}
+			result.ClaudeCreated = result.ClaudeCreated || created
+			result.ClaudePaths = append(result.ClaudePaths, filepath.Join(plan.root, ".claude", "skills", name))
+		}
 	}
 	return result, err
 }

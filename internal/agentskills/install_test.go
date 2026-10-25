@@ -47,6 +47,21 @@ func TestSharedSkillAndClaudeLinkAreIdempotent(t *testing.T) {
 				if _, err := os.Stat(filepath.Join(result.Path, "references/deptrac.md")); err != nil {
 					t.Fatal(err)
 				}
+				if len(result.Paths) != len(Names) {
+					t.Fatalf("not all skills installed: %+v", result.Paths)
+				}
+				for _, name := range Names {
+					path := filepath.Join(root, ".agents/skills", name)
+					if _, err := os.Stat(filepath.Join(path, "SKILL.md")); err != nil {
+						t.Fatal(err)
+					}
+					if slices.Contains(clients, "claude") {
+						resolved, err := filepath.EvalSymlinks(filepath.Join(root, ".claude/skills", name))
+						if err != nil || resolved != path {
+							t.Fatalf("%s alias: %s %v", name, resolved, err)
+						}
+					}
+				}
 				if slices.Contains(clients, "claude") {
 					resolved, err := filepath.EvalSymlinks(result.ClaudePath)
 					if err != nil || resolved != result.Path || result.ClaudeCreated != (attempt == 0) {

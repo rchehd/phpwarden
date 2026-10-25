@@ -28,6 +28,17 @@ runner:
   # result_cache: false
   timeout_seconds: 300
 
+# agents:
+  # completion: {enabled: true, max_attempts: 2, timeout_seconds: 300}
+
+# updates:
+  # timeout_seconds: 120
+
+  # max_age_hours: 24
+  # max_stale_hours: 168
+
+  # offline: false
+
 # Per-tool include/exclude only narrow scope; fail_on: error, warning, or never.
 # Config paths below are examples: uncomment only when those files exist.
 tools:

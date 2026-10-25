@@ -405,9 +405,9 @@ class WorkerCLITest(unittest.TestCase):
 
     def test_init_check_selection_and_unattended_defaults(self):
         for arguments, ci, answers, prompt, code, selected, agents in (
-            ([], "", b"none\nnone\ndebug,rector\n\n", True, 0, {"debug", "rector"}, False),
-            ([], "", b"\n\n", True, 0, None, False),
-            ([], "", b"all\n\n", True, 0, None, True),
+            ([], "", b"none\nnone\nnone\ndebug,rector\n\n", True, 0, {"debug", "rector"}, False),
+            ([], "", b"\n\n\n", True, 0, None, False),
+            ([], "", b"all\n\n\n", True, 0, None, True),
             (["--no-interaction"], "", None, False, 0, None, False),
             (["-n"], "", None, False, 0, None, False),
             (["-n", "--agents", "all"], "", None, False, 0, None, True),
@@ -462,7 +462,7 @@ class WorkerCLITest(unittest.TestCase):
                         process.kill()
                         process.wait(timeout=5)
                 text = output.decode()
-                self.assertEqual("Install the architecture skill for agents?" in text, prompt, text)
+                self.assertEqual("Install project skills for agents?" in text, prompt, text)
                 if code == 0:
                     self.assertEqual("Choose checks for this project" in text, prompt, text)
                 config_path = scenario.root / ".phpwarden.yaml"
@@ -473,6 +473,11 @@ class WorkerCLITest(unittest.TestCase):
                 if agents:
                     self.assertEqual(alias.resolve(), skill_path, text)
                     self.assertTrue((skill_path / "SKILL.md").is_file(), text)
+                    for name in ("review", "doctor", "upgrade"):
+                        shared = scenario.root / f".agents/skills/phpwarden-{name}"
+                        linked = scenario.root / f".claude/skills/phpwarden-{name}"
+                        self.assertTrue((shared / "SKILL.md").is_file(), text)
+                        self.assertEqual(linked.resolve(), shared, text)
                 if code == 130:
                     self.assertFalse(config_path.exists(), text)
                     self.assertFalse((scenario.root / ".git/hooks/pre-commit").exists(), text)

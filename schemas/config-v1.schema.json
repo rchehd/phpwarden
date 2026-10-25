@@ -10,6 +10,31 @@
     "php"
   ],
   "properties": {
+    "agents": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "completion": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean", "default": true},
+            "max_attempts": {"type": "integer", "minimum": 1, "maximum": 5, "default": 2},
+            "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 540, "default": 300}
+          }
+        }
+      }
+    },
+    "updates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 540, "default": 120},
+        "max_age_hours": {"type": "integer", "minimum": 1, "maximum": 8760, "default": 24},
+        "max_stale_hours": {"type": "integer", "minimum": 1, "maximum": 8760, "default": 168},
+        "offline": {"type": "boolean", "default": false}
+      }
+    },
     "version": {
       "type": "integer",
       "const": 1

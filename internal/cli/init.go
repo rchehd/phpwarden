@@ -19,6 +19,10 @@ func initProject(ctx context.Context, args options, cwd string, stdin io.Reader,
 		return fail(stdout, stderr, args, "usage", err)
 	}
 	settings.Agents = selected
+	settings.Hooks, err = agentskills.ParseClients(args.hooks)
+	if err != nil {
+		return fail(stdout, stderr, args, "usage", err)
+	}
 	if interactiveInit(args, stdin, stdout, stderr) {
 		reader := bufio.NewReader(stdin)
 		settings.SelectChecks = func(choices []projectinit.CheckChoice) ([]string, error) {
@@ -27,6 +31,11 @@ func initProject(ctx context.Context, args options, cwd string, stdin io.Reader,
 		if args.agents == "" {
 			settings.SelectAgents = func() ([]string, error) {
 				return chooseInitAgents(ctx, reader, stderr)
+			}
+		}
+		if args.hooks == "" {
+			settings.SelectHooks = func() ([]string, error) {
+				return chooseInitIntegrations(ctx, reader, stderr, "Install completion hooks?")
 			}
 		}
 	}
@@ -116,10 +125,20 @@ func writeAgentInstallation(stdout io.Writer, result projectinit.Result) {
 	if result.AgentSkills.ClaudePath != "" {
 		fmt.Fprintf(stdout, "Claude skill link: %s\n", result.AgentSkills.ClaudePath)
 	}
-	fmt.Fprintln(stdout, "Architecture skill: /phpwarden-architecture (Cursor/Claude), $phpwarden-architecture (Codex)")
+	fmt.Fprintln(stdout, "Skills: phpwarden-architecture, phpwarden-review, phpwarden-doctor, phpwarden-upgrade (use / in Cursor/Claude, $ in Codex)")
 }
 
 func writeHookInstallation(stdout io.Writer, result projectinit.Result) {
+	for _, hook := range result.CompletionHooks {
+		verb := "Already installed"
+		if hook.Changed {
+			verb = "Installed"
+		}
+		fmt.Fprintf(stdout, "%s %s completion hook: %s\n", verb, hook.Client, hook.Path)
+		if hook.Client == "codex" {
+			fmt.Fprintln(stdout, "Review and trust the project hook in Codex /hooks before it can run.")
+		}
+	}
 	if result.PreCommit == nil {
 		return
 	}

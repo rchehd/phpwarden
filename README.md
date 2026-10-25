@@ -104,7 +104,7 @@ php:
 
 If the versions cannot be detected or conflict with `composer.lock`, init stops with exit code 2 and says what to pass, for example `phpwarden init --php-runtime 8.1`. Use `--php-runtime` and `--php-target` to set them yourself. Init never overwrites an existing `.phpwarden.yaml`.
 
-In a terminal, `init` offers agent skill installation, then shows every check with its profile default already selected. Toggle checks by number or ID (for example `2,5` or `rector`), then press Enter to save. `all`, `none`, and `defaults` change the check selection; `q`, Ctrl+C, or closing input cancels before installation. Existing configs are validated and preserved without prompting for checks; agent skills can still be installed.
+In a terminal, `init` offers agent skills and completion hooks separately, then shows every check with its profile default already selected. Toggle checks by number or ID (for example `2,5` or `rector`), then press Enter to save. `all`, `none`, and `defaults` change the check selection; `q`, Ctrl+C, or closing input cancels before installation. Existing configs are validated and preserved without prompting for checks; agent integrations can still be installed.
 
 For unattended setup, accept the profile defaults with:
 
@@ -113,11 +113,11 @@ phpwarden init --no-interaction
 phpwarden init --no-interaction --pre-commit
 ```
 
-`-n` is the short form. CI (`CI` set), `--format json`, and redirected input/output also use defaults without prompting. The flag leaves `composer-require-checker` and `composer-unused` disabled and installs no agent skills unless `--agents` is explicit. Every bundled analyzer is already present in the worker image; init records which checks to run.
+`-n` is the short form. CI (`CI` set), `--format json`, and redirected input/output also use defaults without prompting. The flag leaves `composer-require-checker` and `composer-unused` disabled. Agent skills require explicit `--agents`; completion hooks require explicit `--hooks`. Every bundled analyzer is already present in the worker image; init records which checks to run.
 
-### Agent architecture skill
+### Agent skills
 
-Install the architecture skill for Codex, Cursor and Claude Code together:
+Install the shared skills for Codex, Cursor and Claude Code together:
 
 ```sh
 phpwarden init --agents all --no-interaction
@@ -125,11 +125,71 @@ phpwarden init --agents all --no-interaction
 
 Choose specific clients with `--agents codex,cursor` or `--agents claude`; `--agents none` skips installation and does not remove existing skills. In interactive init, press Enter at the agent prompt to skip, or enter `all` or a comma-separated client list.
 
-The installer writes the standard Agent Skills package to `.agents/skills/phpwarden-architecture/`. [Codex](https://learn.chatgpt.com/docs/build-skills) and [Cursor](https://cursor.com/docs/skills) discover that directory directly. For [Claude Code](https://code.claude.com/docs/en/skills#choose-where-skills-load), it adds the relative directory symlink `.claude/skills/phpwarden-architecture` pointing to the same package. The skill's files have one shared copy; commit the package and the Claude link to share them with the project. Clients that discover the shared directory can see the skill regardless of which client originally requested its installation.
+The installer writes standard Agent Skills packages to `.agents/skills/`. [Codex](https://learn.chatgpt.com/docs/build-skills) and [Cursor](https://cursor.com/docs/skills) discover that directory directly. For [Claude Code](https://code.claude.com/docs/en/skills#choose-where-skills-load), it adds relative directory symlinks under `.claude/skills/` pointing to the same packages. Commit the packages and Claude links to share them with the project. Clients that discover the shared directory can see the skills regardless of which client originally requested installation.
 
-Invoke `$phpwarden-architecture` in Codex or `/phpwarden-architecture` in Cursor and Claude Code. The common name follows the Agent Skills format; colon namespaces belong to separate plugin packaging. The skill instructs the agent to inspect the project, create or refine native Deptrac rules, explain the architecture and validate the complete configured graph.
+Invoke `$phpwarden-architecture` in Codex or `/phpwarden-architecture` in Cursor and Claude Code. The same invocation convention applies to all four skills:
 
-Repeated installation reuses identical files and links. Different existing files, conflicting links and symlinked parent directories stop installation without overwriting them. Review customized skill files before updating them. A write failure can leave completed installation files; init reports the failure and a retry can finish it. Skill installation preserves project configuration, harness settings and hooks. Completion hooks are a separate planned integration.
+| Skill | Purpose |
+| --- | --- |
+| `phpwarden-architecture` | Inspect the project and propose native Deptrac boundaries, then validate the complete graph. |
+| `phpwarden-review` | Review the check report and relevant code, prioritizing evidence and security context. Optional category focus keeps the configured checks intact. |
+| `phpwarden-doctor` | Explain environment failures using the native `doctor` report and propose concrete setup repairs. |
+| `phpwarden-upgrade` | Plan package/PHP upgrades from `updates`, identify dependency blockers, and use upstream Rector sets in dry-run mode. |
+
+Repeated installation reuses identical files and links. Different existing files, conflicting links and symlinked parent directories stop installation without overwriting them. Review customized skill files before updating them. A write failure can leave completed installation files; init reports the failure and a retry can finish it. Skill installation preserves project configuration, harness settings and hooks.
+
+### Agent completion hooks
+
+```sh
+phpwarden init --agents all --hooks all --no-interaction
+```
+
+`--hooks codex,cursor` selects clients; `--hooks none` skips installation without removing existing hooks. The installer merges its command into `.codex/hooks.json`, `.cursor/hooks.json`, and `.claude/settings.json`, preserving other settings and handlers. Invalid/ambiguous JSON or symlinked settings stop preflight. Its managed handler is updated on repeated init, without adding duplicates. Installation can finish partially after an I/O failure; the error names the incomplete step.
+
+The command contains the local executable's absolute path. Run init on each machine to update that path when the CLI moves. In [Codex](https://learn.chatgpt.com/docs/hooks), review and trust the exact hook via `/hooks`; installing files does not grant that trust. Project trust and hook support in the installed client are required. Client discovery and live completion behavior must be verified in your client version.
+
+At completion, the hook runs the ordinary configured `check` scope and failure policy. Required execution failures also request correction. A clean scoped diff skips the worker; deleted/project files remain part of scope handling. Checks serialize per project. Results are checked afresh; the existing result cache is used only when its normal eligibility and freshness checks allow it. No code, baseline, check setting or dependency is changed automatically.
+
+[Claude Code](https://code.claude.com/docs/en/hooks) and Codex receive a blocking Stop decision; [Cursor](https://cursor.com/docs/hooks) receives a follow-up message. Cursor stop hooks request continuation rather than enforce a commit gate. Aborted/error runs and nested PHPWarden executions are ignored. Automatic correction is bounded to two attempts per user turn by default; unresolved results are reported after that limit. A new user turn starts a new budget. Optional check failures remain nonblocking but are reported as incomplete. Cursor prints nonblocking limitations to the hook's stderr. Multi-root Cursor workspaces need a manually selected `--project PATH` in the hook command.
+
+```yaml
+agents:
+  completion:
+    enabled: true
+    max_attempts: 2
+    timeout_seconds: 300
+```
+
+`max_attempts` accepts 1–5; timeout accepts 1–540 seconds. The installed handler allows 600 seconds for checking and cleanup. Set `enabled: false` to suspend installed completion checks. Git pre-commit remains a separate integration.
+
+### Diagnose setup and plan updates
+
+```sh
+phpwarden doctor
+phpwarden doctor --format json
+phpwarden updates
+phpwarden updates --security --no-dev
+phpwarden updates --direct --runtime-version 8.3.26 --format json
+phpwarden updates --offline
+```
+
+`doctor` reads project configuration, Git access, Composer/Drupal dependency metadata, explicit native config paths and local worker compatibility. JSON/YAML configs receive syntax checks; other native configs are checked for readability. Semantic validation still requires their analyzer. It runs no analyzers, installs no dependencies and pulls/builds no images. Setup errors return exit 3; warnings alone return 0.
+
+`updates` queries available releases for locked Composer packages, including Drupal core/modules managed by Composer, and separately reports security advisories and abandoned packages. Ignored Composer advisories remain visible with an explicit marker. `--security` selects packages with advisories, `--direct` selects root dependencies, and `--no-dev` excludes development packages. These filters combine. Candidate versions do not prove that a full dependency upgrade will resolve; the upgrade skill investigates blockers before proposing changes.
+
+The Composer query runs in a matching local worker with network access and only copies of `composer.json` and `composer.lock`. Project scripts/plugins are disabled; installed project code and host Composer credentials are not mounted. Private repositories may therefore be unavailable. Path repositories are removed from the query copy and their release coverage is marked incomplete; locked path packages remain included in the advisory query. Packages/modules outside Composer are outside this command's coverage.
+
+PHP release/support data comes from [php.net releases](https://www.php.net/releases/) and the [supported versions table](https://www.php.net/supported-versions.php). The configured PHP branch selects the feed. The application's deployed patch version remains unknown unless supplied with `--runtime-version X.Y.Z`; neither Composer platform nor the worker establishes it. A security-tagged upstream release does not establish which CVEs affect the current runtime. Distributor backports need separate verification.
+
+```yaml
+updates:
+  timeout_seconds: 120
+  max_age_hours: 24
+  max_stale_hours: 168
+  offline: false
+```
+
+Metadata is stored in a private user cache, keyed by source and Composer input/toolset identity. Fresh cached data avoids network and worker startup; offline mode never fetches. A failed refresh can use dated stale data up to `max_stale_hours` but returns incomplete status. Missing sources, malformed metadata, changed inputs and incomplete repository coverage return exit 3, never a clean claim that everything is current. Complete assessments return 0, even when updates are available; invalid input returns 2. Text and JSON are supported. `updates` assesses project dependencies; it does not update the PHPWarden executable.
 
 Set a checker's `enabled` to `true` or `false` to turn it on or off. Uncomment optional settings to customize them; commented paths are examples and must match your project. `scope.include` accepts paths, and `scope.exclude` accepts globs. Per-checker `include` and `exclude` narrow the global scope. For example:
 

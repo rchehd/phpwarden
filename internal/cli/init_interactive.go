@@ -108,8 +108,12 @@ func chooseInitChecks(ctx context.Context, stdin io.Reader, output io.Writer, de
 }
 
 func chooseInitAgents(ctx context.Context, reader *bufio.Reader, output io.Writer) ([]string, error) {
+	return chooseInitIntegrations(ctx, reader, output, "Install project skills for agents?")
+}
+
+func chooseInitIntegrations(ctx context.Context, reader *bufio.Reader, output io.Writer, title string) ([]string, error) {
 	for {
-		if _, err := fmt.Fprint(output, "\nInstall the architecture skill for agents?\nall / codex,cursor,claude / none · Enter for none · q to cancel\n> "); err != nil {
+		if _, err := fmt.Fprintf(output, "\n%s\nall / codex,cursor,claude / none · Enter for none · q to cancel\n> ", title); err != nil {
 			return nil, err
 		}
 		answer, err := readInitAnswer(ctx, reader)

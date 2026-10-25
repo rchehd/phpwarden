@@ -198,6 +198,10 @@ func auditSettings(cfg config.Config, only []string) config.ComposerAudit {
 
 // dockerFetcher runs Composer audit in a separate container that has network access but sees only copies of the Composer files.
 func dockerFetcher(image string, process runner.Process) composeraudit.Fetcher {
+	return dockerComposerQuery(image, process, "audit")
+}
+
+func dockerComposerQuery(image string, process runner.Process, command string) composeraudit.Fetcher {
 	return func(ctx context.Context, composerJSON, composerLock []byte, noDev bool) ([]byte, error) {
 		directory, err := os.MkdirTemp("", "phpwarden-audit-")
 		if err != nil {
@@ -226,7 +230,7 @@ func dockerFetcher(image string, process runner.Process) composeraudit.Fetcher {
 			"--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777",
 			"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
 			"--mount", strings.TrimSuffix(mount.String(), "\n"), "--workdir", "/audit",
-			"--entrypoint", "/usr/local/bin/phpwarden", image, "worker", "audit"}
+			"--entrypoint", "/usr/local/bin/phpwarden", image, "worker", command}
 		if noDev {
 			args = append(args, "--no-dev")
 		}

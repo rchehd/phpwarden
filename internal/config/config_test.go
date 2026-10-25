@@ -20,6 +20,25 @@ php:
     max: "8.4"
 `
 
+func TestCompletionAndUpdatesDefaultsAndBounds(t *testing.T) {
+	effective, err := Parse([]byte(minimal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if effective.Config.Agents.Completion != (Completion{Enabled: true, MaxAttempts: 2, TimeoutSeconds: 300}) || effective.Config.Updates != (Updates{TimeoutSeconds: 120, MaxAgeHours: 24, MaxStaleHours: 168}) {
+		t.Fatalf("wrong defaults %+v", effective.Config)
+	}
+	for _, extra := range []string{"agents: {completion: {max_attempts: 0}}", "agents: {completion: {timeout_seconds: 541}}", "agents: {completion: {unknown: true}}", "updates: {max_age_hours: 169, max_stale_hours: 168}", "updates: {timeout_seconds: 0}"} {
+		if _, err := Parse([]byte(minimal + extra)); err == nil {
+			t.Fatalf("accepted %s", extra)
+		}
+	}
+	parsed, err := Parse([]byte(minimal + "agents: {completion: {enabled: false, max_attempts: 4}}\nupdates: {offline: true}\n"))
+	if err != nil || parsed.Config.Agents.Completion.Enabled || parsed.Config.Agents.Completion.MaxAttempts != 4 || !parsed.Config.Updates.Offline {
+		t.Fatalf("override ignored %+v %v", parsed.Config, err)
+	}
+}
+
 func TestDeadCodeDefaultsAndOptOut(t *testing.T) {
 	for _, override := range []string{"", "tools: {dead-code: {}}\n"} {
 		effective, err := Parse([]byte(minimal + override))

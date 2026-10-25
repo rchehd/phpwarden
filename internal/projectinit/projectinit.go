@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/rchehd/phpwarden/internal/agenthook"
 	"github.com/rchehd/phpwarden/internal/agentskills"
 	"github.com/rchehd/phpwarden/internal/checker/deptrac"
 	"github.com/rchehd/phpwarden/internal/checker/gitleaks"
@@ -51,6 +52,8 @@ type Options struct {
 	SelectChecks func([]CheckChoice) ([]string, error)
 	Agents       []string
 	SelectAgents func() ([]string, error)
+	Hooks        []string
+	SelectHooks  func() ([]string, error)
 }
 
 type Choice struct {
@@ -64,17 +67,18 @@ type NativeConfig struct {
 }
 
 type Result struct {
-	Created       bool                      `json:"created"`
-	Location      config.Location           `json:"location"`
-	ComposerRoot  string                    `json:"composer_root,omitempty"`
-	Runtime       *Choice                   `json:"runtime,omitempty"`
-	Target        *Choice                   `json:"target,omitempty"`
-	Image         string                    `json:"image,omitempty"`
-	Project       *profile.Facts            `json:"project,omitempty"`
-	Base          *string                   `json:"base,omitempty"`
-	NativeConfigs []NativeConfig            `json:"native_configs,omitempty"`
-	PreCommit     *githook.Installation     `json:"pre_commit,omitempty"`
-	AgentSkills   *agentskills.Installation `json:"agent_skills,omitempty"`
+	Created         bool                      `json:"created"`
+	Location        config.Location           `json:"location"`
+	ComposerRoot    string                    `json:"composer_root,omitempty"`
+	Runtime         *Choice                   `json:"runtime,omitempty"`
+	Target          *Choice                   `json:"target,omitempty"`
+	Image           string                    `json:"image,omitempty"`
+	Project         *profile.Facts            `json:"project,omitempty"`
+	Base            *string                   `json:"base,omitempty"`
+	NativeConfigs   []NativeConfig            `json:"native_configs,omitempty"`
+	PreCommit       *githook.Installation     `json:"pre_commit,omitempty"`
+	AgentSkills     *agentskills.Installation `json:"agent_skills,omitempty"`
+	CompletionHooks []agenthook.Installation  `json:"completion_hooks,omitempty"`
 }
 
 // Run writes an annotated configuration, or validates the one already there.
@@ -91,6 +95,17 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		}
 	}
 	agents, err := agentskills.Prepare(root, selected)
+	if err != nil {
+		return Result{}, err
+	}
+	selectedHooks := options.Hooks
+	if options.SelectHooks != nil {
+		selectedHooks, err = options.SelectHooks()
+		if err != nil {
+			return Result{}, err
+		}
+	}
+	completionHooks, err := agenthook.Prepare(root, options.Executable, selectedHooks)
 	if err != nil {
 		return Result{}, err
 	}
@@ -118,6 +133,10 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	result.AgentSkills, err = agents.Install()
 	if err != nil {
 		return result, fmt.Errorf("configuration is ready, but agent skill installation failed: %w", err)
+	}
+	result.CompletionHooks, err = completionHooks.Install(ctx)
+	if err != nil {
+		return result, fmt.Errorf("configuration is ready, but completion hook installation failed: %w", err)
 	}
 	return result, err
 }

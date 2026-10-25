@@ -26,7 +26,26 @@ type Config struct {
 	PHP          PHP       `json:"php"`
 	Scope        Scope     `json:"scope"`
 	Runner       Runner    `json:"runner"`
+	Agents       Agents    `json:"agents"`
+	Updates      Updates   `json:"updates"`
 	Tools        Tools     `json:"tools"`
+}
+
+type Agents struct {
+	Completion Completion `json:"completion"`
+}
+
+type Completion struct {
+	Enabled        bool `json:"enabled"`
+	MaxAttempts    int  `json:"max_attempts"`
+	TimeoutSeconds int  `json:"timeout_seconds"`
+}
+
+type Updates struct {
+	TimeoutSeconds int  `json:"timeout_seconds"`
+	MaxAgeHours    int  `json:"max_age_hours"`
+	MaxStaleHours  int  `json:"max_stale_hours"`
+	Offline        bool `json:"offline"`
 }
 
 type Framework struct {
@@ -450,6 +469,8 @@ func Parse(data []byte) (Effective, error) {
 			Framework:    Framework{Version: "auto"},
 			Scope:        Scope{Mode: "diff", Exclude: []string{}},
 			Runner:       Runner{Concurrency: 1, TimeoutSeconds: 300},
+			Agents:       Agents{Completion: Completion{Enabled: true, MaxAttempts: 2, TimeoutSeconds: 300}},
+			Updates:      Updates{TimeoutSeconds: 120, MaxAgeHours: 24, MaxStaleHours: 168},
 			Tools: Tools{PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
 				Includes: []string{}, BootstrapFiles: []string{}, ScanDirectories: []string{}, StubFiles: []string{}, Autoload: "auto",
 				Drupal: defaults.PHPStanDrupal, Deprecations: true, MemoryLimitMB: 512, ExtraExtensions: []string{}, StrictRules: StrictRules{All: true, Rules: map[string]bool{}}},
@@ -509,6 +530,12 @@ func Parse(data []byte) (Effective, error) {
 			"tools.drupal-config.forbidden_keys": "profile_default", "tools.drupal-config.module_roots": "core_default",
 		},
 		Pending: []string{},
+	}
+	for _, field := range []string{"enabled", "max_attempts", "timeout_seconds"} {
+		result.Provenance["agents.completion."+field] = "core_default"
+	}
+	for _, field := range []string{"timeout_seconds", "max_age_hours", "max_stale_hours", "offline"} {
+		result.Provenance["updates."+field] = "core_default"
 	}
 	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "standards", "sniffs", "exclude_sniffs", "standard_paths", "extra_inputs", "extra_extensions", "error_severity", "warning_severity", "compatibility.enabled", "compatibility.test_version"} {
 		result.Provenance["tools.phpcs."+field] = "core_default"
@@ -678,6 +705,9 @@ func markProvenance(values map[string]any, prefix string, sources map[string]str
 }
 
 func validateValues(cfg Config) error {
+	if cfg.Updates.MaxStaleHours < cfg.Updates.MaxAgeHours {
+		return fmt.Errorf("updates.max_stale_hours must be at least updates.max_age_hours")
+	}
 	if cfg.Tools.Deptrac.Config != "" && !strings.HasSuffix(cfg.Tools.Deptrac.Config, ".yaml") && !strings.HasSuffix(cfg.Tools.Deptrac.Config, ".yml") && !strings.HasSuffix(cfg.Tools.Deptrac.Config, ".yaml.dist") && !strings.HasSuffix(cfg.Tools.Deptrac.Config, ".yml.dist") {
 		return fmt.Errorf("Deptrac config must be a local YAML file")
 	}

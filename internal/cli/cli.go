@@ -38,6 +38,9 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
        phpwarden fix [PATH...] [options]
        phpwarden worker check [PATH...] [options]
        phpwarden hook pre-commit [--project PATH]
+       phpwarden hook stop --client codex|cursor|claude [--project PATH]
+       phpwarden doctor [options]
+       phpwarden updates [--security] [--direct] [--no-dev] [--offline] [--runtime-version X.Y.Z] [options]
 
 Options:
   --project PATH       Project root
@@ -49,12 +52,20 @@ Options:
   --version            Show version
 
 Init options:
-  --no-interaction, -n Use profile defaults; install agent skills only with --agents
-  --agents CLIENTS     Install architecture skill: all, none, or codex,cursor,claude
+  --no-interaction, -n Use profile defaults; skills/hooks require explicit --agents/--hooks
+  --agents CLIENTS     Install project skills: all, none, or codex,cursor,claude
+  --hooks CLIENTS      Install completion hooks: all, none, or codex,cursor,claude
   --pre-commit         Install a Git pre-commit hook for staged files; preserve existing hooks
   --composer-root DIR  Directory with composer.json inside the project (default: detected)
   --php-runtime X.Y    PHP the project runs on; selects the image (default: .ddev, Composer platform, composer.lock)
   --php-target X.Y     PHP the code must support (default: Composer platform, else the runtime)
+
+Updates options:
+  --security           Show packages with security advisories, including project ignores
+  --direct             Show direct Composer dependencies only
+  --no-dev             Exclude development packages from the update report
+  --offline            Use cached update metadata without fetching
+  --runtime-version V  Verified application PHP patch version (X.Y.Z)
 
 Scope options:
   --mode diff|full     Override configured mode (default config: diff)
@@ -67,7 +78,7 @@ Scope options:
 
 Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
 Check uses local development Docker images (Linux amd64, PHP runtime 8.1–8.4, target from 8.1 up to the runtime).
-Init offers agent skills and check selection in terminals; CI, JSON and redirected streams use profile defaults.
+Init offers agent skills, completion hooks and check selection in terminals; CI, JSON and redirected streams use defaults.
 Agent skills use .agents/skills; Claude gets a relative directory link in .claude/skills.
 Init writes .phpwarden.yaml at the Git root and never overwrites an existing file.
 Worker check requires PHP in its execution environment. Images must exist locally; automatic pulls are not implemented.
@@ -76,27 +87,33 @@ Worker check requires PHP in its execution environment. Images must exist locall
 var minorVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
 
 type options struct {
-	noInteraction bool
-	noCache       bool
-	all           bool
-	preCommit     bool
-	project       string
-	config        string
-	format        string
-	color         string
-	help          bool
-	version       bool
-	command       []string
-	mode          string
-	base          string
-	wholeFiles    bool
-	only          string
-	phpRuntime    string
-	phpTarget     string
-	composerRoot  string
-	agents        string
-	commits       int
-	fix           bool
+	noInteraction  bool
+	noCache        bool
+	all            bool
+	preCommit      bool
+	project        string
+	config         string
+	format         string
+	color          string
+	help           bool
+	version        bool
+	command        []string
+	mode           string
+	base           string
+	wholeFiles     bool
+	only           string
+	phpRuntime     string
+	phpTarget      string
+	composerRoot   string
+	agents         string
+	hooks          string
+	security       bool
+	direct         bool
+	noDev          bool
+	offline        bool
+	runtimeVersion string
+	commits        int
+	fix            bool
 }
 
 type response struct {
@@ -123,6 +140,12 @@ func Run(arguments []string, cwd string, stdout, stderr io.Writer) int {
 }
 
 func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(arguments) >= 2 && arguments[0] == "worker" && arguments[1] == "updates" {
+		return workerUpdates(ctx, arguments[2:], cwd, stdout, stderr)
+	}
+	if len(arguments) >= 2 && arguments[0] == "hook" && arguments[1] == "stop" {
+		return completionHook(ctx, arguments[2:], cwd, stdin, stdout, stderr)
+	}
 	if len(arguments) >= 2 && arguments[0] == "worker" && arguments[1] == "audit" {
 		return workerAudit(ctx, arguments[2:], cwd, stdout, stderr)
 	}
@@ -137,6 +160,12 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	if args.version {
 		fmt.Fprintln(stdout, "phpwarden dev")
 		return 0
+	}
+	if len(args.command) == 1 && (args.command[0] == "doctor" || args.command[0] == "updates") {
+		return projectMaintenance(ctx, args, cwd, stdout, stderr)
+	}
+	if args.security || args.direct || args.noDev || args.offline || args.runtimeVersion != "" {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("update filters require updates"))
 	}
 	if args.noInteraction && !(len(args.command) == 1 && args.command[0] == "init") {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--no-interaction requires init"))
@@ -194,6 +223,9 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	}
 	if args.agents != "" && !isInit {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--agents requires init"))
+	}
+	if args.hooks != "" && !isInit {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("--hooks requires init"))
 	}
 	if isInit && args.config != "" {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("init always writes %s in the project root; use --project", config.Filename))
@@ -311,6 +343,23 @@ func parse(arguments []string) (options, error) {
 	seen := map[string]bool{}
 	for i := 0; i < len(arguments); i++ {
 		argument := arguments[i]
+		if argument == "--security" || argument == "--direct" || argument == "--no-dev" || argument == "--offline" {
+			if seen[argument] {
+				return result, fmt.Errorf("duplicate option %s", argument)
+			}
+			seen[argument] = true
+			switch argument {
+			case "--security":
+				result.security = true
+			case "--direct":
+				result.direct = true
+			case "--no-dev":
+				result.noDev = true
+			case "--offline":
+				result.offline = true
+			}
+			continue
+		}
 		if argument == "--help" || argument == "-h" {
 			result.help = true
 			continue
@@ -366,7 +415,7 @@ func parse(arguments []string) (options, error) {
 			continue
 		}
 		name, value, inline := strings.Cut(argument, "=")
-		if !slices.Contains([]string{"--project", "--config", "--format", "--mode", "--base", "--only", "--color", "--php-runtime", "--php-target", "--commits", "--composer-root", "--agents"}, name) {
+		if !slices.Contains([]string{"--project", "--config", "--format", "--mode", "--base", "--only", "--color", "--php-runtime", "--php-target", "--commits", "--composer-root", "--agents", "--hooks", "--runtime-version"}, name) {
 			return result, fmt.Errorf("unknown option %q", name)
 		}
 		if seen[name] {
@@ -384,6 +433,10 @@ func parse(arguments []string) (options, error) {
 			return result, fmt.Errorf("%s requires a nonempty value", name)
 		}
 		switch name {
+		case "--hooks":
+			result.hooks = value
+		case "--runtime-version":
+			result.runtimeVersion = value
 		case "--agents":
 			result.agents = value
 		case "--only":

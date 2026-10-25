@@ -72,6 +72,14 @@ func configurationReference(cfg config.Config) ([]byte, error) {
 	if err := writeSection("  ", configurationFields(cfg.Runner), map[string]bool{"timeout_seconds": true}); err != nil {
 		return nil, err
 	}
+	output.WriteString("\n# agents:\n")
+	if err := writeSection("  ", configurationFields(cfg.Agents), nil); err != nil {
+		return nil, err
+	}
+	output.WriteString("\n# updates:\n")
+	if err := writeSection("  ", configurationFields(cfg.Updates), nil); err != nil {
+		return nil, err
+	}
 	output.WriteString("\n# Per-tool include/exclude only narrow scope; fail_on: error, warning, or never.\n# Config paths below are examples: uncomment only when those files exist.\ntools:\n")
 	tools := configurationFields(cfg.Tools)
 	sort.SliceStable(tools, func(i, j int) bool {

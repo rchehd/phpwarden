@@ -28,7 +28,7 @@ func preCommit(ctx context.Context, args options, cwd string, stdout, stderr io.
 		}
 		return 2
 	}
-	if args.format != "text" || args.mode != "" || args.base != "" || args.commits != 0 || args.wholeFiles || args.fix || args.preCommit || args.phpRuntime != "" || args.phpTarget != "" || args.composerRoot != "" || args.config != "" || args.only != "" || args.noCache || args.agents != "" {
+	if args.format != "text" || args.mode != "" || args.base != "" || args.commits != 0 || args.wholeFiles || args.fix || args.preCommit || args.phpRuntime != "" || args.phpTarget != "" || args.composerRoot != "" || args.config != "" || args.only != "" || args.noCache || args.agents != "" || args.hooks != "" {
 		return failure(fmt.Errorf("hook pre-commit accepts only --project, --color and --all; configure checks in .phpwarden.yaml"))
 	}
 	directory := cwd
