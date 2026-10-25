@@ -130,6 +130,7 @@ class WorkerCLITest(unittest.TestCase):
                 "eventhorizon": {"enabled": False},
                 "dead-code": {"enabled": False},
                 "rector": {"enabled": False},
+                "deptrac": {"enabled": False},
             },
         }
         (scenario.root / ".phpwarden.yaml").write_text(json.dumps(config))
@@ -403,15 +404,17 @@ class WorkerCLITest(unittest.TestCase):
             self.assertEqual(report["verdict"], "error")
 
     def test_init_check_selection_and_unattended_defaults(self):
-        for arguments, ci, answers, prompt, code, selected in (
-            ([], "", b"none\ndebug,rector\n\n", True, 0, {"debug", "rector"}),
-            ([], "", b"\n", True, 0, None),
-            (["--no-interaction"], "", None, False, 0, None),
-            (["-n"], "", None, False, 0, None),
-            (["--format", "json"], "", None, False, 0, None),
-            ([], "true", None, False, 0, None),
-            (["--pre-commit"], "", b"q\n", True, 130, None),
-            ([], "", b"\x04", True, 130, None),
+        for arguments, ci, answers, prompt, code, selected, agents in (
+            ([], "", b"none\nnone\ndebug,rector\n\n", True, 0, {"debug", "rector"}, False),
+            ([], "", b"\n\n", True, 0, None, False),
+            ([], "", b"all\n\n", True, 0, None, True),
+            (["--no-interaction"], "", None, False, 0, None, False),
+            (["-n"], "", None, False, 0, None, False),
+            (["-n", "--agents", "all"], "", None, False, 0, None, True),
+            (["--format", "json"], "", None, False, 0, None, False),
+            ([], "true", None, False, 0, None, False),
+            (["--pre-commit"], "", b"all\nq\n", True, 130, None, False),
+            ([], "", b"\x04", True, 130, None, False),
         ):
             with (
                 self.subTest(arguments=arguments, ci=ci, answers=answers),
@@ -459,8 +462,17 @@ class WorkerCLITest(unittest.TestCase):
                         process.kill()
                         process.wait(timeout=5)
                 text = output.decode()
-                self.assertEqual("Choose checks for this project" in text, prompt, text)
+                self.assertEqual("Install the architecture skill for agents?" in text, prompt, text)
+                if code == 0:
+                    self.assertEqual("Choose checks for this project" in text, prompt, text)
                 config_path = scenario.root / ".phpwarden.yaml"
+                skill_path = scenario.root / ".agents/skills/phpwarden-architecture"
+                alias = scenario.root / ".claude/skills/phpwarden-architecture"
+                self.assertEqual(skill_path.exists(), agents, text)
+                self.assertEqual(alias.is_symlink(), agents, text)
+                if agents:
+                    self.assertEqual(alias.resolve(), skill_path, text)
+                    self.assertTrue((skill_path / "SKILL.md").is_file(), text)
                 if code == 130:
                     self.assertFalse(config_path.exists(), text)
                     self.assertFalse((scenario.root / ".git/hooks/pre-commit").exists(), text)
@@ -477,13 +489,32 @@ class WorkerCLITest(unittest.TestCase):
                 tools = json.loads(show.stdout)["effective"]["config"]["tools"]
                 if selected is None:
                     self.assertTrue(tools["rector"]["enabled"], text)
-                    self.assertFalse(tools["deptrac"]["enabled"], text)
+                    self.assertTrue(tools["deptrac"]["enabled"], text)
                     self.assertFalse(tools["composer-unused"]["enabled"], text)
                     self.assertFalse(tools["composer-require-checker"]["enabled"], text)
                 else:
                     self.assertEqual(
                         {key for key, value in tools.items() if value["enabled"]}, selected, text
                     )
+
+    def test_deptrac_default_skips_without_architecture_rules(self):
+        with materialize(FIXTURES / "added-debug") as scenario:
+            self.configure(scenario)
+            path = scenario.root / ".phpwarden.yaml"
+            config = json.loads(path.read_text())
+            config["tools"].pop("deptrac")
+            path.write_text(json.dumps(config))
+            probe = scenario.root / "web/modules/custom/demo/ArchitectureProbe.php"
+            probe.parent.mkdir(parents=True, exist_ok=True)
+            probe.write_text("<?php\nfinal class ArchitectureProbe {}\n")
+            report = self.run_worker(scenario, [probe.relative_to(scenario.root).as_posix()])
+            check = next(row for row in report["checks"] if row["id"] == "deptrac")
+            self.assertEqual(check["status"], "skipped", report)
+            self.assertEqual(check["reason"], "no_config", report)
+            self.assertTrue(
+                any(row["code"] == "architecture_config_missing" for row in report["diagnostics"]),
+                report,
+            )
 
     def test_progress_is_interactive_text_only(self):
         for output_format, term, ci, interactive in (

@@ -104,6 +104,7 @@ class DockerWorkerTest(unittest.TestCase):
                 "eventhorizon": {"enabled": False},
                 "dead-code": {"enabled": False},
                 "rector": {"enabled": False},
+                "deptrac": {"enabled": False},
             },
         }
         (scenario.root / ".phpwarden.yaml").write_text(json.dumps(config))
@@ -438,6 +439,7 @@ class DockerWorkerTest(unittest.TestCase):
                     "eventhorizon": {"enabled": False},
                     "dead-code": {"enabled": False},
                     "rector": {"enabled": False},
+                    "deptrac": {"enabled": False},
                 },
             }
             (project / ".phpwarden.yaml").write_text(json.dumps(config))

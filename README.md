@@ -104,7 +104,7 @@ php:
 
 If the versions cannot be detected or conflict with `composer.lock`, init stops with exit code 2 and says what to pass, for example `phpwarden init --php-runtime 8.1`. Use `--php-runtime` and `--php-target` to set them yourself. Init never overwrites an existing `.phpwarden.yaml`.
 
-In a terminal, `init` shows every check with its profile default already selected. Toggle checks by number or ID (for example `2,5` or `rector`), then press Enter to save. `all`, `none`, and `defaults` change the selection; `q`, Ctrl+C, or closing input cancels without writing a config. Existing configs are validated and preserved without prompting.
+In a terminal, `init` offers agent skill installation, then shows every check with its profile default already selected. Toggle checks by number or ID (for example `2,5` or `rector`), then press Enter to save. `all`, `none`, and `defaults` change the check selection; `q`, Ctrl+C, or closing input cancels before installation. Existing configs are validated and preserved without prompting for checks; agent skills can still be installed.
 
 For unattended setup, accept the profile defaults with:
 
@@ -113,7 +113,23 @@ phpwarden init --no-interaction
 phpwarden init --no-interaction --pre-commit
 ```
 
-`-n` is the short form. CI (`CI` set), `--format json`, and redirected input/output also use defaults without prompting. The flag does not enable the three checks that need extra project-specific setup. Every bundled analyzer is already present in the worker image; init records which checks to run.
+`-n` is the short form. CI (`CI` set), `--format json`, and redirected input/output also use defaults without prompting. The flag leaves `composer-require-checker` and `composer-unused` disabled and installs no agent skills unless `--agents` is explicit. Every bundled analyzer is already present in the worker image; init records which checks to run.
+
+### Agent architecture skill
+
+Install the architecture skill for Codex, Cursor and Claude Code together:
+
+```sh
+phpwarden init --agents all --no-interaction
+```
+
+Choose specific clients with `--agents codex,cursor` or `--agents claude`; `--agents none` skips installation and does not remove existing skills. In interactive init, press Enter at the agent prompt to skip, or enter `all` or a comma-separated client list.
+
+The installer writes the standard Agent Skills package to `.agents/skills/phpwarden-architecture/`. [Codex](https://learn.chatgpt.com/docs/build-skills) and [Cursor](https://cursor.com/docs/skills) discover that directory directly. For [Claude Code](https://code.claude.com/docs/en/skills#choose-where-skills-load), it adds the relative directory symlink `.claude/skills/phpwarden-architecture` pointing to the same package. The skill's files have one shared copy; commit the package and the Claude link to share them with the project. Clients that discover the shared directory can see the skill regardless of which client originally requested its installation.
+
+Invoke `$phpwarden-architecture` in Codex or `/phpwarden-architecture` in Cursor and Claude Code. The common name follows the Agent Skills format; colon namespaces belong to separate plugin packaging. The skill instructs the agent to inspect the project, create or refine native Deptrac rules, explain the architecture and validate the complete configured graph.
+
+Repeated installation reuses identical files and links. Different existing files, conflicting links and symlinked parent directories stop installation without overwriting them. Review customized skill files before updating them. A write failure can leave completed installation files; init reports the failure and a retry can finish it. Skill installation preserves project configuration, harness settings and hooks. Completion hooks are a separate planned integration.
 
 Set a checker's `enabled` to `true` or `false` to turn it on or off. Uncomment optional settings to customize them; commented paths are examples and must match your project. `scope.include` accepts paths, and `scope.exclude` accepts globs. Per-checker `include` and `exclude` narrow the global scope. For example:
 
@@ -242,14 +258,13 @@ Use `phpwarden check --no-cache` to force live analysis. `--fix` always prepares
 
 ## Checkers
 
-All checkers except `composer-require-checker`, `composer-unused`, and `deptrac` are enabled by default in the Drupal profile. `composer-audit` is the only one that uses the network, and it is optional by default.
+All checkers except `composer-require-checker` and `composer-unused` are enabled by default in the Drupal profile. `composer-audit` is the only one that uses the network, and it is optional by default.
 
-These three checks require an explicit choice for the project:
+These two checks require an explicit choice for the project:
 
 | Checker | Why it starts disabled |
 |---|---|
 | `composer-require-checker`, `composer-unused` | Inspect a whole standalone Composer package in full mode; Drupal installer layouts are unsupported |
-| `deptrac` | Needs the project's architecture layers and dependency rules |
 
 Enable one with `tools.<id>.enabled: true`, or select it for a single run using `--only`. `disabled` means configuration turned a checker off; `no files` means it has no applicable files in the selected scope; `no config` means a required native rules file was not found. Enabling a checker does not widen the selected scope or bypass its prerequisites.
 
@@ -273,7 +288,7 @@ Enable one with `tools.<id>.enabled: true`, or select it for a single run using 
 | `phpstan` | PHPStan with phpstan-drupal and deprecation rules |
 | `composer-require-checker` | Undeclared symbols in standalone Composer packages; opt-in, full only |
 | `composer-unused` | Dependency removal candidates; opt-in, advisory, full only |
-| `deptrac` | Project-defined architecture layers and dependency rules; opt-in, skips without config |
+| `deptrac` | Project-defined architecture layers and dependency rules; skips without config |
 | `rector` | Drupal/PHP modernization suggestions from an isolated Drupal Rector bundle; enabled, dry-run |
 | `semgrep` | Local PHP security search/taint rules using Semgrep CE; enabled in the Drupal profile |
 | `twig-cs-fixer` | Twig template style with Twig CS Fixer |
@@ -353,7 +368,7 @@ ComposerRequireChecker is pinned to 4.7.1 on PHP 8.1 and 4.16.1 on PHP 8.2–8.4
 
 ### Deptrac
 
-`deptrac` checks the architecture defined by your project. It is disabled by default; enable `tools.deptrac.enabled: true` or pass `--only deptrac`. Without a discovered configuration it reports `skipped: no_config`, including with `--only`. A missing explicitly configured file is an error. PHPWarden does not supply default Drupal layers or create architecture rules.
+`deptrac` checks the architecture defined by your project and is enabled by default. Without a discovered configuration it reports `skipped: no_config`, including with `--only`, with guidance for installing and using the architecture skill. A missing explicitly configured file is an error. PHPWarden does not supply default Drupal layers; the optional `phpwarden-architecture` agent skill helps create project-specific rules. An existing `enabled: false` remains effective.
 
 The isolated bundle pins Deptrac 4.4.0 and PHPStan 2.3.1. Version 4.4.0 is the newest Deptrac release compatible with the worker's complete PHP 8.1–8.4 matrix; Deptrac 4.5 and newer require PHP 8.2. All bundle dependencies have a separate lock and manifest identities. The adapter uses the pinned analysis API, disables Deptrac's persistent cache, and keeps generated configuration and temporary files in a private directory. It avoids the CLI analysis command's unlimited-memory override and retains `memory_limit_mb`.
 

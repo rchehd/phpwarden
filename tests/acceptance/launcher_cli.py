@@ -104,6 +104,7 @@ class LauncherCLITest(unittest.TestCase):
                 "eventhorizon": {"enabled": False},
                 "dead-code": {"enabled": False},
                 "rector": {"enabled": False},
+                "deptrac": {"enabled": False},
             },
         }
         (root / ".phpwarden.yaml").write_text(json.dumps(config))

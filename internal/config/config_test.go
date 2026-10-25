@@ -523,14 +523,18 @@ func TestRectorUpgradeSettingsAreSeparateAndDryRunOnly(t *testing.T) {
 	}
 }
 
-func TestDeptracRequiresOptInAndLocalConfiguration(t *testing.T) {
+func TestDeptracEnabledByDefaultWithLocalConfiguration(t *testing.T) {
 	effective, err := Parse([]byte(minimal))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defaults := effective.Config.Tools.Deptrac
-	if defaults.Enabled || !defaults.Required || defaults.FailOn != "error" || !defaults.DiscoverConfig || defaults.ReportUncovered || defaults.FailOnUncovered || defaults.ReportSkipped || defaults.MemoryLimitMB != 1024 || effective.Provenance["tools.deptrac.config"] != "core_default" {
+	if !defaults.Enabled || !defaults.Required || defaults.FailOn != "error" || !defaults.DiscoverConfig || defaults.ReportUncovered || defaults.FailOnUncovered || defaults.ReportSkipped || defaults.MemoryLimitMB != 1024 || effective.Provenance["tools.deptrac.config"] != "core_default" {
 		t.Fatalf("Deptrac defaults: %+v", defaults)
+	}
+	disabled, err := Parse([]byte(minimal + "tools: {deptrac: {enabled: false}}\n"))
+	if err != nil || disabled.Config.Tools.Deptrac.Enabled {
+		t.Fatalf("explicit Deptrac opt-out was lost: %+v %v", disabled, err)
 	}
 	effective, err = Parse([]byte(minimal + "tools: {deptrac: {enabled: true, config: config/deptrac.yaml, fail_on: never, report_uncovered: true, report_skipped: true}}\n"))
 	if err != nil || !effective.Config.Tools.Deptrac.Enabled || !effective.Config.Tools.Deptrac.ReportUncovered {

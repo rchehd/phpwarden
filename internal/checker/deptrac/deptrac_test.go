@@ -198,6 +198,9 @@ func TestNoConfigAndUnsafeConfiguration(t *testing.T) {
 	if result.Check.Status != "skipped" || *result.Check.Reason != "no_config" {
 		t.Fatalf("missing config: %+v", result)
 	}
+	if len(result.Diagnostics) != 1 || result.Diagnostics[0].Code != "architecture_config_missing" {
+		t.Fatalf("missing architecture setup guidance: %+v", result)
+	}
 	cfg := settings(t)
 	cfg.Config = "missing.yaml"
 	result = run(context.Background(), root, ".", selected(nil), cfg, "", unused)

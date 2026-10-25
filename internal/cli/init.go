@@ -1,20 +1,33 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
 
+	"github.com/rchehd/phpwarden/internal/agentskills"
 	"github.com/rchehd/phpwarden/internal/projectinit"
 )
 
 func initProject(ctx context.Context, args options, cwd string, stdin io.Reader, stdout, stderr io.Writer) int {
 	settings := projectinit.Options{CWD: cwd, Project: args.project, ComposerRoot: args.composerRoot, Runtime: args.phpRuntime, Target: args.phpTarget, PreCommit: args.preCommit}
+	selected, err := agentskills.ParseClients(args.agents)
+	if err != nil {
+		return fail(stdout, stderr, args, "usage", err)
+	}
+	settings.Agents = selected
 	if interactiveInit(args, stdin, stdout, stderr) {
+		reader := bufio.NewReader(stdin)
 		settings.SelectChecks = func(choices []projectinit.CheckChoice) ([]string, error) {
-			return chooseInitChecks(ctx, stdin, stderr, choices)
+			return chooseInitChecks(ctx, reader, stderr, choices)
+		}
+		if args.agents == "" {
+			settings.SelectAgents = func() ([]string, error) {
+				return chooseInitAgents(ctx, reader, stderr)
+			}
 		}
 	}
 	result, err := projectinit.Run(ctx, settings)
@@ -36,6 +49,7 @@ func initProject(ctx context.Context, args options, cwd string, stdin io.Reader,
 	if !result.Created {
 		fmt.Fprintf(stdout, "Configuration already exists: %s\n", result.Location.Path)
 		writeHookInstallation(stdout, result)
+		writeAgentInstallation(stdout, result)
 		fmt.Fprintln(stdout, "\nNext: phpwarden check")
 		return 0
 	}
@@ -85,8 +99,24 @@ func initProject(ctx context.Context, args options, cwd string, stdin io.Reader,
 		row("Warnings", facts.Warnings...)
 	}
 	writeHookInstallation(stdout, result)
+	writeAgentInstallation(stdout, result)
 	fmt.Fprintln(stdout, "\nNext: phpwarden check")
 	return 0
+}
+
+func writeAgentInstallation(stdout io.Writer, result projectinit.Result) {
+	if result.AgentSkills == nil {
+		return
+	}
+	verb := "Installed"
+	if !result.AgentSkills.Created && !result.AgentSkills.ClaudeCreated {
+		verb = "Already installed"
+	}
+	fmt.Fprintf(stdout, "%s agent skill for %s: %s\n", verb, strings.Join(result.AgentSkills.Clients, ", "), result.AgentSkills.Path)
+	if result.AgentSkills.ClaudePath != "" {
+		fmt.Fprintf(stdout, "Claude skill link: %s\n", result.AgentSkills.ClaudePath)
+	}
+	fmt.Fprintln(stdout, "Architecture skill: /phpwarden-architecture (Cursor/Claude), $phpwarden-architecture (Codex)")
 }
 
 func writeHookInstallation(stdout io.Writer, result projectinit.Result) {

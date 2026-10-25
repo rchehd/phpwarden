@@ -18,6 +18,24 @@ func TestEveryCheckerHasCategory(t *testing.T) {
 	}
 }
 
+func TestArchitectureSetupNoteKeepsSkippedStatus(t *testing.T) {
+	result := base("demo.php")
+	result.Checks = []report.Check{check("deptrac", "skipped", true, "no_config")}
+	result.Diagnostics = []report.Diagnostic{{Checker: new("deptrac"), Code: "architecture_config_missing", Message: "Run phpwarden init --agents all --no-interaction, then use phpwarden-architecture."}}
+	result.Finalize()
+	var output bytes.Buffer
+	if err := Write(&output, result, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	text := output.String()
+	if !strings.Contains(text, "INFO Architecture rules missing") || !strings.Contains(text, "--agents all") || !strings.Contains(text, "- Architecture") || strings.Contains(text, "WARNING") || strings.Contains(text, "ERROR") {
+		t.Fatalf("setup note changed execution status: %s", text)
+	}
+	if result.Checks[0].Status != "skipped" || *result.Checks[0].Reason != "no_config" {
+		t.Fatal("setup note altered the underlying check")
+	}
+}
+
 func TestDefaultTextGroupsFailuresFindingsAndSummaryByCategory(t *testing.T) {
 	result := base("demo.php", "composer.json")
 	result.Checks = []report.Check{

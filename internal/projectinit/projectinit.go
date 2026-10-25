@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/rchehd/phpwarden/internal/agentskills"
 	"github.com/rchehd/phpwarden/internal/checker/deptrac"
 	"github.com/rchehd/phpwarden/internal/checker/gitleaks"
 	"github.com/rchehd/phpwarden/internal/checker/nodecheck"
@@ -48,6 +49,8 @@ type Options struct {
 	PreCommit    bool
 	Executable   string
 	SelectChecks func([]CheckChoice) ([]string, error)
+	Agents       []string
+	SelectAgents func() ([]string, error)
 }
 
 type Choice struct {
@@ -61,21 +64,33 @@ type NativeConfig struct {
 }
 
 type Result struct {
-	Created       bool                  `json:"created"`
-	Location      config.Location       `json:"location"`
-	ComposerRoot  string                `json:"composer_root,omitempty"`
-	Runtime       *Choice               `json:"runtime,omitempty"`
-	Target        *Choice               `json:"target,omitempty"`
-	Image         string                `json:"image,omitempty"`
-	Project       *profile.Facts        `json:"project,omitempty"`
-	Base          *string               `json:"base,omitempty"`
-	NativeConfigs []NativeConfig        `json:"native_configs,omitempty"`
-	PreCommit     *githook.Installation `json:"pre_commit,omitempty"`
+	Created       bool                      `json:"created"`
+	Location      config.Location           `json:"location"`
+	ComposerRoot  string                    `json:"composer_root,omitempty"`
+	Runtime       *Choice                   `json:"runtime,omitempty"`
+	Target        *Choice                   `json:"target,omitempty"`
+	Image         string                    `json:"image,omitempty"`
+	Project       *profile.Facts            `json:"project,omitempty"`
+	Base          *string                   `json:"base,omitempty"`
+	NativeConfigs []NativeConfig            `json:"native_configs,omitempty"`
+	PreCommit     *githook.Installation     `json:"pre_commit,omitempty"`
+	AgentSkills   *agentskills.Installation `json:"agent_skills,omitempty"`
 }
 
 // Run writes an annotated configuration, or validates the one already there.
 func Run(ctx context.Context, options Options) (Result, error) {
 	root, err := projectRoot(ctx, options)
+	if err != nil {
+		return Result{}, err
+	}
+	selected := options.Agents
+	if options.SelectAgents != nil {
+		selected, err = options.SelectAgents()
+		if err != nil {
+			return Result{}, err
+		}
+	}
+	agents, err := agentskills.Prepare(root, selected)
 	if err != nil {
 		return Result{}, err
 	}
@@ -87,15 +102,24 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		}
 	}
 	result, err := configure(ctx, root, options)
-	if err != nil || !options.PreCommit {
+	if err != nil {
 		return result, err
 	}
-	installed, err := hook.Install()
-	if err != nil {
-		return result, fmt.Errorf("configuration is ready, but pre-commit installation failed: %w", err)
+	if err := ctx.Err(); err != nil {
+		return result, err
 	}
-	result.PreCommit = &installed
-	return result, nil
+	if options.PreCommit {
+		installed, err := hook.Install()
+		if err != nil {
+			return result, fmt.Errorf("configuration is ready, but pre-commit installation failed: %w", err)
+		}
+		result.PreCommit = &installed
+	}
+	result.AgentSkills, err = agents.Install()
+	if err != nil {
+		return result, fmt.Errorf("configuration is ready, but agent skill installation failed: %w", err)
+	}
+	return result, err
 }
 
 func configure(ctx context.Context, root string, options Options) (Result, error) {

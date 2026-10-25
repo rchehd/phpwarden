@@ -85,6 +85,7 @@ func run(ctx context.Context, root, composerRoot string, selected scope.Selectio
 		return fail("error", "config_invalid", err.Error())
 	}
 	if filename == "" {
+		result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "architecture_config_missing", Stage: "checker", Checker: new("deptrac"), Message: "Architecture rules are not configured. Install the architecture skill with 'phpwarden init --agents all --no-interaction', then invoke phpwarden-architecture in your agent, or create a native Deptrac YAML config."})
 		return skipped("no_config")
 	}
 	if info, err := os.Stat(filepath.Join(bundle, "vendor/autoload.php")); err != nil || !info.Mode().IsRegular() {

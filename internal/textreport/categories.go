@@ -107,6 +107,10 @@ func reportCategories(result report.Report) []category {
 
 func diagnosticIssue(diagnostic report.Diagnostic, check report.Check) categoryIssue {
 	issue := categoryIssue{severity: "error", title: "Analysis could not complete", diagnostic: diagnostic}
+	if diagnostic.Code == "architecture_config_missing" && check.Status == "skipped" {
+		issue.severity, issue.title = "info", "Architecture rules missing"
+		return issue
+	}
 	if diagnostic.Checker != nil && check.Status != "error" && check.Status != "unavailable" {
 		issue.severity, issue.title = "warning", "Analysis note"
 	}
@@ -169,7 +173,7 @@ func (group category) summary() (string, string) {
 		status = "failed"
 	case failures > 0:
 		status = "incomplete"
-	case active == 0 && len(group.issues) == 0 && len(group.result.Findings) == 0:
+	case active == 0 && len(group.result.Findings) == 0 && !slices.ContainsFunc(group.issues, func(issue categoryIssue) bool { return issue.severity != "info" }):
 		status = "skipped"
 	case gap:
 		status = "partial"

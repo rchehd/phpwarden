@@ -83,7 +83,7 @@ tools:
     extra_inputs: []
     memory_limit_mb: 1024
   deptrac:
-    enabled: false
+    enabled: true
     required: true
     fail_on: error
     timeout_seconds: 300

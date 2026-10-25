@@ -90,6 +90,9 @@ func configurationReference(cfg config.Config) ([]byte, error) {
 		if tool.name == "rector" {
 			output.WriteString("  # When enabled, use upstream sets for the current Drupal version unless overridden.\n")
 		}
+		if tool.name == "deptrac" {
+			output.WriteString("  # Skips without project rules; init --agents all installs the architecture skill.\n")
+		}
 		fmt.Fprintf(&output, "  %s:\n", tool.name)
 		fields := configurationFields(tool.value)
 		for j := range fields {

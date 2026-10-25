@@ -112,7 +112,7 @@ tools:
     # twig_functions: [dump, kint]
 
   deptrac:
-    enabled: false
+    enabled: true
     required: true
     fail_on: error
     # timeout_seconds: 300

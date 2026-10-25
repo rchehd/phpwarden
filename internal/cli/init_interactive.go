@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rchehd/phpwarden/internal/agentskills"
 	"github.com/rchehd/phpwarden/internal/projectinit"
 )
 
@@ -59,7 +60,10 @@ func interactiveInit(args options, stdin io.Reader, stdout, stderr io.Writer) bo
 
 func chooseInitChecks(ctx context.Context, stdin io.Reader, output io.Writer, defaults []projectinit.CheckChoice) ([]string, error) {
 	choices := slices.Clone(defaults)
-	reader := bufio.NewReader(stdin)
+	reader, ok := stdin.(*bufio.Reader)
+	if !ok {
+		reader = bufio.NewReader(stdin)
+	}
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -99,6 +103,29 @@ func chooseInitChecks(ctx context.Context, stdin io.Reader, output io.Writer, de
 			for _, index := range indexes {
 				choices[index].Enabled = !choices[index].Enabled
 			}
+		}
+	}
+}
+
+func chooseInitAgents(ctx context.Context, reader *bufio.Reader, output io.Writer) ([]string, error) {
+	for {
+		if _, err := fmt.Fprint(output, "\nInstall the architecture skill for agents?\nall / codex,cursor,claude / none · Enter for none · q to cancel\n> "); err != nil {
+			return nil, err
+		}
+		answer, err := readInitAnswer(ctx, reader)
+		if err != nil {
+			return nil, err
+		}
+		answer = strings.ToLower(strings.TrimSpace(answer))
+		if answer == "q" || answer == "quit" {
+			return nil, context.Canceled
+		}
+		selected, err := agentskills.ParseClients(answer)
+		if err == nil {
+			return selected, nil
+		}
+		if _, err := fmt.Fprintln(output, err); err != nil {
+			return nil, err
 		}
 	}
 }

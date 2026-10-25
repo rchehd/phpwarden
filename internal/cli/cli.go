@@ -49,7 +49,8 @@ Options:
   --version            Show version
 
 Init options:
-  --no-interaction, -n Use profile defaults without asking which checks to enable
+  --no-interaction, -n Use profile defaults; install agent skills only with --agents
+  --agents CLIENTS     Install architecture skill: all, none, or codex,cursor,claude
   --pre-commit         Install a Git pre-commit hook for staged files; preserve existing hooks
   --composer-root DIR  Directory with composer.json inside the project (default: detected)
   --php-runtime X.Y    PHP the project runs on; selects the image (default: .ddev, Composer platform, composer.lock)
@@ -66,7 +67,8 @@ Scope options:
 
 Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
 Check uses local development Docker images (Linux amd64, PHP runtime 8.1–8.4, target from 8.1 up to the runtime).
-Init offers a check selection in terminals; CI, JSON and redirected input/output use profile defaults.
+Init offers agent skills and check selection in terminals; CI, JSON and redirected streams use profile defaults.
+Agent skills use .agents/skills; Claude gets a relative directory link in .claude/skills.
 Init writes .phpwarden.yaml at the Git root and never overwrites an existing file.
 Worker check requires PHP in its execution environment. Images must exist locally; automatic pulls are not implemented.
 `
@@ -92,6 +94,7 @@ type options struct {
 	phpRuntime    string
 	phpTarget     string
 	composerRoot  string
+	agents        string
 	commits       int
 	fix           bool
 }
@@ -188,6 +191,9 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	}
 	if args.preCommit && !isInit {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--pre-commit requires init"))
+	}
+	if args.agents != "" && !isInit {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("--agents requires init"))
 	}
 	if isInit && args.config != "" {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("init always writes %s in the project root; use --project", config.Filename))
@@ -360,7 +366,7 @@ func parse(arguments []string) (options, error) {
 			continue
 		}
 		name, value, inline := strings.Cut(argument, "=")
-		if !slices.Contains([]string{"--project", "--config", "--format", "--mode", "--base", "--only", "--color", "--php-runtime", "--php-target", "--commits", "--composer-root"}, name) {
+		if !slices.Contains([]string{"--project", "--config", "--format", "--mode", "--base", "--only", "--color", "--php-runtime", "--php-target", "--commits", "--composer-root", "--agents"}, name) {
 			return result, fmt.Errorf("unknown option %q", name)
 		}
 		if seen[name] {
@@ -378,6 +384,8 @@ func parse(arguments []string) (options, error) {
 			return result, fmt.Errorf("%s requires a nonempty value", name)
 		}
 		switch name {
+		case "--agents":
+			result.agents = value
 		case "--only":
 			result.only = value
 		case "--mode":
