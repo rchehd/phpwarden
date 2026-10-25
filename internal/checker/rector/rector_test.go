@@ -3,6 +3,7 @@ package rector
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -27,6 +28,10 @@ func settings(t *testing.T) config.Rector {
 	result := effective.Config.Tools.Rector
 	result.Enabled, result.Rules = true, []string{messageRule}
 	return result
+}
+
+func projectConfig(settings config.Rector, composerRoot, targetPHP string) config.Config {
+	return config.Config{Profile: "drupal", ComposerRoot: composerRoot, Framework: config.Framework{Version: "11.4.10"}, PHP: config.PHP{Target: config.Target{Min: targetPHP, Max: targetPHP}}, Tools: config.Tools{Rector: settings}}
 }
 
 func write(t *testing.T, root, name, text string) {
@@ -135,7 +140,7 @@ func TestRectorFailuresCannotBecomeSuccessfulSuggestions(t *testing.T) {
 				}
 				return result
 			})
-			result := run(context.Background(), root, ".", "8.4", selection(nil), settings(t), bundle, process)
+			result := run(context.Background(), root, selection(nil), projectConfig(settings(t), ".", "8.4"), bundle, process)
 			if name == "valid" {
 				if result.Check.Status != "passed" || len(result.Findings) != 1 || result.Findings[0].Severity != "warning" || *result.Findings[0].Line != 2 {
 					t.Fatalf("valid dry-run rejected: %+v", result)
@@ -151,7 +156,7 @@ func TestNativeDrupalRuleDryRunPreservesOriginal(t *testing.T) {
 	root := t.TempDir()
 	bundle, _ := filepath.Abs("../../../tools/rector")
 	write(t, root, "demo.module", original)
-	result := run(context.Background(), root, ".", "8.4", selection(nil), settings(t), bundle, runner.Exec{})
+	result := run(context.Background(), root, selection(nil), projectConfig(settings(t), ".", "8.4"), bundle, runner.Exec{})
 	if result.Check.Status != "passed" || len(result.Diagnostics) != 0 || len(result.Findings) != 1 || *result.Findings[0].Line != 2 {
 		t.Fatalf("native Drupal Rector: %+v", result)
 	}
@@ -161,13 +166,144 @@ func TestNativeDrupalRuleDryRunPreservesOriginal(t *testing.T) {
 	}
 }
 
+func TestNativeProfilePresetDryRunAndSkipRules(t *testing.T) {
+	root := t.TempDir()
+	bundle, _ := filepath.Abs("../../../tools/rector")
+	write(t, root, "demo.module", original)
+	write(t, root, "vendor/composer/installed.json", `{"packages":[]}`)
+	cfg := settings(t)
+	cfg.Rules = []string{}
+	for _, skip := range []bool{false, true} {
+		if skip {
+			cfg.SkipRules = []string{messageRule}
+		}
+		process := processFunc(func(ctx context.Context, cmd runner.Command) runner.Result {
+			result := runner.Exec{}.Run(ctx, cmd)
+			if result.ExitCode != 0 && result.ExitCode != 2 {
+				t.Logf("native Rector failure: %s %s", result.Stdout, result.Stderr)
+			}
+			return result
+		})
+		result := run(context.Background(), root, selection(nil), projectConfig(cfg, ".", "8.4"), bundle, process)
+		want := 1
+		if skip {
+			want = 0
+		}
+		if result.Check.Status != "passed" || len(result.Diagnostics) != 0 || len(result.Findings) != want {
+			t.Fatalf("native profile preset (skip=%v): %+v", skip, result)
+		}
+		data, err := os.ReadFile(filepath.Join(root, "demo.module"))
+		if err != nil || string(data) != original {
+			t.Fatal("automatic preset changed original source")
+		}
+	}
+}
+
+func TestProfilePresetFallbackAndOverrides(t *testing.T) {
+	for _, name := range []string{"automatic", "skip rules", "explicit config", "root config", "composer config", "discovery off", "PHP target", "Drupal target", "sets", "rules", "unknown version", "unknown profile", "missing config", "missing dependencies", "unsafe dependencies"} {
+		t.Run(name, func(t *testing.T) {
+			root, bundle := t.TempDir(), t.TempDir()
+			write(t, root, "demo.module", original)
+			cfg := settings(t)
+			cfg.Rules = []string{}
+			project := projectConfig(cfg, "platform", "8.4")
+			write(t, root, "platform/vendor/composer/installed.json", `{"packages":[]}`)
+			switch name {
+			case "skip rules":
+				project.Tools.Rector.SkipRules = []string{messageRule}
+			case "explicit config":
+				project.Framework.Version = "auto"
+				project.Tools.Rector.Config = "custom.php"
+				write(t, root, "custom.php", "<?php")
+				write(t, root, "rector.php", "<?php")
+			case "root config":
+				write(t, root, "rector.php", "<?php")
+				write(t, root, "platform/rector.php", "<?php")
+			case "composer config":
+				write(t, root, "platform/rector.dist.php", "<?php")
+			case "discovery off":
+				write(t, root, "rector.php", "<?php")
+				project.Tools.Rector.DiscoverConfig = false
+			case "PHP target":
+				project.Tools.Rector.TargetPHP = "8.5"
+			case "Drupal target":
+				project.Tools.Rector.TargetDrupal = "12.0"
+			case "sets":
+				project.Tools.Rector.Sets = []string{"drupal-11.0"}
+			case "rules":
+				project.Tools.Rector.Rules = []string{messageRule}
+			case "unknown version":
+				project.Framework.Version = "auto"
+			case "unknown profile":
+				project.Profile = "laravel"
+			case "missing config":
+				project.Tools.Rector.Config = "missing.php"
+			case "missing dependencies", "unsafe dependencies":
+				metadata := filepath.Join(root, "platform/vendor/composer/installed.json")
+				if err := os.Remove(metadata); err != nil {
+					t.Fatal(err)
+				}
+				if name == "unsafe dependencies" {
+					write(t, root, "metadata.json", `{"packages":[]}`)
+					if err := os.Symlink(filepath.Join(root, "metadata.json"), metadata); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			prepared, err := prepare(root, bundle, selection(nil), project)
+			if name == "missing dependencies" || name == "unsafe dependencies" {
+				if !errors.Is(err, errDependencies) {
+					t.Fatalf("dependency error lost: %v", err)
+				}
+				return
+			}
+			if name == "unknown version" || name == "unknown profile" || name == "missing config" {
+				if err == nil {
+					t.Fatal("invalid preset/config silently accepted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch name {
+			case "automatic", "skip rules", "discovery off":
+				if prepared.Drupal != "11.4.10" || prepared.PHP != 80400 || prepared.Config != "" || !slices.Contains(prepared.Sets, drupalSet(bundle, "11.4")) || slices.Contains(prepared.Sets, drupalSet(bundle, "12.0")) {
+					t.Fatalf("incorrect automatic preset: %+v", prepared)
+				}
+			case "explicit config", "root config", "composer config":
+				want := map[string]string{"explicit config": "custom.php", "root config": "rector.php", "composer config": "platform/rector.dist.php"}[name]
+				if prepared.Config != filepath.Join(root, want) || len(prepared.Sets) != 0 || prepared.Drupal != "" {
+					t.Fatalf("project config was overridden: %+v", prepared)
+				}
+			case "PHP target":
+				if prepared.PHP != 80500 || len(prepared.Sets) != 1 || prepared.Drupal != "" {
+					t.Fatalf("PHP target was overridden: %+v", prepared)
+				}
+			case "Drupal target":
+				if prepared.Drupal != "12.0.0" || !slices.Contains(prepared.Sets, drupalSet(bundle, "12.0")) {
+					t.Fatalf("Drupal target was overridden: %+v", prepared)
+				}
+			case "sets":
+				if !slices.Equal(prepared.Sets, []string{drupalSet(bundle, "11.0")}) || prepared.Drupal != "" {
+					t.Fatalf("explicit sets were overridden: %+v", prepared)
+				}
+			case "rules":
+				if len(prepared.Sets) != 0 || !slices.Equal(prepared.Rules, []string{messageRule}) || prepared.Drupal != "" {
+					t.Fatalf("explicit rules were overridden: %+v", prepared)
+				}
+			}
+		})
+	}
+}
+
 func TestPrepareDiscoveryTargetsAndUnsafeInputs(t *testing.T) {
 	root, bundle := t.TempDir(), t.TempDir()
 	write(t, root, "demo.module", original)
 	write(t, root, "nested/rector.dist.php", "<?php")
 	cfg := settings(t)
 	cfg.TargetDrupal, cfg.TargetPHP = "11.1", "8.5"
-	prepared, err := prepare(root, "nested", "8.1", bundle, selection(nil), cfg)
+	prepared, err := prepare(root, bundle, selection(nil), projectConfig(cfg, "nested", "8.1"))
 	if err != nil || !strings.HasSuffix(prepared.Config, "nested/rector.dist.php") || prepared.PHP != 80500 || prepared.Drupal != "11.1.0" || !slices.Contains(prepared.Sets, drupalSet(bundle, "11.1")) || slices.Contains(prepared.Sets, drupalSet(bundle, "11.2")) {
 		t.Fatalf("upgrade targets/discovery: %+v %v", prepared, err)
 	}
@@ -179,11 +315,11 @@ func TestPrepareDiscoveryTargetsAndUnsafeInputs(t *testing.T) {
 	if err := os.Symlink(filepath.Join(root, "nested/rector.dist.php"), filepath.Join(root, "rector.php")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := prepare(root, "nested", "8.4", bundle, selection(nil), cfg); err == nil {
+	if _, err := prepare(root, bundle, selection(nil), projectConfig(cfg, "nested", "8.4")); err == nil {
 		t.Fatal("symlink config accepted")
 	}
 	cfg.DiscoverConfig, cfg.DryRun = false, false
-	if _, err := prepare(root, ".", "8.4", bundle, selection(nil), cfg); err == nil {
+	if _, err := prepare(root, bundle, selection(nil), projectConfig(cfg, ".", "8.4")); err == nil {
 		t.Fatal("apply mode accepted")
 	}
 }
@@ -195,18 +331,18 @@ func TestDisabledEmptyAndCancelledRectorNeverExecutes(t *testing.T) {
 	})
 	cfg := settings(t)
 	cfg.Enabled = false
-	result := run(context.Background(), t.TempDir(), ".", "8.4", selection(nil), cfg, "", unused)
+	result := run(context.Background(), t.TempDir(), selection(nil), projectConfig(cfg, ".", "8.4"), "", unused)
 	if result.Check.Status != "skipped" || *result.Check.Reason != "disabled" {
 		t.Fatalf("disabled Rector: %+v", result)
 	}
 	cfg.Enabled = true
-	result = run(context.Background(), t.TempDir(), ".", "8.4", scope.Selection{}, cfg, "", unused)
+	result = run(context.Background(), t.TempDir(), scope.Selection{}, projectConfig(cfg, ".", "8.4"), "", unused)
 	if result.Check.Status != "skipped" || *result.Check.Reason != "no_files" {
 		t.Fatalf("empty Rector: %+v", result)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	result = run(ctx, t.TempDir(), ".", "8.4", selection(nil), cfg, "", unused)
+	result = run(ctx, t.TempDir(), selection(nil), projectConfig(cfg, ".", "8.4"), "", unused)
 	if result.Check.Status != "error" || *result.Check.Reason != "checker_timeout" {
 		t.Fatalf("cancelled Rector: %+v", result)
 	}
@@ -227,7 +363,7 @@ func TestMonorepoRunsFromComposerRoot(t *testing.T) {
 		}
 		return runner.Result{Stdout: metadata()}
 	})
-	result := run(context.Background(), root, "platform", "8.4", selection(nil), settings(t), bundle, process)
+	result := run(context.Background(), root, selection(nil), projectConfig(settings(t), "platform", "8.4"), bundle, process)
 	if result.Check.Status != "passed" || len(result.Findings) != 1 {
 		t.Fatal(result)
 	}

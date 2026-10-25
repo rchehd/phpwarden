@@ -1375,11 +1375,12 @@
         },
         "rector": {
           "type": "object",
+          "description": "Advisory dry-run enabled by default in the Drupal profile. Uses upstream profile sets for framework.version unless a project config, target, sets or rules is supplied.",
           "additionalProperties": false,
           "properties": {
             "enabled": {
               "type": "boolean",
-              "default": false
+              "default": true
             },
             "required": {
               "type": "boolean",

@@ -50,6 +50,8 @@ func TestConfigCommands(t *testing.T) {
 
 func TestUsageErrorsNeverReturnSuccess(t *testing.T) {
 	cases := [][]string{
+		{"check", "--no-interaction"}, {"hook", "pre-commit", "-n"},
+		{"init", "--no-interaction", "-n"}, {"--version", "--no-interaction"},
 		{"check", "--pre-commit"}, {"scope", "--pre-commit"}, {"config", "show", "--pre-commit"},
 		{"init", "--pre-commit", "--pre-commit"}, {"--version", "--pre-commit"},
 		{"scope", "--all"}, {"config", "show", "--all"}, {"check", "--all", "--all"}, {"--version", "--all"},

@@ -47,6 +47,7 @@ type Options struct {
 	Target       string
 	PreCommit    bool
 	Executable   string
+	SelectChecks func([]CheckChoice) ([]string, error)
 }
 
 type Choice struct {
@@ -120,6 +121,28 @@ func configure(ctx context.Context, root string, options Options) (Result, error
 	if err != nil {
 		return result, err
 	}
+	if options.SelectChecks != nil {
+		effective, err := config.Parse(data)
+		if err != nil {
+			return result, err
+		}
+		choices := checkChoices(effective.Config.Tools)
+		selected, err := options.SelectChecks(choices)
+		if err != nil {
+			return result, err
+		}
+		enabled, err := checkSelection(choices, selected)
+		if err != nil {
+			return result, err
+		}
+		data, selection, err = generate(location, composerRoot, runtime, target, enabled)
+		if err != nil {
+			return result, err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
 	if err := write(location.Path, data); errors.Is(err, fs.ErrExist) {
 		return result, validateExisting(root)
 	} else if err != nil {
@@ -184,7 +207,7 @@ func choose(location config.Location, composerRoot string, facts profile.Facts, 
 		return nil, Choice{}, Choice{}, toolset.Selection{}, err
 	}
 	if runtime != nil {
-		data, selection, err := generate(location, composerRoot, *runtime, target(*runtime))
+		data, selection, err := generate(location, composerRoot, *runtime, target(*runtime), nil)
 		if err == nil {
 			return data, *runtime, target(*runtime), selection, nil
 		}
@@ -192,7 +215,7 @@ func choose(location config.Location, composerRoot string, facts profile.Facts, 
 		var fits []string
 		for _, version := range runtimes {
 			candidate := Choice{version, "--php-runtime"}
-			if _, _, err := generate(location, composerRoot, candidate, target(candidate)); err == nil {
+			if _, _, err := generate(location, composerRoot, candidate, target(candidate), nil); err == nil {
 				fits = append(fits, version)
 			}
 		}
@@ -205,7 +228,7 @@ func choose(location config.Location, composerRoot string, facts profile.Facts, 
 	var failures []string
 	for _, version := range runtimes {
 		candidate := Choice{version, "composer.lock, the lowest supported PHP all packages allow"}
-		data, selection, err := generate(location, composerRoot, candidate, target(candidate))
+		data, selection, err := generate(location, composerRoot, candidate, target(candidate), nil)
 		if err == nil {
 			return data, candidate, target(candidate), selection, nil
 		}
@@ -216,7 +239,7 @@ func choose(location config.Location, composerRoot string, facts profile.Facts, 
 }
 
 // generate renders the configuration and checks it the same way check does, without Docker.
-func generate(location config.Location, composerRoot string, runtime, target Choice) ([]byte, toolset.Selection, error) {
+func generate(location config.Location, composerRoot string, runtime, target Choice, enabled map[string]bool) ([]byte, toolset.Selection, error) {
 	root := ""
 	if composerRoot != "." {
 		root = fmt.Sprintf("composer_root: %q  # directory with composer.json\n", composerRoot)
@@ -226,6 +249,7 @@ func generate(location config.Location, composerRoot string, runtime, target Cho
 	if err != nil {
 		return nil, toolset.Selection{}, err
 	}
+	applyCheckSelection(&effective.Config.Tools, enabled)
 	effective, err = discovery.Apply(location, effective)
 	if err != nil {
 		return nil, toolset.Selection{}, err

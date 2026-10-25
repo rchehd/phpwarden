@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -9,9 +10,19 @@ import (
 	"github.com/rchehd/phpwarden/internal/projectinit"
 )
 
-func initProject(ctx context.Context, args options, cwd string, stdout, stderr io.Writer) int {
-	result, err := projectinit.Run(ctx, projectinit.Options{CWD: cwd, Project: args.project, ComposerRoot: args.composerRoot, Runtime: args.phpRuntime, Target: args.phpTarget, PreCommit: args.preCommit})
+func initProject(ctx context.Context, args options, cwd string, stdin io.Reader, stdout, stderr io.Writer) int {
+	settings := projectinit.Options{CWD: cwd, Project: args.project, ComposerRoot: args.composerRoot, Runtime: args.phpRuntime, Target: args.phpTarget, PreCommit: args.preCommit}
+	if interactiveInit(args, stdin, stdout, stderr) {
+		settings.SelectChecks = func(choices []projectinit.CheckChoice) ([]string, error) {
+			return chooseInitChecks(ctx, stdin, stderr, choices)
+		}
+	}
+	result, err := projectinit.Run(ctx, settings)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			fmt.Fprintln(stderr, "PHPWarden init cancelled.")
+			return 130
+		}
 		return fail(stdout, stderr, args, "init", err)
 	}
 	if args.format == "json" {

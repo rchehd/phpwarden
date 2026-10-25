@@ -509,7 +509,7 @@ func TestRectorUpgradeSettingsAreSeparateAndDryRunOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	defaults := effective.Config.Tools.Rector
-	if defaults.Enabled || !defaults.DryRun || defaults.FailOn != "never" || !defaults.Required || defaults.TargetPHP != "" || defaults.TargetDrupal != "" || effective.Provenance["tools.rector.dry_run"] != "core_default" {
+	if !defaults.Enabled || !defaults.DryRun || defaults.FailOn != "never" || !defaults.Required || defaults.TargetPHP != "" || defaults.TargetDrupal != "" || effective.Provenance["tools.rector.dry_run"] != "core_default" {
 		t.Fatalf("Rector defaults: %+v", defaults)
 	}
 	effective, err = Parse([]byte(minimal + "tools: {rector: {enabled: true, target_php: '8.5', target_drupal: '11.1', sets: [drupal-11.0], skip_rules: ['Rector\\Renaming\\Rector\\FuncCall\\RenameFunctionRector']}}\n"))

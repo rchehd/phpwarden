@@ -36,7 +36,11 @@ from tests.support.phpstan import (
     check_phpstan_project_config,
     check_phpstan_settings,
 )
-from tests.support.rector import check_rector, check_rector_project_config
+from tests.support.rector import (
+    check_rector,
+    check_rector_profile_preset,
+    check_rector_project_config,
+)
 from tests.support.scenarios import materialize
 from tests.support.semgrep import check_semgrep, check_semgrep_project_rules
 from tests.support.syntax import check_parallel_syntax, check_syntax_fixtures, check_syntax_settings
@@ -99,6 +103,7 @@ class LauncherCLITest(unittest.TestCase):
                 "semgrep": {"enabled": False},
                 "eventhorizon": {"enabled": False},
                 "dead-code": {"enabled": False},
+                "rector": {"enabled": False},
             },
         }
         (root / ".phpwarden.yaml").write_text(json.dumps(config))
@@ -472,6 +477,11 @@ class LauncherCLITest(unittest.TestCase):
 
     def test_rector_dry_run(self):
         check_rector(
+            self, lambda scenario: self.configure(scenario.root, scenario.base), self.run_check
+        )
+
+    def test_rector_profile_preset(self):
+        check_rector_profile_preset(
             self, lambda scenario: self.configure(scenario.root, scenario.base), self.run_check
         )
 

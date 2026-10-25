@@ -279,8 +279,9 @@ tools:
 
     # strict_rules: {enabled: false, all: true, rules: {}}
 
+  # When enabled, use upstream sets for the current Drupal version unless overridden.
   rector:
-    enabled: false
+    enabled: true
     required: true
     fail_on: never
     # timeout_seconds: 600

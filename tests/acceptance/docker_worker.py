@@ -39,7 +39,11 @@ from tests.support.phpstan import (
     check_phpstan_project_config,
     check_phpstan_settings,
 )
-from tests.support.rector import check_rector, check_rector_project_config
+from tests.support.rector import (
+    check_rector,
+    check_rector_profile_preset,
+    check_rector_project_config,
+)
 from tests.support.scenarios import materialize
 from tests.support.semgrep import check_semgrep, check_semgrep_project_rules
 from tests.support.syntax import check_parallel_syntax, check_syntax_fixtures
@@ -99,6 +103,7 @@ class DockerWorkerTest(unittest.TestCase):
                 "semgrep": {"enabled": False},
                 "eventhorizon": {"enabled": False},
                 "dead-code": {"enabled": False},
+                "rector": {"enabled": False},
             },
         }
         (scenario.root / ".phpwarden.yaml").write_text(json.dumps(config))
@@ -310,6 +315,9 @@ class DockerWorkerTest(unittest.TestCase):
     def test_rector_dry_run(self):
         check_rector(self, self.configure, self.run_check)
 
+    def test_rector_profile_preset(self):
+        check_rector_profile_preset(self, self.configure, self.run_check)
+
     def test_rector_project_config(self):
         check_rector_project_config(self, self.configure, self.run_check)
 
@@ -429,6 +437,7 @@ class DockerWorkerTest(unittest.TestCase):
                     "semgrep": {"enabled": False},
                     "eventhorizon": {"enabled": False},
                     "dead-code": {"enabled": False},
+                    "rector": {"enabled": False},
                 },
             }
             (project / ".phpwarden.yaml").write_text(json.dumps(config))

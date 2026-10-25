@@ -104,6 +104,17 @@ php:
 
 If the versions cannot be detected or conflict with `composer.lock`, init stops with exit code 2 and says what to pass, for example `phpwarden init --php-runtime 8.1`. Use `--php-runtime` and `--php-target` to set them yourself. Init never overwrites an existing `.phpwarden.yaml`.
 
+In a terminal, `init` shows every check with its profile default already selected. Toggle checks by number or ID (for example `2,5` or `rector`), then press Enter to save. `all`, `none`, and `defaults` change the selection; `q`, Ctrl+C, or closing input cancels without writing a config. Existing configs are validated and preserved without prompting.
+
+For unattended setup, accept the profile defaults with:
+
+```bash
+phpwarden init --no-interaction
+phpwarden init --no-interaction --pre-commit
+```
+
+`-n` is the short form. CI (`CI` set), `--format json`, and redirected input/output also use defaults without prompting. The flag does not enable the three checks that need extra project-specific setup. Every bundled analyzer is already present in the worker image; init records which checks to run.
+
 Set a checker's `enabled` to `true` or `false` to turn it on or off. Uncomment optional settings to customize them; commented paths are examples and must match your project. `scope.include` accepts paths, and `scope.exclude` accepts globs. Per-checker `include` and `exclude` narrow the global scope. For example:
 
 ```yaml
@@ -231,15 +242,14 @@ Use `phpwarden check --no-cache` to force live analysis. `--fix` always prepares
 
 ## Checkers
 
-All checkers except `composer-require-checker`, `composer-unused`, `deptrac`, and `rector` are enabled by default in the Drupal profile. `composer-audit` is the only one that uses the network, and it is optional by default.
+All checkers except `composer-require-checker`, `composer-unused`, and `deptrac` are enabled by default in the Drupal profile. `composer-audit` is the only one that uses the network, and it is optional by default.
 
-These four checks require an explicit choice for the project:
+These three checks require an explicit choice for the project:
 
 | Checker | Why it starts disabled |
 |---|---|
 | `composer-require-checker`, `composer-unused` | Inspect a whole standalone Composer package in full mode; Drupal installer layouts are unsupported |
 | `deptrac` | Needs the project's architecture layers and dependency rules |
-| `rector` | Upgrade suggestions need chosen targets or rules |
 
 Enable one with `tools.<id>.enabled: true`, or select it for a single run using `--only`. `disabled` means configuration turned a checker off; `no files` means it has no applicable files in the selected scope; `no config` means a required native rules file was not found. Enabling a checker does not widen the selected scope or bypass its prerequisites.
 
@@ -264,7 +274,7 @@ Enable one with `tools.<id>.enabled: true`, or select it for a single run using 
 | `composer-require-checker` | Undeclared symbols in standalone Composer packages; opt-in, full only |
 | `composer-unused` | Dependency removal candidates; opt-in, advisory, full only |
 | `deptrac` | Project-defined architecture layers and dependency rules; opt-in, skips without config |
-| `rector` | Drupal/PHP upgrade suggestions from an isolated Drupal Rector bundle; opt-in dry-run |
+| `rector` | Drupal/PHP modernization suggestions from an isolated Drupal Rector bundle; enabled, dry-run |
 | `semgrep` | Local PHP security search/taint rules using Semgrep CE; enabled in the Drupal profile |
 | `twig-cs-fixer` | Twig template style with Twig CS Fixer |
 
@@ -357,11 +367,15 @@ Forbidden dependencies are `deptrac.violation` errors. `report_uncovered` expose
 
 ### Drupal Rector
 
-`rector` is an opt-in upgrade check. It uses isolated, locked bundles of Drupal Rector 1.1.3, Rector 2.6.1, and PHPStan 2.3.1. Drupal Rector 1.1.3 explicitly conflicts with Rector 2.6.2 and newer; the lock preserves that constraint. Enable `tools.rector.enabled: true` or use `phpwarden check --only rector` with an upgrade configuration.
+`rector` is enabled by default in the Drupal profile and only suggests changes. It uses isolated, locked bundles of Drupal Rector 1.1.3, Rector 2.6.1, and PHPStan 2.3.1. Drupal Rector 1.1.3 explicitly conflicts with Rector 2.6.2 and newer; the lock preserves that constraint. Disable it with `tools.rector.enabled: false`, or run it on its own with `phpwarden check --only rector`. Existing project files with explicit `enabled: false` keep that choice.
 
-Supply a project `rector.php` / `rector.dist.php`, `config`, `target_php`, `target_drupal`, `sets`, or `rules`. Discovery checks the project root before the Composer root. Upgrade targets are independent of the current project's `php.runtime`, `php.target`, and `framework.version`; they never change image selection or the normal compatibility checks. Without an explicit PHP upgrade target, Rector uses the current PHP target maximum as its feature ceiling and adds no PHP upgrade sets.
+With no project config or explicit targets, sets, or rules, the Drupal profile selects the bundled upstream deprecation sets through the current Drupal minor from resolved `framework.version`. For example, Drupal 11.4.10 uses sets through 11.4 and retains 11.4.10 for upstream version guards. Automatic presets support Drupal 10.0–10.6, 11.0–11.4, and 12.0; unknown or newer versions require a project config or an explicit selection. Presets suggest modernization for the current version without selecting a future Drupal upgrade.
 
-With applicable PHP files, setting only `enabled: true` without any of those rules or targets produces `error: config_invalid`; Rector cannot choose the intended upgrade. With its default `required: true`, this makes the run incomplete with exit code 3. With no applicable files, it reports `skipped: no_files`.
+An explicit `config` takes precedence over discovered `rector.php` / `rector.dist.php`; discovery checks the project root before the Composer root. Any project config, `target_php`, `target_drupal`, `sets`, or `rules` replaces the automatic preset. Explicit selections can be combined with a project config. `skip_rules` also works with the automatic preset. Upgrade targets are independent of the current project's `php.runtime`, `php.target`, and `framework.version`; they never change image selection or the normal compatibility checks. Without an explicit PHP upgrade target, Rector uses the current PHP target maximum as its feature ceiling and adds no PHP upgrade sets.
+
+The automatic Drupal preset needs Composer-installed package metadata in the selected `composer_root` (including a custom `vendor-dir`). Restore project dependencies with `composer install` before checking. Missing metadata reports `unavailable: dependencies_missing`; PHPWarden does not install dependencies.
+
+With applicable PHP files, an unresolved or unsupported automatic preset produces `error: config_invalid`. With its default `required: true`, this makes the run incomplete with exit code 3. With no applicable files, it reports `skipped: no_files`.
 
 `target_php` enables cumulative PHP sets through the chosen version (8.1–8.5). `target_drupal` selects the pinned minor deprecation sets through the chosen target, including older Drupal sets. Supported targets are 10.0–10.6, 11.0–11.4, and 12.0. This sets Drupal Rector's assumed destination and minimum supported version; suggested code may drop compatibility with older Drupal. The tool's rule coverage is incomplete and a successful check does not prove upgrade readiness. Future minor sets and the upstream opt-in breaking sets are not enabled automatically.
 

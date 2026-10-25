@@ -429,7 +429,7 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 			continue
 		}
 		if finding.Checker == "rector" {
-			selected := rector.Select(request.Selection, request.Config.Tools.Rector)
+			selected := rector.Select(request.Selection, request.Config.Tools.Rector, request.Config.Profile)
 			if finding.Kind != "code" || finding.Rule != "rector.upgrade" || finding.Severity != "warning" || finding.Path == nil || finding.Line == nil || !selected.Contains(*finding.Path, *finding.Line) {
 				return result, fmt.Errorf("Rector suggestion is outside the requested scope")
 			}

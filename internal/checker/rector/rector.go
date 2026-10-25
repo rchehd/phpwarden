@@ -5,6 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -33,15 +34,16 @@ var helper []byte
 //go:embed config.php
 var configuration []byte
 
-func Run(ctx context.Context, root, composerRoot, targetPHP string, selected scope.Selection, cfg config.Rector, process runner.Process) checker.Outcome {
+func Run(ctx context.Context, root string, selected scope.Selection, project config.Config, process runner.Process) checker.Outcome {
 	executable, _ := os.Executable()
 	bundle := filepath.Clean(filepath.Join(filepath.Dir(executable), "..", "lib", "phpwarden", "rector"))
-	return run(ctx, root, composerRoot, targetPHP, selected, cfg, bundle, process)
+	return run(ctx, root, selected, project, bundle, process)
 }
 
-func run(ctx context.Context, root, composerRoot, targetPHP string, selected scope.Selection, cfg config.Rector, bundle string, process runner.Process) checker.Outcome {
+func run(ctx context.Context, root string, selected scope.Selection, project config.Config, bundle string, process runner.Process) checker.Outcome {
+	cfg := project.Tools.Rector
 	result := checker.Outcome{Check: report.Check{ID: "rector", Status: "passed", Required: cfg.Required, FailOn: cfg.FailOn}, Findings: []report.Finding{}, Diagnostics: []report.Diagnostic{}}
-	selected = Select(selected, cfg)
+	selected = Select(selected, cfg, project.Profile)
 	if !cfg.Enabled || len(selected.Files) == 0 {
 		reason := "no_files"
 		if !cfg.Enabled {
@@ -60,8 +62,11 @@ func run(ctx context.Context, root, composerRoot, targetPHP string, selected sco
 	if ctx.Err() != nil {
 		return fail("error", "checker_timeout", "Rector execution context expired")
 	}
-	prepared, err := prepare(root, composerRoot, targetPHP, bundle, selected, cfg)
+	prepared, err := prepare(root, bundle, selected, project)
 	if err != nil {
+		if errors.Is(err, errDependencies) {
+			return fail("unavailable", "dependencies_missing", err.Error())
+		}
 		return fail("error", "config_invalid", err.Error())
 	}
 	binary := filepath.Join(bundle, "vendor/rector/rector/bin/rector.php")
@@ -89,7 +94,7 @@ func run(ctx context.Context, root, composerRoot, targetPHP string, selected sco
 	}
 	phpArgs := []string{"-d", "auto_prepend_file=", "-d", "auto_append_file=", "-d", "display_errors=stderr", "-d", "log_errors=0", "-d", fmt.Sprintf("memory_limit=%dM", cfg.MemoryLimitMB)}
 	runPHP := func(arguments ...string) runner.Result {
-		return process.Run(ctx, runner.Command{Name: "php", Args: append(slices.Clone(phpArgs), arguments...), Directory: config.ComposerDir(root, config.Config{ComposerRoot: composerRoot}), Env: environment})
+		return process.Run(ctx, runner.Command{Name: "php", Args: append(slices.Clone(phpArgs), arguments...), Directory: config.ComposerDir(root, project), Env: environment})
 	}
 	metadata := runPHP(filepath.Join(temporary, "helper.php"), bundle)
 	if metadata.Unavailable {
@@ -110,13 +115,13 @@ func run(ctx context.Context, root, composerRoot, targetPHP string, selected sco
 	}
 	result.Runtime, result.PHPVersion = &versions.Runtime, &versions.PHP
 	contents := map[string][]byte{}
-	project, err := os.OpenRoot(root)
+	inputs, err := os.OpenRoot(root)
 	if err != nil {
 		return fail("error", "input_read", "Cannot read Rector inputs")
 	}
-	defer project.Close()
+	defer inputs.Close()
 	for _, name := range selected.Files {
-		data, _, err := edit.Read(project, name)
+		data, _, err := edit.Read(inputs, name)
 		if err != nil || len(data) > 16<<20 {
 			return fail("error", "input_read", "Rector inputs must be readable regular files at most 16 MiB each")
 		}
@@ -137,7 +142,7 @@ func run(ctx context.Context, root, composerRoot, targetPHP string, selected sco
 		return fail("error", "process_failed", "Rector could not complete its dry-run; no partial suggestions accepted")
 	}
 	for name, before := range contents {
-		after, _, err := edit.Read(project, name)
+		after, _, err := edit.Read(inputs, name)
 		if err != nil || !bytes.Equal(before, after) {
 			return fail("error", "input_changed", "A Rector input changed during its dry-run")
 		}

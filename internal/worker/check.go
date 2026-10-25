@@ -155,9 +155,9 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
 			outcome = deptrac.Run(ctx, location.Root, cfg.ComposerRoot, selection, settings, process)
 		} else if id == "rector" {
-			settings := cfg.Tools.Rector
-			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
-			outcome = rector.Run(ctx, location.Root, cfg.ComposerRoot, cfg.PHP.Target.Max, selection, settings, process)
+			current := cfg
+			current.Tools.Rector.Enabled = checker.Enabled(id, cfg.Tools.Rector.Enabled, only)
+			outcome = rector.Run(ctx, location.Root, selection, current, process)
 		} else if id == "semgrep" {
 			settings := cfg.Tools.Semgrep
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)

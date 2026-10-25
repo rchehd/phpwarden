@@ -49,6 +49,7 @@ Options:
   --version            Show version
 
 Init options:
+  --no-interaction, -n Use profile defaults without asking which checks to enable
   --pre-commit         Install a Git pre-commit hook for staged files; preserve existing hooks
   --composer-root DIR  Directory with composer.json inside the project (default: detected)
   --php-runtime X.Y    PHP the project runs on; selects the image (default: .ddev, Composer platform, composer.lock)
@@ -65,6 +66,7 @@ Scope options:
 
 Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
 Check uses local development Docker images (Linux amd64, PHP runtime 8.1–8.4, target from 8.1 up to the runtime).
+Init offers a check selection in terminals; CI, JSON and redirected input/output use profile defaults.
 Init writes .phpwarden.yaml at the Git root and never overwrites an existing file.
 Worker check requires PHP in its execution environment. Images must exist locally; automatic pulls are not implemented.
 `
@@ -72,25 +74,26 @@ Worker check requires PHP in its execution environment. Images must exist locall
 var minorVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
 
 type options struct {
-	noCache      bool
-	all          bool
-	preCommit    bool
-	project      string
-	config       string
-	format       string
-	color        string
-	help         bool
-	version      bool
-	command      []string
-	mode         string
-	base         string
-	wholeFiles   bool
-	only         string
-	phpRuntime   string
-	phpTarget    string
-	composerRoot string
-	commits      int
-	fix          bool
+	noInteraction bool
+	noCache       bool
+	all           bool
+	preCommit     bool
+	project       string
+	config        string
+	format        string
+	color         string
+	help          bool
+	version       bool
+	command       []string
+	mode          string
+	base          string
+	wholeFiles    bool
+	only          string
+	phpRuntime    string
+	phpTarget     string
+	composerRoot  string
+	commits       int
+	fix           bool
 }
 
 type response struct {
@@ -131,6 +134,9 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	if args.version {
 		fmt.Fprintln(stdout, "phpwarden dev")
 		return 0
+	}
+	if args.noInteraction && !(len(args.command) == 1 && args.command[0] == "init") {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("--no-interaction requires init"))
 	}
 	if len(args.command) == 2 && args.command[0] == "hook" && args.command[1] == "pre-commit" {
 		return preCommit(ctx, args, cwd, stdout, stderr)
@@ -203,7 +209,7 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--no-cache requires check or fix"))
 	}
 	if isInit {
-		return initProject(ctx, args, cwd, stdout, stderr)
+		return initProject(ctx, args, cwd, stdin, stdout, stderr)
 	}
 	var display *terminalProgress
 	if isCheck || isWorker {
@@ -335,6 +341,13 @@ func parse(arguments []string) (options, error) {
 			result.all = true
 			continue
 		}
+		if argument == "--no-interaction" || argument == "-n" {
+			if result.noInteraction {
+				return result, fmt.Errorf("duplicate option --no-interaction")
+			}
+			result.noInteraction = true
+			continue
+		}
 		if argument == "--pre-commit" {
 			if result.preCommit {
 				return result, fmt.Errorf("duplicate option --pre-commit")
@@ -407,7 +420,7 @@ func parse(arguments []string) (options, error) {
 			result.color = value
 		}
 	}
-	if result.version && (len(result.command) != 0 || len(seen) != 0 || result.help || result.wholeFiles || result.fix || result.noCache || result.all || result.preCommit) {
+	if result.version && (len(result.command) != 0 || len(seen) != 0 || result.help || result.wholeFiles || result.fix || result.noCache || result.all || result.preCommit || result.noInteraction) {
 		return result, fmt.Errorf("--version cannot be combined with a command or options")
 	}
 	return result, nil

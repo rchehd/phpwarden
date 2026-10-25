@@ -458,7 +458,7 @@ func Parse(data []byte) (Effective, error) {
 				ComposerRequireChecker: ComposerRequireChecker{PackageTool: PackageTool{Enabled: false, Required: true, FailOn: "never", TimeoutSeconds: 300, DiscoverConfig: true, ExtraInputs: []string{}, MemoryLimitMB: 1024}, ScanFiles: []string{}, AllowedSymbols: []string{}},
 				ComposerUnused:         ComposerUnused{PackageTool: PackageTool{Enabled: false, Required: true, FailOn: "never", TimeoutSeconds: 300, DiscoverConfig: true, ExtraInputs: []string{}, MemoryLimitMB: 1024}, ExcludePackages: []string{}, ExcludeDirectories: []string{}},
 				Deptrac:                Deptrac{Enabled: false, Required: true, FailOn: "error", TimeoutSeconds: 300, Exclude: []string{}, DiscoverConfig: true, ExtraInputs: []string{}, MemoryLimitMB: 1024},
-				Rector:                 Rector{Enabled: false, Required: true, FailOn: "never", TimeoutSeconds: 600, Exclude: []string{}, DiscoverConfig: true, Sets: []string{}, Rules: []string{}, SkipRules: []string{}, ExtraInputs: []string{}, ExtraExtensions: []string{}, MemoryLimitMB: 1024, DryRun: true},
+				Rector:                 Rector{Enabled: defaults.RectorEnabled, Required: true, FailOn: "never", TimeoutSeconds: 600, Exclude: []string{}, DiscoverConfig: true, Sets: []string{}, Rules: []string{}, SkipRules: []string{}, ExtraInputs: []string{}, ExtraExtensions: []string{}, MemoryLimitMB: 1024, DryRun: true},
 				Semgrep:                Semgrep{Enabled: defaults.SemgrepEnabled, Required: true, FailOn: "error", TimeoutSeconds: 300, Exclude: []string{}, DiscoverConfig: true, UseDefaults: true, Rulesets: []string{}, Rules: []string{}, ExcludeRules: []string{}, Severities: []string{"ERROR", "WARNING", "INFO"}, ExtraInputs: []string{}, ExtraExtensions: []string{}, RuleTimeoutSeconds: 5, MemoryLimitMB: 1024},
 				DeadCode:               DeadCode{Enabled: defaults.DeadCodeEnabled, Required: true, FailOn: "error", TimeoutSeconds: 600, Exclude: []string{}, MemoryLimitMB: 1024},
 				ESLint:                 NodeLint{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{"**/*.min.js"}, DiscoverConfig: true, ExtraExtensions: []string{}, ExtraInputs: []string{}},
@@ -536,6 +536,7 @@ func Parse(data []byte) (Effective, error) {
 	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "target_php", "target_drupal", "sets", "rules", "skip_rules", "extra_inputs", "extra_extensions", "memory_limit_mb", "dry_run"} {
 		result.Provenance["tools.rector."+field] = "core_default"
 	}
+	result.Provenance["tools.rector.enabled"] = "profile_default"
 	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "config", "discover_config", "extra_inputs", "report_uncovered", "fail_on_uncovered", "report_skipped", "memory_limit_mb"} {
 		result.Provenance["tools.deptrac."+field] = "core_default"
 	}

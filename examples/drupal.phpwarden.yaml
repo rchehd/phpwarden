@@ -95,8 +95,9 @@ tools:
     report_skipped: false
     memory_limit_mb: 1024
     exclude: []
+  # When enabled, use upstream sets for the current Drupal version unless overridden.
   rector:
-    enabled: false
+    enabled: true
     required: true
     fail_on: never
     timeout_seconds: 600

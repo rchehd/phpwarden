@@ -87,6 +87,9 @@ func configurationReference(cfg config.Config) ([]byte, error) {
 		if i > 0 {
 			output.WriteByte('\n')
 		}
+		if tool.name == "rector" {
+			output.WriteString("  # When enabled, use upstream sets for the current Drupal version unless overridden.\n")
+		}
 		fmt.Fprintf(&output, "  %s:\n", tool.name)
 		fields := configurationFields(tool.value)
 		for j := range fields {

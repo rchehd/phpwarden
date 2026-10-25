@@ -38,7 +38,11 @@ from tests.support.phpstan import (
     check_phpstan_project_config,
     check_phpstan_settings,
 )
-from tests.support.rector import check_rector, check_rector_project_config
+from tests.support.rector import (
+    check_rector,
+    check_rector_profile_preset,
+    check_rector_project_config,
+)
 from tests.support.scenarios import materialize
 from tests.support.semgrep import check_semgrep, check_semgrep_project_rules
 from tests.support.syntax import check_parallel_syntax, check_syntax_fixtures, check_syntax_settings
@@ -125,6 +129,7 @@ class WorkerCLITest(unittest.TestCase):
                 "semgrep": {"enabled": False},
                 "eventhorizon": {"enabled": False},
                 "dead-code": {"enabled": False},
+                "rector": {"enabled": False},
             },
         }
         (scenario.root / ".phpwarden.yaml").write_text(json.dumps(config))
@@ -273,6 +278,9 @@ class WorkerCLITest(unittest.TestCase):
     def test_rector_dry_run(self):
         check_rector(self, self.configure, self.run_worker)
 
+    def test_rector_profile_preset(self):
+        check_rector_profile_preset(self, self.configure, self.run_worker)
+
     def test_rector_project_config(self):
         check_rector_project_config(self, self.configure, self.run_worker)
 
@@ -393,6 +401,89 @@ class WorkerCLITest(unittest.TestCase):
             report = self.run_worker(scenario, ["--only", "phpstna"])
             self.assertEqual(report["exit_code"], 2)
             self.assertEqual(report["verdict"], "error")
+
+    def test_init_check_selection_and_unattended_defaults(self):
+        for arguments, ci, answers, prompt, code, selected in (
+            ([], "", b"none\ndebug,rector\n\n", True, 0, {"debug", "rector"}),
+            ([], "", b"\n", True, 0, None),
+            (["--no-interaction"], "", None, False, 0, None),
+            (["-n"], "", None, False, 0, None),
+            (["--format", "json"], "", None, False, 0, None),
+            ([], "true", None, False, 0, None),
+            (["--pre-commit"], "", b"q\n", True, 130, None),
+            ([], "", b"\x04", True, 130, None),
+        ):
+            with (
+                self.subTest(arguments=arguments, ci=ci, answers=answers),
+                materialize(FIXTURES / "added-debug") as scenario,
+            ):
+                (scenario.root / "composer.json").write_text("{}")
+                (scenario.root / "composer.lock").write_text(
+                    json.dumps({"packages": [{"name": "drupal/core", "version": "11.4.10"}]})
+                )
+                master, slave = pty.openpty()
+                process = subprocess.Popen(
+                    [str(self.binary), "init", "--php-runtime", self.runtime, *arguments],
+                    cwd=scenario.root,
+                    env=scenario.env | {"TERM": "xterm", "CI": ci},
+                    stdin=slave,
+                    stdout=slave,
+                    stderr=slave,
+                )
+                os.close(slave)
+                output = bytearray()
+                sent = False
+                deadline = time.monotonic() + 20
+                try:
+                    while True:
+                        remaining = deadline - time.monotonic()
+                        self.assertGreater(remaining, 0, "PTY init did not finish")
+                        if not select.select([master], [], [], min(remaining, 1))[0]:
+                            continue
+                        try:
+                            chunk = os.read(master, 65536)
+                        except OSError as error:
+                            if error.errno == errno.EIO:
+                                break
+                            raise
+                        if not chunk:
+                            break
+                        output.extend(chunk)
+                        if answers is not None and not sent and b"\n> " in output:
+                            os.write(master, answers)
+                            sent = True
+                    self.assertEqual(process.wait(timeout=5), code, output.decode())
+                finally:
+                    os.close(master)
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait(timeout=5)
+                text = output.decode()
+                self.assertEqual("Choose checks for this project" in text, prompt, text)
+                config_path = scenario.root / ".phpwarden.yaml"
+                if code == 130:
+                    self.assertFalse(config_path.exists(), text)
+                    self.assertFalse((scenario.root / ".git/hooks/pre-commit").exists(), text)
+                    continue
+                show = subprocess.run(
+                    [str(self.binary), "config", "show", "--format", "json"],
+                    cwd=scenario.root,
+                    env=scenario.env,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=True,
+                )
+                tools = json.loads(show.stdout)["effective"]["config"]["tools"]
+                if selected is None:
+                    self.assertTrue(tools["rector"]["enabled"], text)
+                    self.assertFalse(tools["deptrac"]["enabled"], text)
+                    self.assertFalse(tools["composer-unused"]["enabled"], text)
+                    self.assertFalse(tools["composer-require-checker"]["enabled"], text)
+                else:
+                    self.assertEqual(
+                        {key for key, value in tools.items() if value["enabled"]}, selected, text
+                    )
 
     def test_progress_is_interactive_text_only(self):
         for output_format, term, ci, interactive in (

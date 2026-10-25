@@ -6,6 +6,53 @@ from tests.support.scenarios import materialize
 MESSAGE_RULE = r"DrupalRector\Drupal8\Rector\Deprecation\DrupalSetMessageRector"
 
 
+def check_rector_profile_preset(test, configure, run):
+    with materialize(FIXTURES / "phpmd-added") as scenario:
+        configure(scenario)
+        filename = scenario.root / "web/modules/custom/demo/upgrade.module"
+        source = "<?php\ndrupal_set_message('hello');\n"
+        filename.write_text(source)
+        composer = scenario.root / "platform"
+        metadata = composer / "dependencies/composer/installed.json"
+        metadata.parent.mkdir(parents=True)
+        package = {"name": "drupal/core", "version": "11.4.10", "version_normalized": "11.4.10.0"}
+        (composer / "composer.json").write_text(
+            json.dumps({"config": {"vendor-dir": "dependencies"}})
+        )
+        (composer / "composer.lock").write_text(json.dumps({"packages": [package]}))
+        metadata.write_text(json.dumps({"packages": [package]}))
+        config_path = scenario.root / ".phpwarden.yaml"
+        config = json.loads(config_path.read_text())
+        config["composer_root"] = "platform"
+        config["tools"] = {tool: {"enabled": False} for tool in TOOLS} | {
+            "rector": {"enabled": True}
+        }
+        config_path.write_text(json.dumps(config))
+        arguments = [filename.relative_to(scenario.root).as_posix()]
+        result = run(scenario, arguments)
+        test.assertEqual(result["exit_code"], 0, result)
+        test.assertTrue(result["complete"], result)
+        test.assertEqual(result["environment"]["framework_version"], "11.4.10", result)
+        test.assertEqual(len(result["findings"]), 1, result)
+        test.assertIn("DrupalSetMessageRector", result["findings"][0]["message"])
+        test.assertEqual(filename.read_text(), source)
+
+        metadata.unlink()
+        result = run(scenario, arguments)
+        test.assertEqual(result["exit_code"], 3, result)
+        test.assertFalse(result["complete"], result)
+        test.assertEqual(result["diagnostics"][0]["code"], "dependencies_missing", result)
+        test.assertIn("composer install", result["diagnostics"][0]["message"])
+
+        config["tools"]["rector"]["rules"] = [MESSAGE_RULE]
+        config_path.write_text(json.dumps(config))
+        result = run(scenario, arguments)
+        test.assertEqual(result["exit_code"], 0, result)
+        test.assertTrue(result["complete"], result)
+        test.assertEqual(len(result["findings"]), 1, result)
+        test.assertEqual(filename.read_text(), source)
+
+
 def check_rector(test, configure, run):
     with materialize(FIXTURES / "phpmd-added") as scenario:
         configure(scenario)
