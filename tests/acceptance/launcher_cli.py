@@ -190,9 +190,10 @@ class LauncherCLITest(unittest.TestCase):
                 self.assertIn("UTF-8", completed.stdout)
                 self.assertIn("Result: FAIL", completed.stdout)
                 outputs[output] = completed.stdout
-            self.assertIn("yaml / yaml.syntax", outputs["text"])
+            self.assertIn("\nCorrectness\n", outputs["text"])
+            self.assertNotIn("yaml / yaml.syntax", outputs["text"])
             self.assertIn("1 finding · 1 file", outputs["text"])
-            self.assertRegex(outputs["text"], r"\n  \S*encoding\.yaml\n")
+            self.assertRegex(outputs["text"], r"\n    \S*encoding\.yaml\n")
             self.assertRegex(outputs["compact"], r"\n\S*encoding\.yaml  error  .*\[yaml: ")
 
     def run_check(self, scenario, arguments):
