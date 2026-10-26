@@ -15,7 +15,7 @@ Drupal is currently the only available profile. Symfony and Laravel profiles are
 Download a Linux amd64 archive and `SHA256SUMS` from a published [GitHub Release](https://github.com/rchehd/phpwarden/releases). Verify the checksum before extracting, then install the executable into a writable directory such as `~/.local/bin`:
 
 ```sh
-sha256sum -c SHA256SUMS
+sha256sum --ignore-missing -c SHA256SUMS
 tar -xzf phpwarden-linux-amd64.tar.gz
 install -Dm755 phpwarden "$HOME/.local/bin/phpwarden"
 ```
@@ -23,6 +23,67 @@ install -Dm755 phpwarden "$HOME/.local/bin/phpwarden"
 Keep `~/.local/bin` in `PATH`. From the project, run `phpwarden init` and `phpwarden check`. The published CLI embeds its matching compatibility manifest and downloads only the required worker image on first use. It verifies the exact repository digest, platform, protocol and toolset before starting checks. Existing compatible images need no network access. Concurrent requests share a download lock; cancellation or download failure stops the check. `doctor` and `resolve` never download images.
 
 For offline/preloaded installations, set `runner.image_pull: never`; the default is `missing`. The configured `runner.timeout_seconds` also bounds initial image download, so increase it for a slow first download. This setting controls worker image downloads; Composer advisory/update queries have their own offline settings.
+
+### Docker Compose
+
+Published builds with a compatibility manifest also produce `phpwarden-compose-php8.X.tar.gz` for each supported PHP runtime. Download the archive for your project's runtime and `SHA256SUMS`, verify it, then extract it at the project's Git root. It contains `phpwarden`, `.phpwarden.compose.yaml` and `.phpwarden-image`, with the worker pinned by registry digest:
+
+```sh
+sha256sum --ignore-missing -c SHA256SUMS
+tar -xzf phpwarden-compose-php8.3.tar.gz
+./phpwarden init -n --pre-commit
+./phpwarden check --commits 2
+./phpwarden fix path/to/file.php --only phpcs
+```
+
+Commit those three integration files and `.phpwarden.yaml`. The wrapper invokes a separate Compose file and never starts application services. It mounts the project at the same absolute path as on the host, including Git metadata for linked worktrees, and uses the host UID/GID. Run it from inside the project. `check` mounts code read-only with no network; `init` and explicit `fix` use a separate writable service. No Docker socket is mounted. `--composer-root` supports Composer projects inside a monorepo.
+
+Composer auditing first exports only `composer.json`, `composer.lock` and audit settings to a temporary directory. A separate networked service refreshes a shared user cache without mounting project code, vendor or credentials. The offline check then reads that cache and reports missing or stale data according to the project policy. `tools.composer-audit.offline: true` skips network queries; a cold offline cache remains unavailable. Other network commands (`updates`) and agent completion hooks currently require the host CLI. Agent skills and the host pre-commit hook can be installed through Compose. Hooks call the project wrapper, not a container-only executable.
+
+Changing `.phpwarden.yaml` cannot change an existing container's PHP. Replace `.phpwarden-image` with the corresponding digest from the same build's `compatibility.json` when changing runtime; mismatches produce an error. For local development, the image file may contain an immutable local `sha256:<image ID>`. Copyable source templates are in `examples/compose`; generated release archives supply the actual digest. Updating or rolling back Compose means replacing all three integration files together after checking for local edits. Wrapper commands require Linux, Git, Docker Compose and standard shell utilities.
+
+### Composer or npm dependency
+
+Manifest-bearing builds also produce two Linux amd64 project packages. Both contain the exact same CLI as the standalone archive and verify its SHA256 before every launch. They install no analyzer dependencies and run no install scripts. CLI acquisition happens through the package manager; its first `check` downloads the selected digest-pinned worker. Package-managed CLI updates use Composer/npm rather than `phpwarden update`.
+
+The packages are not yet registered on Packagist or npm. Use the generated assets locally or from an exact GitHub Release URL. For npm, a downloaded asset works without a registry package:
+
+```sh
+npm install --save-dev --save-exact --ignore-scripts ./phpwarden-npm-linux-amd64.tgz
+./node_modules/.bin/phpwarden init -n --pre-commit
+npm exec --offline -- phpwarden check --commits 2
+```
+
+Keep local package archives in a stable, committed project directory, or use an exact release asset URL, and commit `package-lock.json`. `npm ci --ignore-scripts` reinstalls the locked package. Upgrade or roll back by installing the chosen version's archive and committing the updated manifest and lockfile.
+
+For Composer, add a package repository to the project's existing `repositories` array, using the actual version and asset URL from the chosen build:
+
+```json
+{
+  "type": "package",
+  "package": {
+    "name": "rchehd/phpwarden",
+    "version": "0.1.0-rc.1",
+    "dist": {
+      "type": "zip",
+      "url": "https://github.com/rchehd/phpwarden/releases/download/v0.1.0-rc.1/phpwarden-composer-linux-amd64.zip"
+    },
+    "bin": ["bin/phpwarden"]
+  }
+}
+```
+
+The version above illustrates the format; that release must exist before using its URL. For local testing, use an absolute `file:///.../phpwarden-composer-linux-amd64.zip` URL. Then run:
+
+```sh
+composer require --dev rchehd/phpwarden:0.1.0-rc.1 --no-scripts --no-plugins
+vendor/bin/phpwarden init -n --pre-commit
+vendor/bin/phpwarden check --commits 2
+```
+
+Commit `composer.json` and `composer.lock`. `composer install --no-scripts --no-plugins` reinstalls the pin; change the package repository version/URL and requirement together for an upgrade or rollback. Downloaded assets should first be verified against the matching `SHA256SUMS`; the wrapper independently checks its embedded executable. Existing hooks are preserved; new hooks call the installed package wrapper, which remains at a stable project path across package updates.
+
+Package wrappers support host installations with a local Docker daemon. Installing them inside an application container alone does not supply Docker access or map its paths to the host. Use the separate Compose integration for that workflow.
 
 ### Build from source
 
@@ -86,9 +147,9 @@ gh workflow run build.yml --repo rchehd/phpwarden --ref main -f target=cli
 
 Use `-f target=all -f publish_images=true` to build both targets and publish the images.
 
-Build runs that include the CLI produce a `phpwarden-linux-amd64-<commit>` Actions artifact containing `phpwarden-linux-amd64.tar.gz` and `SHA256SUMS`. Extract the downloaded artifact, run `sha256sum -c SHA256SUMS`, then extract the tarball. It contains the executable, README, source commit SHA and `release.json` build identity.
+Build runs that include the CLI produce a `phpwarden-linux-amd64-<commit>` Actions artifact containing `phpwarden-linux-amd64.tar.gz` and `SHA256SUMS`. Extract the downloaded artifact, run `sha256sum --ignore-missing -c SHA256SUMS`, then extract the tarball. It contains the executable, README, source commit SHA and `release.json` build identity.
 
-With `all` + `publish_images=true`, the image job records real published digests, then the CLI job embeds that manifest. This development snapshot has a `v0.0.0-dev.<commit>` version, supports automatic worker downloads, and can later update to a published stable CLI. The archive includes `compatibility.json`, also uploaded separately. `internal/toolset/publication-v1.json` declares framework ranges: Drupal 10.0–10.6 on PHP 8.1–8.4 and Drupal 11.0–11.4 on PHP 8.3–8.4. Project Composer requirements can further restrict a combination. The ranges describe declared compatibility, not proof of every application/tool combination.
+With `all` + `publish_images=true`, the image job records real published digests, then the CLI job embeds that manifest. This development snapshot has a `v0.0.0-dev.<commit>` version, supports automatic worker downloads, and can later update to a published stable CLI. The archive includes `compatibility.json`, also uploaded separately. The same artifact also includes checksum-listed Composer/npm packages and four Compose integration archives. CLI-only or unpublished builds produce only the development CLI archive. `internal/toolset/publication-v1.json` declares framework ranges: Drupal 10.0–10.6 on PHP 8.1–8.4 and Drupal 11.0–11.4 on PHP 8.3–8.4. Project Composer requirements can further restrict a combination. The ranges describe declared compatibility, not proof of every application/tool combination.
 
 CLI-only builds and builds without image publication retain the source/development manifest and require locally prepared images. They do not claim release compatibility or support self-replacement. `--version` reports the embedded version and commit; `--build-info` provides JSON including installation type and manifest checksum. GHCR contains worker images, while CLI archives are available through Actions artifacts and versioned GitHub Releases. Ready-to-use Compose, Composer and npm packaging remain separate work.
 

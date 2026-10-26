@@ -22,6 +22,7 @@ type Plan struct {
 }
 
 func PrepareInstall(ctx context.Context, directory, executable string) (Plan, error) {
+	explicitExecutable := executable != ""
 	top, err := root(ctx, directory)
 	if err != nil {
 		return Plan{}, err
@@ -67,6 +68,10 @@ func PrepareInstall(ctx context.Context, directory, executable string) (Plan, er
 	}
 	quoted := "'" + strings.ReplaceAll(executable, "'", "'\"'\"'") + "'"
 	content := []byte("#!/bin/sh\n# PHPWarden pre-commit hook v1\nexec " + quoted + " hook pre-commit\n")
+	if relative, err := filepath.Rel(directory, executable); explicitExecutable && err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		quotedRelative := "'" + strings.ReplaceAll(filepath.ToSlash(relative), "'", "'\"'\"'") + "'"
+		content = []byte("#!/bin/sh\n# PHPWarden pre-commit hook v1\nproject_root=$(git rev-parse --show-toplevel) || exit 2\nexec \"$project_root\"/" + quotedRelative + " hook pre-commit\n")
+	}
 	plan := Plan{filename: filename, content: content}
 	if _, err := plan.existing(); err != nil {
 		return Plan{}, err

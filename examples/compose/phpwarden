@@ -1,0 +1,45 @@
+#!/bin/sh
+set -eu
+PHPWARDEN_WRAPPER=$(readlink -f "$0")
+PHPWARDEN_ROOT=$(dirname "$PHPWARDEN_WRAPPER")
+PHPWARDEN_CWD=$(pwd -P)
+case "$PHPWARDEN_CWD/" in
+    "$PHPWARDEN_ROOT/"*) ;;
+    *) printf '%s\n' 'Run PHPWarden from inside the project.' >&2; exit 2 ;;
+esac
+PHPWARDEN_IMAGE=$(cat "$PHPWARDEN_ROOT/.phpwarden-image")
+if ! printf '%s\n' "$PHPWARDEN_IMAGE" | LC_ALL=C grep -Eq '^(ghcr\.io/rchehd/phpwarden@)?sha256:[a-f0-9]{64}$'; then
+    printf '%s\n' '.phpwarden-image must contain an official GHCR digest or a local sha256 image ID.' >&2
+    exit 2
+fi
+PHPWARDEN_UID=$(id -u)
+PHPWARDEN_GID=$(id -g)
+PHPWARDEN_GIT_COMMON=$(git -C "$PHPWARDEN_ROOT" rev-parse --path-format=absolute --git-common-dir)
+PHPWARDEN_CACHE=${XDG_CACHE_HOME:-"$HOME/.cache"}/phpwarden/compose
+mkdir -p "$PHPWARDEN_CACHE"
+chmod 700 "$PHPWARDEN_CACHE"
+PHPWARDEN_EXCHANGE=$(mktemp -d)
+trap 'rm -rf "$PHPWARDEN_EXCHANGE"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+export PHPWARDEN_ROOT PHPWARDEN_CWD PHPWARDEN_WRAPPER PHPWARDEN_IMAGE
+export PHPWARDEN_UID PHPWARDEN_GID PHPWARDEN_GIT_COMMON PHPWARDEN_CACHE PHPWARDEN_EXCHANGE
+compose() {
+    docker compose --env-file /dev/null --project-name "phpwarden-$(printf '%s' "$PHPWARDEN_ROOT" | sha256sum | cut -c1-12)" -f "$PHPWARDEN_ROOT/.phpwarden.compose.yaml" "$@"
+}
+service=phpwarden
+case "${1:---help}" in
+    init|fix) service=phpwarden-write ;;
+esac
+for argument in "$@"; do
+    if [ "$argument" = --fix ]; then service=phpwarden-write; fi
+done
+case "${1:---help}" in
+    check|hook)
+        compose run --rm --no-deps -T phpwarden-export audit-export "$@"
+        if grep -q '"enabled":true' "$PHPWARDEN_EXCHANGE/audit.json" && ! compose run --rm --no-deps -T phpwarden-audit; then
+            printf '%s\n' 'Advisory refresh failed; the check will report cache availability.' >&2
+        fi
+        ;;
+esac
+compose run --rm --no-deps -T "$service" "$@"

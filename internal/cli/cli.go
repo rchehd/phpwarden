@@ -39,6 +39,7 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
        phpwarden check [PATH...] [options]
        phpwarden fix [PATH...] [options]
        phpwarden worker check [PATH...] [options]
+       phpwarden container <init|check|fix|config|scope|resolve|hook pre-commit> [options]
        phpwarden hook pre-commit [--project PATH]
        phpwarden hook stop --client codex|cursor|claude [--project PATH]
        phpwarden doctor [options]
@@ -144,6 +145,13 @@ func Run(arguments []string, cwd string, stdout, stderr io.Writer) int {
 }
 
 func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Reader, stdout, stderr io.Writer) int {
+	return runContext(ctx, arguments, cwd, stdin, stdout, stderr, false)
+}
+
+func runContext(ctx context.Context, arguments []string, cwd string, stdin io.Reader, stdout, stderr io.Writer, native bool) int {
+	if len(arguments) > 0 && arguments[0] == "container" {
+		return containerCLI(ctx, arguments[1:], cwd, stdin, stdout, stderr)
+	}
 	if len(arguments) > 0 && arguments[0] == "update" {
 		return updateCLI(ctx, arguments[1:], stdout, stderr)
 	}
@@ -190,7 +198,7 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--no-interaction requires init"))
 	}
 	if len(args.command) == 2 && args.command[0] == "hook" && args.command[1] == "pre-commit" {
-		return preCommit(ctx, args, cwd, stdout, stderr)
+		return preCommit(ctx, args, cwd, stdout, stderr, native)
 	}
 	if len(args.command) == 2 && args.command[0] == "worker" && (args.command[1] == "execute" || args.command[1] == "prepare-fix") {
 		if len(arguments) != 2 {

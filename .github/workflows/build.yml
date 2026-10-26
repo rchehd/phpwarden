@@ -104,6 +104,10 @@ jobs:
           done
       - name: Run public launcher fixture tests
         run: python -m unittest tests.acceptance.launcher_cli -v
+      - name: Run Compose installation and hook tests
+        env:
+          PHPWARDEN_TEST_IMAGE: phpwarden:static-php8.3-dev
+        run: python -m unittest tests.acceptance.compose_cli -v
       - name: Publish tested images
         if: (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && inputs.publish_images)
         env:
@@ -176,6 +180,9 @@ jobs:
             dist/phpwarden-linux-amd64.tar.gz
             dist/SHA256SUMS
             dist/compatibility.json
+            dist/phpwarden-composer-linux-amd64.zip
+            dist/phpwarden-npm-linux-amd64.tgz
+            dist/phpwarden-compose-php*.tar.gz
           if-no-files-found: error
 
   release:
@@ -201,5 +208,5 @@ jobs:
           sha256sum -c SHA256SUMS
           prerelease=()
           if [[ "$RELEASE_TAG" == *-* ]]; then prerelease=(--prerelease); fi
-          gh release create "$RELEASE_TAG" phpwarden-linux-amd64.tar.gz SHA256SUMS compatibility.json --verify-tag --title "$RELEASE_TAG" --generate-notes "${prerelease[@]}"
+          gh release create "$RELEASE_TAG" phpwarden-linux-amd64.tar.gz SHA256SUMS compatibility.json phpwarden-composer-linux-amd64.zip phpwarden-npm-linux-amd64.tgz phpwarden-compose-php*.tar.gz --verify-tag --title "$RELEASE_TAG" --generate-notes "${prerelease[@]}"
 

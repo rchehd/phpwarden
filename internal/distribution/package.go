@@ -98,13 +98,32 @@ func Package(ctx context.Context, binary, readme, manifest, output string) error
 	if err := os.WriteFile(filepath.Join(output, name), buffer.Bytes(), 0o644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(output, "SHA256SUMS"), []byte(fmt.Sprintf("%x  %s\n", sha256.Sum256(buffer.Bytes()), name)), 0o644); err != nil {
-		return err
-	}
 	if data, exists := files["compatibility.json"]; exists {
 		if err := os.WriteFile(filepath.Join(output, "compatibility.json"), data, 0o644); err != nil {
 			return err
 		}
+		if err := projectPackages(files, info, output); err != nil {
+			return err
+		}
 	}
-	return nil
+	names := []string{name}
+	if files["compatibility.json"] != nil {
+		names = append(names, "compatibility.json", "phpwarden-composer-linux-amd64.zip", "phpwarden-npm-linux-amd64.tgz")
+		compose, err := filepath.Glob(filepath.Join(output, "phpwarden-compose-php*.tar.gz"))
+		if err != nil {
+			return err
+		}
+		for _, path := range compose {
+			names = append(names, filepath.Base(path))
+		}
+	}
+	var sums []byte
+	for _, name := range names {
+		data, err := os.ReadFile(filepath.Join(output, name))
+		if err != nil {
+			return err
+		}
+		sums = fmt.Appendf(sums, "%x  %s\n", sha256.Sum256(data), name)
+	}
+	return os.WriteFile(filepath.Join(output, "SHA256SUMS"), sums, 0o644)
 }

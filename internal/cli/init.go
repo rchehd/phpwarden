@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/rchehd/phpwarden/internal/agentskills"
@@ -14,6 +16,12 @@ import (
 
 func initProject(ctx context.Context, args options, cwd string, stdin io.Reader, stdout, stderr io.Writer) int {
 	settings := projectinit.Options{CWD: cwd, Project: args.project, ComposerRoot: args.composerRoot, Runtime: args.phpRuntime, Target: args.phpTarget, PreCommit: args.preCommit}
+	if executable := os.Getenv("PHPWARDEN_EXECUTABLE"); executable != "" {
+		if !filepath.IsAbs(executable) || strings.ContainsAny(executable, "\r\n\x00") {
+			return fail(stdout, stderr, args, "init", fmt.Errorf("PHPWARDEN_EXECUTABLE must be an absolute wrapper path"))
+		}
+		settings.Executable = executable
+	}
 	selected, err := agentskills.ParseClients(args.agents)
 	if err != nil {
 		return fail(stdout, stderr, args, "usage", err)

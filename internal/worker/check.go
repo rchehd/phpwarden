@@ -74,6 +74,9 @@ func Check(ctx context.Context, location config.Location, effective config.Effec
 		return failure("stale", err)
 	}
 	audit := func(ctx context.Context, settings config.ComposerAudit) checker.Outcome {
+		if cached, _ := ctx.Value(cachedAuditKey{}).(bool); cached {
+			settings.Offline = true
+		}
 		cacheDir, _ := composeraudit.CacheDir()
 		return composeraudit.Run(ctx, config.ComposerDir(location.Root, cfg), settings, composeraudit.NativeFetcher(composeraudit.Bundle(), process), cacheDir, time.Now())
 	}

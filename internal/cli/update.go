@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"runtime"
 	"strings"
 
@@ -58,6 +59,9 @@ func updateCLI(ctx context.Context, arguments []string, stdout, stderr io.Writer
 		return 3
 	}
 	settings.Current = metadata
+	if installation := os.Getenv("PHPWARDEN_INSTALLATION"); installation != "" && !settings.Check {
+		settings.Current.Distribution = installation
+	}
 	ctx, display := startProgress(ctx, format, stdout, stderr)
 	result := selfupdate.Run(ctx, settings)
 	display.Stop()

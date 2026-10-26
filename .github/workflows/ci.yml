@@ -70,7 +70,7 @@ jobs:
         run: node --check internal/checker/nodecheck/helper.cjs
       - name: Check formatting
         run: |
-          files=$(gofmt -l buildinfo.go cmd internal schemas)
+          files=$(gofmt -l *.go cmd internal schemas)
           if [ -n "$files" ]; then
             printf '%s\n' "$files"
             exit 1
@@ -96,6 +96,8 @@ jobs:
           php -l internal/checker/composervalidate/helper.php
       - name: Worker fixture acceptance tests
         run: python -m unittest tests.acceptance.worker_cli -v
+      - name: Clean Composer and npm installation tests
+        run: python -m unittest tests.acceptance.distribution_cli -v
 
   test-fixtures:
     name: Test fixtures · lint and validate

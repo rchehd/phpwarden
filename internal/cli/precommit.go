@@ -15,9 +15,10 @@ import (
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/runner"
 	"github.com/rchehd/phpwarden/internal/scope"
+	"github.com/rchehd/phpwarden/internal/worker"
 )
 
-func preCommit(ctx context.Context, args options, cwd string, stdout, stderr io.Writer) int {
+func preCommit(ctx context.Context, args options, cwd string, stdout, stderr io.Writer, native bool) int {
 	failure := func(err error) int {
 		fmt.Fprintf(stderr, "PHPWarden pre-commit: %v\n", err)
 		if ctx.Err() == context.Canceled {
@@ -104,7 +105,11 @@ func preCommit(ctx context.Context, args options, cwd string, stdout, stderr io.
 	fmt.Fprintf(stdout, "PHPWarden pre-commit · %d staged file(s) · whole files\n", len(selected))
 	ctx, display := startProgress(ctx, "text", stdout, stderr)
 	defer display.Stop()
-	result := launcher.Check(ctx, location, effective, options, nil, runner.Exec{})
+	check := launcher.Check
+	if native {
+		check = worker.Check
+	}
+	result := check(ctx, location, effective, options, nil, runner.Exec{})
 	err = snapshot.Check(ctx, selected)
 	if ctx.Err() != nil {
 		display.Stop()

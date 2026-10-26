@@ -2,6 +2,11 @@
 !go.mod
 !go.sum
 !buildinfo.go
+!distribution_assets.go
+!examples/
+!examples/compose/
+!examples/compose/phpwarden
+!examples/compose/phpwarden.compose.yaml
 !docker-bake.json
 !cmd/
 !cmd/**

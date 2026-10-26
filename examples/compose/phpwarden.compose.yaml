@@ -1,0 +1,76 @@
+services:
+  phpwarden:
+    image: ${PHPWARDEN_IMAGE:?Set a pinned PHPWarden image digest}
+    platform: linux/amd64
+    profiles: [quality]
+    entrypoint: [/usr/local/bin/phpwarden, container]
+    working_dir: ${PHPWARDEN_CWD}
+    user: ${PHPWARDEN_UID}:${PHPWARDEN_GID}
+    read_only: true
+    network_mode: none
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    environment:
+      HOME: /tmp
+      XDG_CACHE_HOME: /cache
+      PHPWARDEN_EXECUTABLE: ${PHPWARDEN_WRAPPER}
+      PHPWARDEN_INSTALLATION: compose
+      PHPWARDEN_AUDIT_EXPORT: /exchange
+      NO_COLOR:
+    tmpfs:
+      - /tmp:mode=1777
+    volumes:
+      - type: bind
+        source: ${PHPWARDEN_ROOT}
+        target: ${PHPWARDEN_ROOT}
+        read_only: true
+      - type: bind
+        source: ${PHPWARDEN_GIT_COMMON}
+        target: ${PHPWARDEN_GIT_COMMON}
+        read_only: true
+      - type: bind
+        source: ${PHPWARDEN_CACHE}
+        target: /cache
+
+  phpwarden-write:
+    extends: phpwarden
+    volumes:
+      - type: bind
+        source: ${PHPWARDEN_ROOT}
+        target: ${PHPWARDEN_ROOT}
+      - type: bind
+        source: ${PHPWARDEN_GIT_COMMON}
+        target: ${PHPWARDEN_GIT_COMMON}
+
+  phpwarden-export:
+    extends: phpwarden
+    volumes:
+      - type: bind
+        source: ${PHPWARDEN_EXCHANGE}
+        target: /exchange
+
+  phpwarden-audit:
+    image: ${PHPWARDEN_IMAGE}
+    platform: linux/amd64
+    profiles: [quality]
+    entrypoint: [/usr/local/bin/phpwarden, container, audit-cache]
+    working_dir: /audit
+    user: ${PHPWARDEN_UID}:${PHPWARDEN_GID}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    environment:
+      HOME: /tmp
+      XDG_CACHE_HOME: /cache
+    tmpfs:
+      - /tmp:mode=1777
+    volumes:
+      - type: bind
+        source: ${PHPWARDEN_EXCHANGE}
+        target: /audit
+        read_only: true
+      - type: bind
+        source: ${PHPWARDEN_CACHE}
+        target: /cache
