@@ -2,14 +2,17 @@ package projectupdates
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rchehd/phpwarden/internal/cache"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/runner"
 )
@@ -244,10 +247,16 @@ func TestNativeComposerUsesPrivateCopiesAndDisablesProjectExecution(t *testing.T
 			t.Fatalf("unsafe copied manifest %s %v", data, err)
 		}
 		if strings.Contains(args, "outdated") {
+			if !strings.Contains(args, "--ignore-platform-reqs") {
+				t.Fatal("candidate lookup uses the worker platform instead of release metadata")
+			}
 			if !strings.Contains(args, "--ignore=acme/direct") {
 				t.Fatal("path package not excluded from remote lookup")
 			}
 			return runner.Result{Stdout: []byte(`{"locked":[]}`)}
+		}
+		if strings.Contains(args, "--ignore-platform-reqs") {
+			t.Fatal("candidate lookup options leaked into the advisory query")
 		}
 		return runner.Result{Stdout: []byte(`{"advisories":[],"abandoned":[]}`), Stderr: []byte("partial repository warning")}
 	})
@@ -267,6 +276,39 @@ func TestNativeComposerUsesPrivateCopiesAndDisablesProjectExecution(t *testing.T
 	}
 }
 
+func TestWorkerPlatformFilteredCacheIsRefreshed(t *testing.T) {
+	request := requestFixture(t)
+	directory, err := cache.Directory("updates")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := cache.Open(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	identity := fmt.Sprintf("%x", sha256.Sum256([]byte(manifestFixture+lockFixture))) + "/" + request.Toolset
+	key := fmt.Sprintf("%x", sha256.Sum256([]byte("updates-v1/composer/"+identity)))
+	data, _ := json.Marshal(entry{Version: 1, Fetched: request.Now, Data: envelope(outdatedFixture, auditFixture)})
+	if err := store.Write(key, data); err != nil {
+		t.Fatal(err)
+	}
+	fetched := false
+	request.Composer = func(context.Context, []byte, []byte) ([]byte, error) {
+		fetched = true
+		return envelope(strings.Replace(outdatedFixture, `"2.0.0"`, `"3.0.0"`, 1), auditFixture), nil
+	}
+	result := Run(context.Background(), request)
+	if !result.Complete || !fetched {
+		t.Fatalf("worker-filtered candidates reused: %+v", result)
+	}
+	for _, item := range result.Packages {
+		if item.Name == "acme/direct" && item.Latest != "3.0.0" {
+			t.Fatalf("stale candidate retained: %+v", item)
+		}
+	}
+}
+
 func TestLivePublicMetadataAndComposer(t *testing.T) {
 	if os.Getenv("PHPWARDEN_UPDATES_LIVE") != "1" {
 		t.Skip("explicit opt-in network assessment")
@@ -274,7 +316,8 @@ func TestLivePublicMetadataAndComposer(t *testing.T) {
 	request := requestFixture(t)
 	request.HTTP = nil
 	request.Now = time.Now()
-	manifest := `{"require":{"psr/log":"^3.0"}}`
+	request.Settings.TimeoutSeconds = 90
+	manifest := `{"require":{"psr/log":"^3.0"},"config":{"platform":{"php":"5.6.0"}}}`
 	lock := `{"packages":[{"name":"psr/log","version":"3.0.0","require":{"php":">=8.0.0"},"type":"library","license":["MIT"]}],"packages-dev":[]}`
 	os.WriteFile(filepath.Join(request.Location.Root, "platform/composer.json"), []byte(manifest), 0o644)
 	os.WriteFile(filepath.Join(request.Location.Root, "platform/composer.lock"), []byte(lock), 0o644)

@@ -114,7 +114,7 @@ func NativeComposer(bundle string, process runner.Process) ComposerFetcher {
 			}
 		}
 		binary := filepath.Join(bundle, "vendor/composer/composer/bin/composer")
-		args := []string{"-d", "auto_prepend_file=", "-d", "auto_append_file=", "-d", "memory_limit=512M", binary, "outdated", "--locked", "--format=json", "--no-interaction", "--no-plugins", "--no-scripts", "--no-ansi", "--working-dir=" + directory}
+		args := []string{"-d", "auto_prepend_file=", "-d", "auto_append_file=", "-d", "memory_limit=512M", binary, "outdated", "--locked", "--ignore-platform-reqs", "--format=json", "--no-interaction", "--no-plugins", "--no-scripts", "--no-ansi", "--working-dir=" + directory}
 		for name, isLocal := range local {
 			if isLocal {
 				args = append(args, "--ignore="+name)

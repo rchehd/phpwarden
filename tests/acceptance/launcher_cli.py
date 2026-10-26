@@ -142,6 +142,94 @@ class LauncherCLITest(unittest.TestCase):
 
         check_syntax_fixtures(self, configure, run)
 
+    def test_completion_hooks_use_real_worker_and_bound_retries(self):
+        for client in ("codex", "claude", "cursor"):
+            with self.subTest(client=client), materialize(FIXTURES / "added-debug") as scenario:
+                self.configure(scenario.root, scenario.base)
+                env = scenario.env | {"XDG_CACHE_HOME": str(scenario.root / "cache")}
+                event = {
+                    "hook_event_name": "stop" if client == "cursor" else "Stop",
+                    "session_id": "acceptance",
+                    "cwd": str(scenario.root),
+                    "status": "completed",
+                }
+                filename = scenario.root / "web/modules/custom/demo/demo.module"
+                changed = filename.read_bytes()
+                result, _ = self.run_completion(scenario, client, event, env)
+                self.assertTrue(result.get("decision") == "block" or result.get("followup_message"))
+                self.assertIn("Correctness", json.dumps(result))
+                retry = event | (
+                    {"loop_count": 1} if client == "cursor" else {"stop_hook_active": True}
+                )
+                result, _ = self.run_completion(scenario, client, retry, env)
+                self.assertTrue(result.get("decision") == "block" or result.get("followup_message"))
+                retry |= {"loop_count": 2} if client == "cursor" else {}
+                result, stderr = self.run_completion(scenario, client, retry, env)
+                self.assertNotEqual(result.get("decision"), "block")
+                self.assertFalse(result.get("followup_message"))
+                self.assertIn("stopped automatic retries", stderr)
+                aborted = event | {"status": "aborted"}
+                self.assertEqual(self.run_completion(scenario, client, aborted, env)[0], {})
+                active = env | {"PHPWARDEN_COMPLETION_ACTIVE": "1"}
+                self.assertEqual(self.run_completion(scenario, client, event, active)[0], {})
+                changed = scenario.git(
+                    "show", f"{scenario.base}:web/modules/custom/demo/demo.module"
+                )
+                filename.write_bytes(changed)
+                with tempfile.TemporaryDirectory(prefix="phpwarden-hook-host-") as host:
+                    (Path(host) / "git").symlink_to(shutil.which("git"))
+                    result, stderr = self.run_completion(
+                        scenario, client, retry, env | {"PATH": host}
+                    )
+                    self.assertEqual(result, {})
+                    self.assertEqual(stderr, "")
+                changed += b"var_dump($value);\n"
+                filename.write_bytes(changed)
+                result, _ = self.run_completion(scenario, client, event, env)
+                self.assertTrue(result.get("decision") == "block" or result.get("followup_message"))
+
+    def run_completion(self, scenario, client, event, env):
+        paths = [scenario.root / name for name in (
+            ".phpwarden.yaml", "web/modules/custom/demo/demo.module"
+        )]
+        before = [path.read_bytes() for path in paths]
+        completed = subprocess.run(
+            [str(self.binary), "hook", "stop", "--client", client],
+            cwd=scenario.root,
+            env=env,
+            input=json.dumps(event),
+            text=True,
+            capture_output=True,
+            timeout=60,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual([path.read_bytes() for path in paths], before)
+        return json.loads(completed.stdout), completed.stderr
+
+    def test_completion_reports_optional_and_required_worker_failures(self):
+        with materialize(FIXTURES / "clean-debug") as scenario:
+            self.configure(scenario.root, scenario.base)
+            filename = scenario.root / ".phpwarden.yaml"
+            config = json.loads(filename.read_text())
+            (scenario.root / "broken.xml").write_text("<ruleset")
+            config["tools"]["phpcs"] = {"enabled": True, "config": "broken.xml"}
+            env = scenario.env | {"XDG_CACHE_HOME": str(scenario.root / "cache")}
+            for required in (False, True):
+                with self.subTest(required=required):
+                    config["tools"]["phpcs"]["required"] = required
+                    filename.write_text(json.dumps(config))
+                    event = {
+                        "hook_event_name": "Stop", "session_id": "failure",
+                        "cwd": str(scenario.root),
+                    }
+                    result, stderr = self.run_completion(scenario, "codex", event, env)
+                    if required:
+                        self.assertEqual(result.get("decision"), "block", result)
+                    else:
+                        self.assertNotIn("decision", result)
+                        self.assertIn("incomplete", result.get("systemMessage", ""))
+                        self.assertIn("incomplete", stderr)
+
     def test_syntax_settings_and_explicit_selection(self):
         check_syntax_settings(
             self,

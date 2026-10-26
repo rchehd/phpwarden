@@ -19,7 +19,7 @@ func ValidateRuntime(version, branch string) error {
 }
 
 func Run(ctx context.Context, request Request) Report {
-	result := Report{Version: 1, Command: "updates", Complete: true, Packages: []Package{}, Sources: []Source{}, Notes: []string{"Coverage: Composer-managed locked packages and upstream PHP release/support metadata. Drupal projects outside Composer and vendor backports are not assessed. Available versions are candidates; no full dependency solve or upgrade is performed."}}
+	result := Report{Version: 1, Command: "updates", Complete: true, Packages: []Package{}, Sources: []Source{}, Notes: []string{"Coverage: Composer-managed locked packages and upstream PHP release/support metadata. Drupal projects outside Composer and vendor backports are not assessed. Available versions are candidates; application PHP/extension compatibility is not assessed, and no full dependency solve or upgrade is performed."}}
 	if request.Now.IsZero() {
 		request.Now = time.Now()
 	}
@@ -57,7 +57,7 @@ func Run(ctx context.Context, request Request) Report {
 		result.Notes = append(result.Notes, err.Error())
 		return result
 	}
-	identity := fmt.Sprintf("%x", sha256.Sum256(append(append([]byte{}, composer...), lock...))) + "/" + request.Toolset
+	identity := "platform-independent-v2/" + fmt.Sprintf("%x", sha256.Sum256(append(append([]byte{}, composer...), lock...))) + "/" + request.Toolset
 	validate := func(data []byte) error {
 		copy, loc, err := inventory(composer, lock)
 		if err != nil {
