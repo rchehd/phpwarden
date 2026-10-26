@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -19,6 +20,17 @@ import (
 
 //go:embed templates/launcher.sh
 var packageLauncher string
+
+var composerPrerelease = regexp.MustCompile(`(?i)^(?:dev|(?:alpha|beta|rc)(?:[.-]?[0-9]+)?)$`)
+
+func composerPackageVersion(version string) string {
+	version = strings.TrimPrefix(version, "v")
+	_, suffix, prerelease := strings.Cut(version, "-")
+	if !prerelease || composerPrerelease.MatchString(suffix) {
+		return version
+	}
+	return "dev-" + version
+}
 
 func projectPackages(files map[string][]byte, info buildinfo.Info, output string) error {
 	version := strings.TrimPrefix(info.Version, "v")
@@ -34,7 +46,7 @@ func projectPackages(files map[string][]byte, info buildinfo.Info, output string
 		var metadata map[string]any
 		if manager == "composer" {
 			metadata = map[string]any{
-				"name": "rchehd/phpwarden", "version": version, "type": "library",
+				"name": "rchehd/phpwarden", "version": composerPackageVersion(info.Version), "type": "library",
 				"description": "PHPWarden Linux amd64 CLI with pinned worker compatibility",
 				"bin":         []string{"bin/phpwarden"},
 			}

@@ -73,7 +73,9 @@ For Composer, add a package repository to the project's existing `repositories` 
 }
 ```
 
-The version above illustrates the format; that release must exist before using its URL. For local testing, use an absolute `file:///.../phpwarden-composer-linux-amd64.zip` URL. Then run:
+The version above illustrates the format; that release must exist before using its URL. For local testing, use an absolute `file:///.../phpwarden-composer-linux-amd64.zip` URL.
+
+Manual snapshots use a Composer version such as `dev-0.0.0-dev.a38dff3`; copy the exact value from the archive's `composer.json` into both the repository and requirement. Stable, alpha, beta and RC versions retain their normal version strings. Other prerelease labels receive the `dev-` prefix because Composer accepts fewer prerelease formats than npm. The embedded CLI keeps its original version and worker manifest.
 
 ```sh
 composer require --dev rchehd/phpwarden:0.1.0-rc.1 --no-scripts --no-plugins

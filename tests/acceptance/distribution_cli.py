@@ -33,7 +33,7 @@ class DistributionCLI(unittest.TestCase):
         cls.artifacts = cls.root / "composer-artifacts"
         cls.artifacts.mkdir()
         cls.releases = {}
-        for version in ("v1.0.0", "v1.1.0"):
+        for version in ("v1.0.0", "v1.1.0", "v0.0.0-dev.a38dff3"):
             output = cls.root / version
             output.mkdir()
             images = output / "images.json"
@@ -126,7 +126,7 @@ class DistributionCLI(unittest.TestCase):
                     "package": [
                         {
                             "name": "rchehd/phpwarden",
-                            "version": version[1:],
+                            "version": self.composer_version(output),
                             "dist": {
                                 "type": "zip",
                                 "url": (output / "phpwarden-composer-linux-amd64.zip").as_uri(),
@@ -181,6 +181,59 @@ class DistributionCLI(unittest.TestCase):
         replacement.replace(payload)
         result = self.run_command([wrapper, "--version"], root, expected=3)
         self.assertIn("checksum mismatch", result.stderr)
+
+    @staticmethod
+    def composer_version(output):
+        with zipfile.ZipFile(output / "phpwarden-composer-linux-amd64.zip") as archive:
+            return json.loads(archive.read("composer.json"))["version"]
+
+    def test_composer_installs_manual_ci_snapshot_with_original_cli_identity(self):
+        version = "v0.0.0-dev.a38dff3"
+        output = self.releases[version]
+        composer_version = self.composer_version(output)
+        self.assertEqual(composer_version, "dev-0.0.0-dev.a38dff3")
+        root = self.project("composer-snapshot")
+        (root / "composer.json").write_text(
+            json.dumps(
+                {
+                    "name": "fixture/snapshot",
+                    "repositories": [
+                        {
+                            "type": "package",
+                            "package": {
+                                "name": "rchehd/phpwarden",
+                                "version": composer_version,
+                                "dist": {
+                                    "type": "zip",
+                                    "url": (output / "phpwarden-composer-linux-amd64.zip").as_uri(),
+                                },
+                                "bin": ["bin/phpwarden"],
+                            },
+                        },
+                        {"packagist.org": False},
+                    ],
+                    "require-dev": {"rchehd/phpwarden": composer_version},
+                }
+            )
+        )
+        (root / "composer.lock").unlink()
+        self.run_command(
+            [
+                "composer",
+                "update",
+                "--no-plugins",
+                "--no-scripts",
+                "--no-interaction",
+                "--no-audit",
+            ],
+            root,
+        )
+        wrapper = root / "vendor/bin/phpwarden"
+        metadata = json.loads(self.run_command([wrapper, "--build-info"], root).stdout)
+        self.assertEqual(metadata["version"], version)
+        self.assertEqual(metadata["distribution"], "standalone")
+        lock = json.loads((root / "composer.lock").read_text())
+        self.assertEqual(lock["packages-dev"][0]["version"], composer_version)
 
     def test_npm_clean_install_ci_upgrade_and_rollback(self):
         root = self.project("npm-project")
