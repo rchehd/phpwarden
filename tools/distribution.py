@@ -1,8 +1,10 @@
 import argparse
 import base64
+import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -102,6 +104,10 @@ def package(version, commit, manifest, output):
     if manifest:
         arguments.extend(["--manifest", str(manifest)])
     subprocess.run(arguments, check=True)
+    installer = output / "install.sh"
+    shutil.copyfile("install.sh", installer)
+    with (output / "SHA256SUMS").open("a") as checksums:
+        checksums.write(f"{hashlib.sha256(installer.read_bytes()).hexdigest()}  install.sh\n")
 
 
 def main():

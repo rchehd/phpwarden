@@ -183,6 +183,7 @@ jobs:
             dist/phpwarden-composer-linux-amd64.zip
             dist/phpwarden-npm-linux-amd64.tgz
             dist/phpwarden-compose-php*.tar.gz
+            dist/install.sh
           if-no-files-found: error
 
   release:
@@ -208,5 +209,5 @@ jobs:
           sha256sum -c SHA256SUMS
           prerelease=()
           if [[ "$RELEASE_TAG" == *-* ]]; then prerelease=(--prerelease); fi
-          gh release create "$RELEASE_TAG" phpwarden-linux-amd64.tar.gz SHA256SUMS compatibility.json phpwarden-composer-linux-amd64.zip phpwarden-npm-linux-amd64.tgz phpwarden-compose-php*.tar.gz --verify-tag --title "$RELEASE_TAG" --generate-notes "${prerelease[@]}"
+          gh release create "$RELEASE_TAG" phpwarden-linux-amd64.tar.gz SHA256SUMS compatibility.json phpwarden-composer-linux-amd64.zip phpwarden-npm-linux-amd64.tgz phpwarden-compose-php*.tar.gz install.sh --verify-tag --title "$RELEASE_TAG" --generate-notes "${prerelease[@]}"
 

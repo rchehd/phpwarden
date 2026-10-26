@@ -12,7 +12,23 @@ Drupal is currently the only available profile. Symfony and Laravel profiles are
 
 ## Install
 
-Download a Linux amd64 archive and `SHA256SUMS` from a published [GitHub Release](https://github.com/rchehd/phpwarden/releases). Verify the checksum before extracting, then install the executable into a writable directory such as `~/.local/bin`:
+Download `install.sh`, the Linux amd64 archive and `SHA256SUMS` from the same Actions artifact. Install without a release, network access, PHP, Go or Docker:
+
+```sh
+sh install.sh --archive ./phpwarden-linux-amd64.tar.gz
+```
+
+The default destination is `~/.local/bin/phpwarden`. Use `--dir PATH` for another writable directory, `--checksums FILE` for a checksum file elsewhere, or `--version VERSION` to require the archive's exact version. The installer checks the archive SHA256, executable identity and worker manifest before installing atomically. Repeating the same installation preserves the executable. Replacing a different file requires `--force`; symlinks and package-managed directories are refused. It never changes project settings, hooks or shell startup files.
+
+For a published [GitHub Release](https://github.com/rchehd/phpwarden/releases), download its `install.sh` and select a version explicitly:
+
+```sh
+sh install.sh --version v0.1.0-rc.1 --dir "$HOME/.local/bin"
+```
+
+That version is an example and must be published before the download can work. Without `--archive` or `--version`, the installer downloads the latest stable release. A local source/development archive can also be installed, but its checks require matching preloaded worker images; it does not gain release automatic downloads or self-update support. Installation currently supports Linux amd64 with GNU shell utilities, tar/gzip, SHA256 tools and `flock`; online installation additionally needs curl. No sudo is invoked. An already installed standalone CLI can use `phpwarden update`.
+
+Manual installation remains available. Download a Linux amd64 archive and `SHA256SUMS`, verify the checksum before extracting, then copy the executable into a writable directory:
 
 ```sh
 sha256sum --ignore-missing -c SHA256SUMS
