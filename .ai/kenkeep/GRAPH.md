@@ -1,11 +1,11 @@
 ---
 schema_version: 3
-nodes_hash: 'sha256:9a2bc0e0901aecd958093059ad2f3e04d098e0f10646c75c9fa7f1e7c50626f1'
-node_count: 45
+nodes_hash: 'sha256:8608b358d2b0f9dd7a9ace7c48f248bfb1270e32710560e802460004356b7815'
+node_count: 46
 ---
 # kenkeep Graph
 
-Total nodes: 45
+Total nodes: 46
 
 ## map-checker-inventory
 
@@ -14,7 +14,7 @@ Total nodes: 45
 - **path:** checkers/map-checker-inventory.md
 - **tags:** checkers, config, defaults
 - **relates_to:** practice-separate-failure-policy-from-findings, practice-keep-native-tool-options-in-native-configs, practice-analyze-with-project-dependencies
-- **derived_from:** README.md, 01a1693d-cb80-7003-ae47-1468fd6435b0:map:1
+- **derived_from:** README.md, 01a1693d-cb80-7003-ae47-1468fd6435b0:map:1, 601a78f3-e255-490c-8737-633bc77202bd-1:user-resolution:map
 
 ## map-ci-workflow-triggers-and-jobs
 
@@ -128,6 +128,15 @@ Total nodes: 45
 - **path:** checkers/map-semgrep-engine-bundle-and-rule-limits.md
 - **tags:** semgrep, bundle, licensing, rules
 - **derived_from:** tools/semgrep/README.md
+
+## map-shared-development-toolset-compatibility-metadata
+
+- **kind:** map
+- **title:** Shared development toolset compatibility metadata
+- **path:** runtime/map-shared-development-toolset-compatibility-metadata.md
+- **tags:** toolset, docker, build
+- **relates_to:** practice-image-resolution-and-run-isolation, practice-select-image-before-container-start, practice-run-docker-integration-suites, map-profile-version-image-model
+- **derived_from:** 01a1693d-cb80-7003-ae47-1468fd6435b0:map:0
 
 ## map-test-levels-and-acceptance-suites
 

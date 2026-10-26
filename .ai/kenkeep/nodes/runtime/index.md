@@ -10,15 +10,16 @@
 _None._
 
 ## Conventions (how we build)
+- Open [**Resolve the image before the container exists, never from inside it**](practice-select-image-before-container-start.md) to learn about: PHP runtime or toolset changes need a different container, so image selection happens outside it (launcher, resolve step, or pinned image). #docker #ci #image #runtime
 - Open [**Run image tools against the project's own vendor, never install dependencies**](practice-analyze-with-project-dependencies.md) to learn about: Tools come from the image, but analyzers read the project's core, contrib and autoload; missing deps are reported, not auto-installed. #dependencies #phpstan #docker
+- Open [**Select images by digest or ID and keep runs isolated and fingerprinted**](practice-image-resolution-and-run-isolation.md) to learn about: Image selection is offline and exact, runs are read-only and sandboxed, and drift during a run makes results stale. #runner #docker #images
 - Open [**Keep project mounts read-only and apply fixes on the host**](practice-mount-read-only-apply-fixes-on-host.md) to learn about: Checkers never write to the project; formatters emit edits that the launcher hash-validates and applies on the host. #safety #fix #docker
 - Open [**Let projects configure analyzer concurrency**](practice-let-projects-configure-analyzer-concurrency.md) to learn about: Projects choose sequential, bounded or unrestricted worker concurrency according to available resources. #runner #config #concurrency
-- Open [**Resolve the image before the container exists, never from inside it**](practice-select-image-before-container-start.md) to learn about: PHP runtime or toolset changes need a different container, so image selection happens outside it (launcher, resolve step, or pinned image). #docker #ci #image #runtime
-- Open [**Select images by digest or ID and keep runs isolated and fingerprinted**](practice-image-resolution-and-run-isolation.md) to learn about: Image selection is offline and exact, runs are read-only and sandboxed, and drift during a run makes results stale. #runner #docker #images
 
 ## Components (what exists)
-- Open [**PHPWarden result cache scope and keys**](map-result-cache.md) to learn about: Opt-in cache of complete file-only check results, keyed on content, config, toolset and image digest, 24h TTL. #cache #runner #ci
 - Open [**Profile, framework version, PHP runtime/target, toolset and image model**](map-profile-version-image-model.md) to learn about: One profile per framework; versions, runtime and tool sets are resolved via a compatibility table to a digest-pinned image. #profile #image #versions #docker
+- Open [**PHPWarden result cache scope and keys**](map-result-cache.md) to learn about: Opt-in cache of complete file-only check results, keyed on content, config, toolset and image digest, 24h TTL. #cache #runner #ci
+- Open [**Shared development toolset compatibility metadata**](map-shared-development-toolset-compatibility-metadata.md) to learn about: docker-bake.json supplies the shared development toolset revision to the CLI, manifest entries and Docker image labels. #toolset #docker #build
 
 ## By topic
 
@@ -27,9 +28,9 @@ _None._
 - Open [**CI workflow triggers and jobs**](../testing-ci/map-ci-workflow-triggers-and-jobs.md) — Checks validates branches and PRs; Build runs manually or on v* tags with CLI, images or all targets after the same commit passes checks.
 - Open [**Resolve the image before the container exists, never from inside it**](practice-select-image-before-container-start.md) — PHP runtime or toolset changes need a different container, so image selection happens outside it (launcher, resolve step, or pinned image).
 ### #runner
+- Open [**Select images by digest or ID and keep runs isolated and fingerprinted**](practice-image-resolution-and-run-isolation.md) — Image selection is offline and exact, runs are read-only and sandboxed, and drift during a run makes results stale.
 - Open [**Let projects configure analyzer concurrency**](practice-let-projects-configure-analyzer-concurrency.md) — Projects choose sequential, bounded or unrestricted worker concurrency according to available resources.
 - Open [**PHPWarden result cache scope and keys**](map-result-cache.md) — Opt-in cache of complete file-only check results, keyed on content, config, toolset and image digest, 24h TTL.
-- Open [**Select images by digest or ID and keep runs isolated and fingerprinted**](practice-image-resolution-and-run-isolation.md) — Image selection is offline and exact, runs are read-only and sandboxed, and drift during a run makes results stale.
 ### #ci
 - Open [**Build all PHP images before running Docker acceptance suites**](../testing-ci/practice-run-docker-integration-suites.md) — Run docker buildx bake, then docker_worker per runtime and launcher_cli; rebuild the image together with the CLI.
 - Open [**CI workflow triggers and jobs**](../testing-ci/map-ci-workflow-triggers-and-jobs.md) — Checks validates branches and PRs; Build runs manually or on v* tags with CLI, images or all targets after the same commit passes checks.
@@ -37,6 +38,8 @@ _None._
 ### #image
 - Open [**Profile, framework version, PHP runtime/target, toolset and image model**](map-profile-version-image-model.md) — One profile per framework; versions, runtime and tool sets are resolved via a compatibility table to a digest-pinned image.
 - Open [**Resolve the image before the container exists, never from inside it**](practice-select-image-before-container-start.md) — PHP runtime or toolset changes need a different container, so image selection happens outside it (launcher, resolve step, or pinned image).
+### #build
+- Open [**Shared development toolset compatibility metadata**](map-shared-development-toolset-compatibility-metadata.md) — docker-bake.json supplies the shared development toolset revision to the CLI, manifest entries and Docker image labels.
 ### #cache
 - Open [**PHPWarden result cache scope and keys**](map-result-cache.md) — Opt-in cache of complete file-only check results, keyed on content, config, toolset and image digest, 24h TTL.
 ### #concurrency
@@ -63,5 +66,7 @@ _None._
 ### #safety
 - Open [**Keep project mounts read-only and apply fixes on the host**](practice-mount-read-only-apply-fixes-on-host.md) — Checkers never write to the project; formatters emit edits that the launcher hash-validates and applies on the host.
 - Open [**Pre-commit hook checks staged files and never rewrites the tree**](../git-scope/practice-pre-commit-hook-checks-staged-content.md) — Hook checks whole staged files, aborts on mismatch with the working tree, and never stashes, fixes or stages.
+### #toolset
+- Open [**Shared development toolset compatibility metadata**](map-shared-development-toolset-compatibility-metadata.md) — docker-bake.json supplies the shared development toolset revision to the CLI, manifest entries and Docker image labels.
 ### #versions
 - Open [**Profile, framework version, PHP runtime/target, toolset and image model**](map-profile-version-image-model.md) — One profile per framework; versions, runtime and tool sets are resolved via a compatibility table to a digest-pinned image.
