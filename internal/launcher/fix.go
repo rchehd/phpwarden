@@ -67,9 +67,9 @@ func Fix(ctx context.Context, location config.Location, effective config.Effecti
 	if err := localEndpoint(ctx, process); err != nil {
 		return failure("docker_unavailable", err)
 	}
-	image, err := inspect(ctx, tool, process)
+	image, err := ensureImage(ctx, tool, effective.Config.Runner.ImagePull, process)
 	if err != nil {
-		return failure("image_unavailable", err)
+		return failure(imageErrorCode(tool), err)
 	}
 	request, err := runrequest.Build(location, effective, selected, ids, image, tool.ID)
 	if err != nil {

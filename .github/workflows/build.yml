@@ -18,6 +18,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   validate:
     name: Validate build request
@@ -48,9 +52,18 @@ jobs:
               fi
             fi
           fi
-          if [ "$REF_TYPE" = tag ] && [[ ! "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          if [ "$REF_TYPE" = tag ] && [[ ! "$REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
             echo "Build tags must use vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-prerelease." >&2
             exit 1
+          fi
+          if [ "$REF_TYPE" = tag ] && [[ "$REF_NAME" == *-* ]]; then
+            IFS='.' read -r -a identifiers <<< "${REF_NAME#*-}"
+            for identifier in "${identifiers[@]}"; do
+              if [[ "$identifier" =~ ^0[0-9]+$ ]]; then
+                echo "Numeric prerelease identifiers cannot start with zero." >&2
+                exit 1
+              fi
+            done
           fi
 
   checks:
@@ -72,8 +85,18 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
       - name: Build development worker images
-        run: docker buildx bake
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          export PHPWARDEN_VERSION="v0.0.0-dev.${GITHUB_SHA::7}"
+          if [ "$REF_TYPE" = tag ]; then export PHPWARDEN_VERSION="$REF_NAME"; fi
+          export PHPWARDEN_COMMIT="$GITHUB_SHA"
+          docker buildx bake
       - name: Run real Docker fixture tests
         run: |
           for runtime in 8.1 8.2 8.3 8.4; do
@@ -102,29 +125,49 @@ jobs:
               docker push "$repository:$tag"
             done
           done
+          mkdir -p published
+          version="v0.0.0-dev.${GITHUB_SHA::7}"
+          if [ "$REF_TYPE" = tag ]; then version="$REF_NAME"; fi
+          python3 tools/distribution.py manifest --version "$version" --repository "$repository" --output published/compatibility.json
+      - name: Upload published worker compatibility manifest
+        if: (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && inputs.publish_images)
+        uses: actions/upload-artifact@v7
+        with:
+          name: phpwarden-worker-manifest-${{ github.sha }}
+          path: published/compatibility.json
+          if-no-files-found: error
 
   cli-build:
     name: CLI · downloadable Linux amd64 build
-    if: github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'cli'
-    needs: checks
+    if: >-
+      always() && needs.checks.result == 'success' &&
+      (github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'cli') &&
+      (needs.docker.result == 'success' || (needs.docker.result == 'skipped' && inputs.target == 'cli'))
+    needs: [checks, docker]
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
+      - name: Download matching published worker manifest
+        if: github.event_name == 'push' || inputs.publish_images
+        uses: actions/download-artifact@v8
+        with:
+          name: phpwarden-worker-manifest-${{ github.sha }}
+          path: published
       - name: Build and package standalone CLI
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          mkdir -p dist
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o dist/phpwarden ./cmd/phpwarden
-          dist/phpwarden --version
-          cp README.md dist/README.md
-          git rev-parse HEAD > dist/COMMIT
-          tar -czf dist/phpwarden-linux-amd64.tar.gz -C dist phpwarden README.md COMMIT
-          cd dist
-          sha256sum phpwarden-linux-amd64.tar.gz > SHA256SUMS
+          version="v0.0.0-dev.${GITHUB_SHA::7}"
+          if [ "$REF_TYPE" = tag ]; then version="$REF_NAME"; fi
+          manifest=()
+          if [ -f published/compatibility.json ]; then manifest=(--manifest published/compatibility.json); fi
+          python3 tools/distribution.py package --version "$version" --commit "$GITHUB_SHA" "${manifest[@]}" --output dist
       - name: Upload CLI archive and checksum
         uses: actions/upload-artifact@v7
         with:
@@ -132,5 +175,31 @@ jobs:
           path: |
             dist/phpwarden-linux-amd64.tar.gz
             dist/SHA256SUMS
+            dist/compatibility.json
           if-no-files-found: error
+
+  release:
+    name: Publish versioned CLI release
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [docker, cli-build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: phpwarden-linux-amd64-${{ github.sha }}
+          path: dist
+      - name: Publish archive, checksum and compatibility manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cd dist
+          sha256sum -c SHA256SUMS
+          prerelease=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then prerelease=(--prerelease); fi
+          gh release create "$RELEASE_TAG" phpwarden-linux-amd64.tar.gz SHA256SUMS compatibility.json --verify-tag --title "$RELEASE_TAG" --generate-notes "${prerelease[@]}"
 

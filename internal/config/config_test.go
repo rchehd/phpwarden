@@ -39,6 +39,22 @@ func TestCompletionAndUpdatesDefaultsAndBounds(t *testing.T) {
 	}
 }
 
+func TestImagePullDefaultAndOfflinePolicy(t *testing.T) {
+	for _, policy := range []string{"missing", "never"} {
+		effective, err := Parse([]byte(minimal + "runner: {image_pull: " + policy + "}\n"))
+		if err != nil || effective.Config.Runner.ImagePull != policy || effective.Provenance["runner.image_pull"] != "project_config" {
+			t.Fatalf("%+v %v", effective, err)
+		}
+	}
+	if _, err := Parse([]byte(minimal + "runner: {image_pull: always}\n")); err == nil {
+		t.Fatal("unsupported pull policy accepted")
+	}
+	effective, err := Parse([]byte(minimal))
+	if err != nil || effective.Config.Runner.ImagePull != "missing" {
+		t.Fatalf("%+v %v", effective, err)
+	}
+}
+
 func TestDeadCodeDefaultsAndOptOut(t *testing.T) {
 	for _, override := range []string{"", "tools: {dead-code: {}}\n"} {
 		effective, err := Parse([]byte(minimal + override))

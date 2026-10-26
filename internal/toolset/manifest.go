@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	buildinfo "github.com/rchehd/phpwarden"
 	"io"
 	"regexp"
 	"slices"
@@ -20,7 +21,16 @@ import (
 //go:embed manifest-v1.json
 var bundledManifest []byte
 
-var bundled = sync.OnceValues(func() (Catalog, error) { return ParseManifest(bundledManifest) })
+var bundled = sync.OnceValues(func() (Catalog, error) {
+	data, err := buildinfo.ReleaseManifest()
+	if err != nil {
+		return Catalog{}, err
+	}
+	if data == nil {
+		data = bundledManifest
+	}
+	return ParseManifest(data)
+})
 
 type manifest struct {
 	Version  int     `json:"version"`

@@ -3,6 +3,9 @@ ARG PHP_IMAGE
 
 FROM golang:1.26.5-alpine3.23@sha256:622e56dbc11a8cfe87cafa2331e9a201877271cbff918af53d3be315f3da88cc AS build
 
+ARG BUILD_VERSION=dev
+ARG BUILD_COMMIT=unknown
+
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
@@ -10,7 +13,7 @@ COPY buildinfo.go docker-bake.json ./
 COPY cmd ./cmd
 COPY internal ./internal
 COPY schemas ./schemas
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/phpwarden ./cmd/phpwarden
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/rchehd/phpwarden.Distribution=container -X github.com/rchehd/phpwarden.Version=${BUILD_VERSION} -X github.com/rchehd/phpwarden.Commit=${BUILD_COMMIT}" -o /out/phpwarden ./cmd/phpwarden
 
 FROM node:22.22.3-alpine3.22@sha256:cd7807368cf24826297cbad5dca1a44972ccfd770647db52a8c7589eb4599ac8 AS node-tools
 
@@ -106,6 +109,8 @@ ARG REQUIRE_CHECKER_VERSION=4.16.1
 ARG PHP_VERSION
 ARG PHP_RUNTIME
 ARG TOOLSET_ID
+ARG BUILD_VERSION=dev
+ARG BUILD_COMMIT=unknown
 
 RUN test -n "$TOOLSET_ID" || { echo "TOOLSET_ID is required; use docker buildx bake" >&2; exit 1; }
 RUN apk add --no-cache git ca-certificates libstdc++ python3 \
@@ -132,6 +137,8 @@ COPY --from=tools /opt/phpwarden/tools/eventhorizon/vendor /usr/local/lib/phpwar
 COPY --from=semgrep-tools /opt/phpwarden/tools/semgrep/vendor /usr/local/lib/phpwarden/semgrep/vendor
 COPY --from=build /out/phpwarden /usr/local/bin/phpwarden
 LABEL org.opencontainers.image.title="PHPWarden static worker" \
+    org.opencontainers.image.version="${BUILD_VERSION}" \
+    org.opencontainers.image.revision="${BUILD_COMMIT}" \
     org.opencontainers.image.source="https://github.com/rchehd/phpwarden" \
     io.phpwarden.protocol="2" \
     io.phpwarden.toolset="${TOOLSET_ID}" \

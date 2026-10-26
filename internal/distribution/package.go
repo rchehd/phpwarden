@@ -1,0 +1,110 @@
+package distribution
+
+import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"time"
+
+	buildinfo "github.com/rchehd/phpwarden"
+	"github.com/rchehd/phpwarden/internal/runner"
+	"github.com/rchehd/phpwarden/internal/selfupdate"
+	"github.com/rchehd/phpwarden/internal/toolset"
+)
+
+func Package(ctx context.Context, binary, readme, manifest, output string) error {
+	binary, err := filepath.Abs(binary)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	probe := (runner.Exec{}).Run(ctx, runner.Command{Name: binary, Args: []string{"--build-info"}})
+	var info buildinfo.Info
+	if probe.Err != nil || probe.ExitCode != 0 || json.Unmarshal(probe.Stdout, &info) != nil || info.Platform != "linux/amd64" || !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(info.Commit) {
+		return fmt.Errorf("binary must report a linux/amd64 build with an exact Git commit")
+	}
+	data, err := os.ReadFile(binary)
+	if err != nil {
+		return err
+	}
+	if len(data) > selfupdate.MaxArchive {
+		return fmt.Errorf("binary exceeds release size limit")
+	}
+	doc, err := os.ReadFile(readme)
+	if err != nil {
+		return err
+	}
+	metadata, _ := json.MarshalIndent(info, "", "  ")
+	files := map[string][]byte{"phpwarden": data, "README.md": doc, "COMMIT": []byte(info.Commit + "\n"), "release.json": append(metadata, '\n')}
+	if manifest != "" {
+		data, err := os.ReadFile(manifest)
+		if err != nil {
+			return err
+		}
+		if _, err := toolset.ParseManifest(data); err != nil {
+			return err
+		}
+		var identity struct {
+			Release string `json:"release"`
+		}
+		json.Unmarshal(data, &identity)
+		if identity.Release != info.Version || info.ManifestSHA256 != fmt.Sprintf("%x", sha256.Sum256(data)) || info.Distribution != "standalone" {
+			return fmt.Errorf("binary and release manifest identity differ")
+		}
+		if normalized, err := selfupdate.Version(info.Version); err != nil || normalized != info.Version {
+			return fmt.Errorf("standalone binary requires a canonical release version")
+		}
+		files["compatibility.json"] = data
+	} else if info.ManifestSHA256 != "" || info.Distribution != "source" {
+		return fmt.Errorf("development archive must not claim standalone release compatibility")
+	}
+	var buffer bytes.Buffer
+	zip := gzip.NewWriter(&buffer)
+	archive := tar.NewWriter(zip)
+	for _, name := range []string{"phpwarden", "README.md", "COMMIT", "release.json", "compatibility.json"} {
+		data, exists := files[name]
+		if !exists {
+			continue
+		}
+		mode := int64(0o644)
+		if name == "phpwarden" {
+			mode = 0o755
+		}
+		if err := archive.WriteHeader(&tar.Header{Name: name, Mode: mode, Size: int64(len(data)), Typeflag: tar.TypeReg}); err != nil {
+			return err
+		}
+		if _, err := archive.Write(data); err != nil {
+			return err
+		}
+	}
+	if err := archive.Close(); err != nil {
+		return err
+	}
+	if err := zip.Close(); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(output, 0o755); err != nil {
+		return err
+	}
+	name := "phpwarden-linux-amd64.tar.gz"
+	if err := os.WriteFile(filepath.Join(output, name), buffer.Bytes(), 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(output, "SHA256SUMS"), []byte(fmt.Sprintf("%x  %s\n", sha256.Sum256(buffer.Bytes()), name)), 0o644); err != nil {
+		return err
+	}
+	if data, exists := files["compatibility.json"]; exists {
+		if err := os.WriteFile(filepath.Join(output, "compatibility.json"), data, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}

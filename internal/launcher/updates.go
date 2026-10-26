@@ -18,7 +18,7 @@ func UpdatesFetcher(effective config.Effective, process runner.Process) projectu
 		if err := localEndpoint(ctx, process); err != nil {
 			return nil, err
 		}
-		image, err := inspect(ctx, selection, process)
+		image, err := ensureImage(ctx, selection, effective.Config.Runner.ImagePull, process)
 		if err != nil {
 			return nil, err
 		}

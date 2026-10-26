@@ -7,10 +7,24 @@ Drupal is currently the only available profile. Symfony and Laravel profiles are
 ## Requirements
 
 - Linux amd64, Git, and a local Docker daemon.
-- Go 1.26.5 to build the CLI.
+- Go 1.26.5 only when building the CLI from source.
 - A project supported by an available profile. The current Drupal profile supports PHP 8.1, 8.2, 8.3, and 8.4.
 
 ## Install
+
+Download a Linux amd64 archive and `SHA256SUMS` from a published [GitHub Release](https://github.com/rchehd/phpwarden/releases). Verify the checksum before extracting, then install the executable into a writable directory such as `~/.local/bin`:
+
+```sh
+sha256sum -c SHA256SUMS
+tar -xzf phpwarden-linux-amd64.tar.gz
+install -Dm755 phpwarden "$HOME/.local/bin/phpwarden"
+```
+
+Keep `~/.local/bin` in `PATH`. From the project, run `phpwarden init` and `phpwarden check`. The published CLI embeds its matching compatibility manifest and downloads only the required worker image on first use. It verifies the exact repository digest, platform, protocol and toolset before starting checks. Existing compatible images need no network access. Concurrent requests share a download lock; cancellation or download failure stops the check. `doctor` and `resolve` never download images.
+
+For offline/preloaded installations, set `runner.image_pull: never`; the default is `missing`. The configured `runner.timeout_seconds` also bounds initial image download, so increase it for a slow first download. This setting controls worker image downloads; Composer advisory/update queries have their own offline settings.
+
+### Build from source
 
 Build the CLI and the Docker images locally. There is one image per PHP version, each with the same checker versions. From this repository:
 
@@ -39,7 +53,7 @@ There are two ways to run a check:
 
 | Installation | How it runs |
 |---|---|
-| Standalone CLI | The host binary reads config and launches the matching local worker image |
+| Standalone CLI | The host binary reads config, downloads a missing published worker image when needed, and launches it |
 | Docker image directly | The image runs `phpwarden worker check` inside the mounted project |
 
 For example, with a Git project configured for PHP 8.4 and its dependencies installed, run from that project's Git root:
@@ -62,7 +76,7 @@ The separate **Build** workflow runs manually or on a pushed version tag such as
 | `cli` | Downloadable CLI archive only |
 | `images` | Worker images and their Docker acceptance tests only |
 
-Enable `publish_images` with `all` or `images` on `main` to publish the tested development images to GHCR. Without it, images are built and tested without publication. Version-tag pushes always build both targets and publish version-specific image tags such as `static-php8.4-v0.1.0-rc.1` without moving the floating development tags.
+Enable `publish_images` with `all` or `images` on `main` to publish the tested development images to GHCR. Without it, images are built and tested without publication. Version-tag pushes always build both targets, publish version-specific image tags such as `static-php8.4-v0.1.0-rc.1` without moving the floating development tags, and publish a GitHub Release with the CLI archive/checksums/manifest after successful checks and builds. Tags with a prerelease suffix create prereleases; plain `update` selects stable releases.
 
 To request just the CLI archive with GitHub CLI:
 
@@ -72,11 +86,26 @@ gh workflow run build.yml --repo rchehd/phpwarden --ref main -f target=cli
 
 Use `-f target=all -f publish_images=true` to build both targets and publish the images.
 
-Build runs that include the CLI produce a `phpwarden-linux-amd64-<commit>` Actions artifact containing `phpwarden-linux-amd64.tar.gz` and `SHA256SUMS`. Extract the downloaded artifact, run `sha256sum -c SHA256SUMS`, then extract the tarball. It contains the executable, README and source commit SHA.
+Build runs that include the CLI produce a `phpwarden-linux-amd64-<commit>` Actions artifact containing `phpwarden-linux-amd64.tar.gz` and `SHA256SUMS`. Extract the downloaded artifact, run `sha256sum -c SHA256SUMS`, then extract the tarball. It contains the executable, README, source commit SHA and `release.json` build identity.
 
-The standalone CLI archive is uploaded to Actions artifacts, not GHCR. GHCR receives the ready-to-run PHP runtime images when publication is enabled; those images already contain PHPWarden and the analysis tools.
+With `all` + `publish_images=true`, the image job records real published digests, then the CLI job embeds that manifest. This development snapshot has a `v0.0.0-dev.<commit>` version, supports automatic worker downloads, and can later update to a published stable CLI. The archive includes `compatibility.json`, also uploaded separately. `internal/toolset/publication-v1.json` declares framework ranges: Drupal 10.0–10.6 on PHP 8.1–8.4 and Drupal 11.0–11.4 on PHP 8.3–8.4. Project Composer requirements can further restrict a combination. The ranges describe declared compatibility, not proof of every application/tool combination.
 
-These are development builds: the CLI still requires locally named matching images, reports `dev` as its version and does not download images automatically. GitHub Releases, automatic image pulls, a ready-to-use Compose service, and Composer/npm packages are planned in [the distribution and installation UX plan](DISTRIBUTION-PLAN.md).
+CLI-only builds and builds without image publication retain the source/development manifest and require locally prepared images. They do not claim release compatibility or support self-replacement. `--version` reports the embedded version and commit; `--build-info` provides JSON including installation type and manifest checksum. GHCR contains worker images, while CLI archives are available through Actions artifacts and versioned GitHub Releases. Ready-to-use Compose, Composer and npm packaging remain separate work.
+
+### Update PHPWarden
+
+```sh
+phpwarden update --check
+phpwarden update
+phpwarden update --to v0.1.0-rc.1
+phpwarden update --check --format json
+```
+
+`update --check` only reads release metadata. `update` downloads the latest stable release for the current platform; `--to` selects an exact published version, including prereleases or an explicit downgrade. An ordinary update never downgrades a newer installed release. Linux amd64 is the initial supported platform. A release must already exist on GitHub; Actions artifacts alone do not provide the update channel.
+
+The updater checks `SHA256SUMS`, the API asset digest when available, archive paths/types/sizes, platform/version/commit, compatibility-manifest identity and the downloaded executable's build metadata. It locks the installation directory, detects concurrent replacement, and atomically replaces the executable only after validation. Download/validation/permission failures preserve the installed CLI. It updates only standalone installations; source builds, containers and known package-manager paths must use their own update mechanism. The installation directory must be writable; the updater does not request elevation.
+
+Project settings, native rules, hooks and skills are preserved. The next `check` downloads its selected worker if missing; `update` does not download all PHP runtimes. Old images remain available for rollback and are not pruned automatically. Updating installed skills/hooks is a separate `init --agents ... --hooks ...` operation; customized skill files still require review. Use `updates` (plural) to assess project dependencies.
 
 ## Configure a project
 

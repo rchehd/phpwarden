@@ -1,3 +1,11 @@
+variable "PHPWARDEN_VERSION" {
+  default = "dev"
+}
+
+variable "PHPWARDEN_COMMIT" {
+  default = "unknown"
+}
+
 group "default" {
   targets = ["php"]
 }
@@ -19,6 +27,8 @@ target "php" {
     PHP_VERSION = item.version
     PHP_RUNTIME = item.runtime
     TOOLSET_ID  = "${PHPWARDEN_TOOLSET}-php${item.runtime}"
+    BUILD_VERSION = PHPWARDEN_VERSION
+    BUILD_COMMIT = PHPWARDEN_COMMIT
     REQUIRE_CHECKER_VERSION = item.runtime == "8.1" ? "4.7.1" : "4.16.1"
   }
   tags = ["phpwarden:static-php${item.runtime}-dev"]

@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -81,9 +82,9 @@ func check(ctx context.Context, location config.Location, effective config.Effec
 	if err := localEndpoint(ctx, process); err != nil {
 		return failure("docker_unavailable", err)
 	}
-	image, err := inspect(ctx, selected, process)
+	image, err := ensureImage(ctx, selected, effective.Config.Runner.ImagePull, process)
 	if err != nil {
-		return failure("image_unavailable", err)
+		return failure(imageErrorCode(selected), err)
 	}
 	progress.Stage(ctx, fmt.Sprintf("Preparing %d selected files", len(selection.Files)+len(selection.ProjectFiles)))
 	request, err := runrequest.Build(location, effective, selection, only, image, selected.ID)
@@ -262,11 +263,16 @@ func localEndpoint(ctx context.Context, process runner.Process) error {
 	return nil
 }
 
+var errImageMissing = errors.New("selected image is not available locally")
+
 func inspect(ctx context.Context, selection toolset.Selection, process runner.Process) (string, error) {
 	result := process.Run(ctx, runner.Command{Name: "docker", Args: []string{"image", "inspect", selection.Image}})
 	if result.Err != nil || result.ExitCode != 0 {
 		if !selection.Development {
-			return "", fmt.Errorf("selected release image %s is unavailable locally; registry pull is not implemented yet: %s %v", selection.Image, strings.TrimSpace(string(result.Stderr)), result.Err)
+			if !result.Unavailable && !result.TimedOut && ctx.Err() == nil && strings.Contains(string(result.Stderr), "No such image") {
+				return "", fmt.Errorf("%w: %s", errImageMissing, selection.Image)
+			}
+			return "", fmt.Errorf("cannot inspect selected release image %s: %s %v", selection.Image, strings.TrimSpace(string(result.Stderr)), result.Err)
 		}
 		target := "php" + strings.Join(strings.SplitN(selection.PHPVersion, ".", 3)[:2], "")
 		return "", fmt.Errorf("development image %s is unavailable; build it with docker buildx bake %s: %s %v", selection.Image, target, strings.TrimSpace(string(result.Stderr)), result.Err)

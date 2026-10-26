@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	buildinfo "github.com/rchehd/phpwarden"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -41,6 +43,7 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
        phpwarden hook stop --client codex|cursor|claude [--project PATH]
        phpwarden doctor [options]
        phpwarden updates [--security] [--direct] [--no-dev] [--offline] [--runtime-version X.Y.Z] [options]
+       phpwarden update [--check] [--to VERSION] [--format text|json]
 
 Options:
   --project PATH       Project root
@@ -50,6 +53,7 @@ Options:
   --all                Show every finding in text reports (default: first 10 per rule group)
   --help               Show help
   --version            Show version
+  --build-info         Show executable version, commit, installation and manifest identity as JSON
 
 Init options:
   --no-interaction, -n Use profile defaults; skills/hooks require explicit --agents/--hooks
@@ -81,7 +85,7 @@ Check uses local development Docker images (Linux amd64, PHP runtime 8.1–8.4, 
 Init offers agent skills, completion hooks and check selection in terminals; CI, JSON and redirected streams use defaults.
 Agent skills use .agents/skills; Claude gets a relative directory link in .claude/skills.
 Init writes .phpwarden.yaml at the Git root and never overwrites an existing file.
-Worker check requires PHP in its execution environment. Images must exist locally; automatic pulls are not implemented.
+Worker check requires PHP in its execution environment. Published CLI builds download missing digest-pinned images unless runner.image_pull is never.
 `
 
 var minorVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
@@ -140,6 +144,21 @@ func Run(arguments []string, cwd string, stdout, stderr io.Writer) int {
 }
 
 func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(arguments) > 0 && arguments[0] == "update" {
+		return updateCLI(ctx, arguments[1:], stdout, stderr)
+	}
+	if len(arguments) == 1 && arguments[0] == "--build-info" {
+		metadata, err := buildinfo.Metadata(runtime.GOOS + "/" + runtime.GOARCH)
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 3
+		}
+		if err := writeJSON(stdout, metadata); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 3
+		}
+		return 0
+	}
 	if len(arguments) >= 2 && arguments[0] == "worker" && arguments[1] == "updates" {
 		return workerUpdates(ctx, arguments[2:], cwd, stdout, stderr)
 	}
@@ -158,7 +177,7 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		return 0
 	}
 	if args.version {
-		fmt.Fprintln(stdout, "phpwarden dev")
+		fmt.Fprintf(stdout, "phpwarden %s (%s)\n", buildinfo.Version, buildinfo.Commit)
 		return 0
 	}
 	if len(args.command) == 1 && (args.command[0] == "doctor" || args.command[0] == "updates") {

@@ -122,6 +122,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+		"image_pull": {"type": "string", "enum": ["missing", "never"], "default": "missing"},
         "concurrency": {
           "type": "integer",
           "minimum": 0,

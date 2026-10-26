@@ -24,6 +24,8 @@ scope:
   # whole_files: false
 
 runner:
+  # image_pull: missing
+
   # concurrency: 1  # 0 = all, 1 = sequential, N = limit
   # result_cache: false
   timeout_seconds: 300

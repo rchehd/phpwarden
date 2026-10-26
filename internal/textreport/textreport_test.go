@@ -17,6 +17,19 @@ import (
 
 var update = flag.Bool("update", false, "rewrite golden files")
 
+func TestPublishedImageFailureDoesNotSuggestLocalBuild(t *testing.T) {
+	result := report.New()
+	result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "published_image_unavailable", Stage: "launcher", Message: "worker image download failed"})
+	result.Finalize()
+	var output bytes.Buffer
+	if err := Write(&output, result, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(output.String(), "docker buildx") || !strings.Contains(output.String(), "runner.image_pull") {
+		t.Fatalf("wrong distribution guidance: %s", &output)
+	}
+}
+
 func base(files ...string) report.Report {
 	result := report.New()
 	result.Scope = &scope.Selection{Mode: "diff", BaseRef: new("origin/main"), Files: files}

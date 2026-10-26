@@ -71,9 +71,10 @@ type Scope struct {
 }
 
 type Runner struct {
-	Concurrency    int  `json:"concurrency"`
-	ResultCache    bool `json:"result_cache"`
-	TimeoutSeconds int  `json:"timeout_seconds"`
+	ImagePull      string `json:"image_pull"`
+	Concurrency    int    `json:"concurrency"`
+	ResultCache    bool   `json:"result_cache"`
+	TimeoutSeconds int    `json:"timeout_seconds"`
 }
 
 type Tools struct {
@@ -468,7 +469,7 @@ func Parse(data []byte) (Effective, error) {
 			ComposerRoot: ".",
 			Framework:    Framework{Version: "auto"},
 			Scope:        Scope{Mode: "diff", Exclude: []string{}},
-			Runner:       Runner{Concurrency: 1, TimeoutSeconds: 300},
+			Runner:       Runner{Concurrency: 1, TimeoutSeconds: 300, ImagePull: "missing"},
 			Agents:       Agents{Completion: Completion{Enabled: true, MaxAttempts: 2, TimeoutSeconds: 300}},
 			Updates:      Updates{TimeoutSeconds: 120, MaxAgeHours: 24, MaxStaleHours: 168},
 			Tools: Tools{PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
@@ -506,6 +507,7 @@ func Parse(data []byte) (Effective, error) {
 				}},
 		},
 		Provenance: map[string]string{
+			"runner.image_pull": "core_default",
 			"framework.version": "core_default", "composer_root": "core_default", "scope.mode": "core_default",
 			"scope.exclude": "core_default", "scope.whole_files": "core_default",
 			"runner.concurrency": "core_default", "runner.result_cache": "core_default", "runner.timeout_seconds": "core_default", "tools.debug.enabled": "profile_default",
