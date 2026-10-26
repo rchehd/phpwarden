@@ -27,7 +27,7 @@ func ensureImage(ctx context.Context, selection toolset.Selection, policy string
 		return image, err
 	}
 	if policy == "never" {
-		return "", fmt.Errorf("%w; runner.image_pull is never", err)
+		return "", fmt.Errorf("%w; runner.image_pull is never; run phpwarden prepare while online", err)
 	}
 	if policy != "missing" && policy != "" {
 		return "", fmt.Errorf("unsupported image pull policy %q", policy)

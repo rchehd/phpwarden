@@ -203,6 +203,30 @@ class LauncherCLITest(unittest.TestCase):
             self.assertEqual(snapshot(scenario.root), before)
         return result
 
+    def test_prepare_ignores_scope_and_never_analyzes_project_files(self):
+        with materialize(FIXTURES / "added-debug") as scenario:
+            self.configure(scenario.root, "missing-base-ref")
+            config = scenario.root / ".phpwarden.yaml"
+            settings = json.loads(config.read_text())
+            settings["runner"] = {"image_pull": "never"}
+            config.write_text(json.dumps(settings))
+            before = snapshot(scenario.root)
+            for _ in range(2):
+                result = self.run_cli(scenario.root, ["prepare"], scenario.env)
+                self.assertTrue(result["ready"])
+                self.assertEqual(result["command"], "prepare")
+                self.assertEqual(result["exit_code"], 0)
+                self.assertTrue(result["selection"]["development"])
+                self.assertRegex(result["image_id"], r"^sha256:[0-9a-f]{64}$")
+                self.assertNotIn("checks", result)
+                self.assertNotIn("findings", result)
+                self.assertEqual(snapshot(scenario.root), before)
+            settings["scope"]["base"] = scenario.base
+            config.write_text(json.dumps(settings))
+            result = self.run_cli(scenario.root, ["check", "--only=debug"], scenario.env)
+            self.assertEqual(result["exit_code"], 1)
+            self.assertTrue(result["complete"])
+
     def test_rule_groups_and_all_preserve_complete_machine_reports(self):
         with materialize(FIXTURES / "clean-debug") as scenario:
             self.configure(scenario.root, scenario.base)

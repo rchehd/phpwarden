@@ -36,6 +36,7 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
        phpwarden config <validate|show> [options]
        phpwarden scope [PATH...] [options]
        phpwarden resolve [options]
+       phpwarden prepare [--project PATH] [--config PATH] [--format text|json]
        phpwarden check [PATH...] [options]
        phpwarden fix [PATH...] [options]
        phpwarden worker check [PATH...] [options]
@@ -82,11 +83,13 @@ Scope options:
   --only ID[,ID...]    Select composer-audit, composer-require-checker, composer-unused, composer-validate, dead-code, debug, deptrac, drupal-config, eslint, eventhorizon, gitleaks, jscpd, phpcs, phpmd, phpstan, rector, semgrep, stylelint, syntax, twig-cs-fixer, whitespace, yaml; enable selected checkers
 
 Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
-Check uses local development Docker images (Linux amd64, PHP runtime 8.1–8.4, target from 8.1 up to the runtime).
+Check uses Docker worker images (Linux amd64, PHP runtime 8.1–8.4, target from 8.1 up to the runtime).
 Init offers agent skills, completion hooks and check selection in terminals; CI, JSON and redirected streams use defaults.
 Agent skills use .agents/skills; Claude gets a relative directory link in .claude/skills.
 Init writes .phpwarden.yaml at the Git root and never overwrites an existing file.
 Worker check requires PHP in its execution environment. Published CLI builds download missing digest-pinned images unless runner.image_pull is never.
+Prepare explicitly downloads the selected published image even with runner.image_pull: never; it never runs analysis.
+Source/development CLI builds only validate a preloaded development image. Prepare does not warm Composer advisory or update caches.
 `
 
 var minorVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
@@ -188,6 +191,9 @@ func runContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		fmt.Fprintf(stdout, "phpwarden %s (%s)\n", buildinfo.Version, buildinfo.Commit)
 		return 0
 	}
+	if len(args.command) > 0 && args.command[0] == "prepare" {
+		return prepareProject(ctx, args, cwd, stdout, stderr)
+	}
 	if len(args.command) == 1 && (args.command[0] == "doctor" || args.command[0] == "updates") {
 		return projectMaintenance(ctx, args, cwd, stdout, stderr)
 	}
@@ -240,7 +246,7 @@ func runContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--all applies only to text reports from check, fix or worker check; compact and JSON already include every finding"))
 	}
 	if !isInit && !isScope && !isConfig && !isWorker && !isCheck && !isResolve {
-		return fail(stdout, stderr, args, "usage", fmt.Errorf("expected init, config validate/show, resolve, scope, check, fix, worker check, or hook pre-commit; use --help"))
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("expected init, config validate/show, resolve, prepare, scope, check, fix, worker check, or hook pre-commit; use --help"))
 	}
 	if !isInit && (args.phpRuntime != "" || args.phpTarget != "" || args.composerRoot != "") {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--composer-root, --php-runtime and --php-target require the init command"))
@@ -612,6 +618,9 @@ func writeScope(args options, location config.Location, selection scope.Selectio
 }
 
 func fail(stdout, stderr io.Writer, args options, stage string, err error) int {
+	if len(args.command) > 0 && args.command[0] == "prepare" {
+		return writePreparation(stdout, stderr, args.format, launcher.Preparation{Version: 1, Command: "prepare", ExitCode: 2, Diagnostics: []report.Diagnostic{{Code: stage + "_invalid", Stage: stage, Message: err.Error()}}})
+	}
 	if workerCommand(args) || len(args.command) > 0 && (args.command[0] == "check" || args.command[0] == "fix") {
 		return writeReport(stdout, stderr, args.format, args.color, report.InputError(stage, err), args.all)
 	}

@@ -40,6 +40,21 @@ Keep `~/.local/bin` in `PATH`. From the project, run `phpwarden init` and `phpwa
 
 For offline/preloaded installations, set `runner.image_pull: never`; the default is `missing`. The configured `runner.timeout_seconds` also bounds initial image download, so increase it for a slow first download. This setting controls worker image downloads; Composer advisory/update queries have their own offline settings.
 
+### Prepare an image for CI or offline checks
+
+```sh
+phpwarden prepare
+phpwarden prepare --project /path/to/project --format json
+```
+
+`prepare` reads the project config and compatibility manifest, then ensures the selected worker image is present and compatible. A published CLI downloads only the missing digest-pinned image; a compatible local image is reused without registry access. It checks the platform, PHP version, protocol, toolset, capabilities and analyzer versions. Concurrent preparation/check commands share the same download lock. No worker container, analyzer, Composer query or Docker build is started, and Git diff/base refs are not resolved.
+
+This is an explicit preparation command: it permits downloading a missing published image even when `runner.image_pull: never`. It does not change that setting or any project files. Run `prepare` while online, then use `check` with `runner.image_pull: never` to require the preloaded image. The runner timeout also bounds preparation; cancellation returns exit 130. Source/development CLI builds only validate the expected local development image and never pull mutable development tags. Run preparation on the same Docker daemon that will run checks; the host CLI still requires a local Docker Unix socket. Compose chooses its image before the container starts and does not expose a nested `prepare` command.
+
+Preparation can use `composer.lock` to discover compatibility before dependencies are installed, including a monorepo's `composer_root`. Conflicting project/dependency metadata remains an error. Required inputs are configuration and version metadata, not source selection or analyzer setup. JSON reports `ready`, the resolved `selection`, verified local `image_id`, `exit_code` and `diagnostics`. Exit codes are 0 for a ready image, 2 for invalid input/compatibility and 3 for Docker/download/verification failures; these are preparation results, not analysis reports.
+
+This prepares worker images only. For fully offline checks, configure Composer advisories separately with `tools.composer-audit.offline: true` and prepare its advisory cache in an online check first; a cold cache is reported unavailable according to the configured policy. `updates` has its own metadata/offline settings. `doctor` and `resolve` remain read-only and never download images.
+
 ### Docker Compose
 
 Published builds with a compatibility manifest also produce `phpwarden-compose-php8.X.tar.gz` for each supported PHP runtime. Download the archive for your project's runtime and `SHA256SUMS`, verify it, then extract it at the project's Git root. It contains `phpwarden`, `.phpwarden.compose.yaml` and `.phpwarden-image`, with the worker pinned by registry digest:
@@ -169,7 +184,7 @@ Build runs that include the CLI produce a `phpwarden-linux-amd64-<commit>` Actio
 
 With `all` + `publish_images=true`, the image job records real published digests, then the CLI job embeds that manifest. This development snapshot has a `v0.0.0-dev.<commit>` version, supports automatic worker downloads, and can later update to a published stable CLI. The archive includes `compatibility.json`, also uploaded separately. The same artifact also includes checksum-listed Composer/npm packages and four Compose integration archives. CLI-only or unpublished builds produce only the development CLI archive. `internal/toolset/publication-v1.json` declares framework ranges: Drupal 10.0–10.6 on PHP 8.1–8.4 and Drupal 11.0–11.4 on PHP 8.3–8.4. Project Composer requirements can further restrict a combination. The ranges describe declared compatibility, not proof of every application/tool combination.
 
-CLI-only builds and builds without image publication retain the source/development manifest and require locally prepared images. They do not claim release compatibility or support self-replacement. `--version` reports the embedded version and commit; `--build-info` provides JSON including installation type and manifest checksum. GHCR contains worker images, while CLI archives are available through Actions artifacts and versioned GitHub Releases. Ready-to-use Compose, Composer and npm packaging remain separate work.
+CLI-only builds and builds without image publication retain the source/development manifest and require locally prepared images. They do not claim release compatibility or support self-replacement. `--version` reports the embedded version and commit; `--build-info` provides JSON including installation type and manifest checksum. GHCR contains worker images, while CLI archives are available through Actions artifacts and versioned GitHub Releases. Manifest-bearing builds also include Compose and Composer/npm packages; those package names are not yet registered in public package registries.
 
 ### Update PHPWarden
 
