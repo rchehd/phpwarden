@@ -27,10 +27,54 @@ configuration, records requests, executes project code or manages containers.
 
 ## Connect a client locally
 
+After preparing the runtime with `performance setup`, use the host CLI:
+
+```sh
+phpwarden performance connect --project /absolute/path/to/project --client all
+phpwarden performance disconnect --project /absolute/path/to/project --client all
+```
+
+`--client` accepts `all`, `codex`, `cursor`, `claude` or a comma-separated
+selection. Both commands support `--state-dir` and `--format json`. Use the same
+exact project and state base as setup. The connection reads the producer, reports
+directory and source mapping from that saved setup, including after teardown
+when captures remain. It does not build images or start containers.
+
+Codex uses `.codex/config.toml`; Cursor uses `.cursor/mcp.json`. New files get
+exact entries in the checkout's local Git exclude. Tracked configs are refused,
+and existing untracked configs must already be ignored so connecting does not
+hide unrelated user files. Claude uses the selected project's entry in
+`~/.claude.json`, or `$CLAUDE_CONFIG_DIR/.claude.json` when configured; it does not
+create a shared `.mcp.json` or a server available to every project.
+
+All selected configs are checked before writing. Existing servers and settings
+are retained; JSON is reformatted without changing values, while foreign TOML
+bytes and comments remain intact. Duplicate keys, invalid scopes, symlinks and
+server-name conflicts fail explicitly. Sealed inline TOML server tables may
+require manual configuration. Private ownership records contain only managed
+entry fingerprints and generated blocks, never copies of foreign settings.
+Repeating connect is safe and can update the executable path. An identical
+pre-existing server is reused without claiming ownership.
+
+Disconnect removes only unchanged owned entries. Manual changes to those
+entries require review and are not overwritten. Other settings, captures and
+runtime state are retained; local exclusions remain if the config now contains
+additional user settings. Disconnect can run without the original runtime
+receipt. If a write fails, earlier settings writes are rolled back when they
+have not changed concurrently, and a private pending ownership receipt allows
+retrying. Avoid editing client settings concurrently with installation.
+
+Reload the selected clients to discover the tools. Codex additionally requires
+trusting the project; connection installation does not change trust settings.
+The commands configure the connection, not client approval or enablement UI.
+
+### Manual configuration
+
 Replace the executable, reports and project paths below with absolute paths on
 your computer. MCP argument arrays do not expand `~` like a shell. Use one
 connection per checkout and preserve existing client settings. These snippets
-are installation instructions, not settings that PHPWarden writes for you.
+are an alternative for manually managed configurations or capture directories
+without a PHPWarden runtime receipt.
 
 ### Codex
 

@@ -48,6 +48,7 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
        phpwarden update [--check] [--to VERSION] [--format text|json]
        phpwarden performance --reports DIR --producer COMMIT [--report KEY] [--format text|json]
        phpwarden performance setup|status|teardown [options]
+       phpwarden performance connect|disconnect --client all|codex,cursor,claude [options]
        phpwarden performance mcp --reports DIR --producer COMMIT [options]
 
 Options:

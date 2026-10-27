@@ -342,6 +342,11 @@ func (w *workspace) exclude(ctx context.Context, add bool) error {
 		return fmt.Errorf("Git exclude location changed")
 	}
 	w.state.ExcludeFile = name
+	unlock, err := cache.LockProject(ctx, filepath.Dir(name))
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	current, err := readRegular(name, 1<<20)
 	if os.IsNotExist(err) {
 		current = nil

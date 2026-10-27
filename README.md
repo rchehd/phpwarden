@@ -33,7 +33,14 @@ phpwarden performance mcp --reports /path/to/spx-reports \
 
 An MCP client starts this command as a stdio subprocess. It exposes five read-only tools: `find_reports`, `get_report_metadata`, `get_flat_profile`, `get_callers` and `get_aggregated_call_graph`. They use the guarded native reader, validate the entire capture before returning a focused view, and carry explicit completeness, diagnostics, pagination and snapshot fingerprints. The graph aggregates direct-call counts; function timings apply across the whole capture. Query arguments cannot select arbitrary files or execute commands.
 
-The server needs no PHP, Docker or network, starts no profiler and does not modify client settings. Configure it locally for the selected checkout using an absolute executable/report path; [MCP setup examples](tools/spx/MCP.md) cover Codex, Cursor and Claude Code. `init --agents all -n` installs the shared performance skill and the usual Claude alias, separately from MCP connection configuration.
+The server needs no PHP, Docker or network and starts no profiler. After `performance setup`, install a local connection using its saved capture paths:
+
+```sh
+phpwarden performance connect --project /path/to/project --client all
+phpwarden performance disconnect --project /path/to/project --client all
+```
+
+Choose `codex`, `cursor`, `claude` or a comma-separated selection instead of `all`. Repeat `--state-dir` if setup used a custom state base. New Codex/Cursor config files are locally excluded from Git; tracked configs and existing unignored files are refused. Claude uses its private project-local configuration. Existing settings and servers are preserved; disconnect removes only unchanged owned entries and keeps captures. Reload the client after connecting and trust the project in Codex. [MCP setup details](tools/spx/MCP.md) include manual configuration. `init --agents all -n` installs the shared performance skill and the usual Claude alias separately.
 
 ### Local profiler setup (experimental)
 
