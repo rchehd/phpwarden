@@ -48,6 +48,7 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
        phpwarden update [--check] [--to VERSION] [--format text|json]
        phpwarden performance --reports DIR --producer COMMIT [--report KEY] [--format text|json]
        phpwarden performance setup|status|teardown [options]
+       phpwarden performance mcp --reports DIR --producer COMMIT [options]
 
 Options:
   --project PATH       Project root
@@ -161,6 +162,9 @@ func runContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		return updateCLI(ctx, arguments[1:], stdout, stderr)
 	}
 	if len(arguments) > 0 && arguments[0] == "performance" {
+		if len(arguments) > 1 && arguments[1] == "mcp" {
+			return performanceMCPCLI(ctx, arguments[2:], cwd, stdin, stdout, stderr)
+		}
 		return performanceCLI(ctx, arguments[1:], cwd, stdout, stderr)
 	}
 	if len(arguments) == 1 && arguments[0] == "--build-info" {

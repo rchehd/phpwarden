@@ -13,7 +13,7 @@ import (
 
 const Name = "phpwarden-architecture"
 
-var Names = []string{Name, "phpwarden-review", "phpwarden-doctor", "phpwarden-upgrade"}
+var Names = []string{Name, "phpwarden-review", "phpwarden-doctor", "phpwarden-upgrade", "phpwarden-performance"}
 
 //go:embed skills
 var content embed.FS

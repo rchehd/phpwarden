@@ -1,6 +1,9 @@
 package performance
 
-import "time"
+import (
+	"os"
+	"time"
+)
 
 const Producer = "62b228e4f7ca5e87faf6cc1e31bac7ad3c959a07"
 
@@ -12,6 +15,8 @@ type Options struct {
 	ContainerRoot string
 	Top           int
 	limits        *limits
+	directoryRoot *os.Root
+	workspaceRoot *os.Root
 }
 
 type limits struct {

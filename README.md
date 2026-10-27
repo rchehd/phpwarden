@@ -21,7 +21,19 @@ This first reader supports complete, unsampled gzip or Zstandard captures from t
 
 The reader rejects input symlinks, confines source mapping to the selected workspace, omits host/user/custom metadata and CLI arguments, and strips HTTP query strings, fragments and userinfo. Request paths and function names remain visible; inspect the output before sharing it. Inputs are bounded to 25 reports, 64 KiB metadata, 16 MiB compressed and 64 MiB decoded per report, with aggregate 64 MiB input/verification and decoded budgets. Other limits are one million events, 8,192 functions, 32,768 caller edges, 512 stack frames, 64 KiB lines and 15 seconds per invocation. Summaries show at most 20 functions and three direct callers per function, with omitted-function counts. JSON output stays below 2 MiB.
 
-Reading reports installs nothing and does not record requests. Local runtime setup is described below; MCP transport is a later step. Profiling remains separate from `check` and agent completion hooks. See [the SPX fixtures and probe](tools/spx/README.md).
+Reading reports installs nothing and does not record requests. Local runtime setup is described below; agents can use the [read-only MCP server](tools/spx/MCP.md) and the optional `phpwarden-performance` skill. Profiling remains separate from `check` and agent completion hooks. See [the SPX fixtures and probe](tools/spx/README.md).
+
+### Agent access through MCP
+
+```sh
+phpwarden performance mcp --reports /path/to/spx-reports \
+  --producer 62b228e4f7ca5e87faf6cc1e31bac7ad3c959a07 \
+  --project /path/to/project --container-root /var/www/html
+```
+
+An MCP client starts this command as a stdio subprocess. It exposes five read-only tools: `find_reports`, `get_report_metadata`, `get_flat_profile`, `get_callers` and `get_aggregated_call_graph`. They use the guarded native reader, validate the entire capture before returning a focused view, and carry explicit completeness, diagnostics, pagination and snapshot fingerprints. The graph aggregates direct-call counts; function timings apply across the whole capture. Query arguments cannot select arbitrary files or execute commands.
+
+The server needs no PHP, Docker or network, starts no profiler and does not modify client settings. Configure it locally for the selected checkout using an absolute executable/report path; [MCP setup examples](tools/spx/MCP.md) cover Codex, Cursor and Claude Code. `init --agents all -n` installs the shared performance skill and the usual Claude alias, separately from MCP connection configuration.
 
 ### Local profiler setup (experimental)
 
@@ -312,7 +324,7 @@ Choose specific clients with `--agents codex,cursor` or `--agents claude`; `--ag
 
 The installer writes standard Agent Skills packages to `.agents/skills/`. [Codex](https://learn.chatgpt.com/docs/build-skills) and [Cursor](https://cursor.com/docs/skills) discover that directory directly. For [Claude Code](https://code.claude.com/docs/en/skills#choose-where-skills-load), it adds relative directory symlinks under `.claude/skills/` pointing to the same packages. Commit the packages and Claude links to share them with the project. Clients that discover the shared directory can see the skills regardless of which client originally requested installation.
 
-Invoke `$phpwarden-architecture` in Codex or `/phpwarden-architecture` in Cursor and Claude Code. The same invocation convention applies to all four skills:
+Invoke `$phpwarden-architecture` in Codex or `/phpwarden-architecture` in Cursor and Claude Code. The same invocation convention applies to all five skills:
 
 | Skill | Purpose |
 | --- | --- |
@@ -320,6 +332,7 @@ Invoke `$phpwarden-architecture` in Codex or `/phpwarden-architecture` in Cursor
 | `phpwarden-review` | Review the check report and relevant code, prioritizing evidence and security context. Optional category focus keeps the configured checks intact. |
 | `phpwarden-doctor` | Explain environment failures using the native `doctor` report and propose concrete setup repairs. |
 | `phpwarden-upgrade` | Plan package/PHP upgrades from `updates`, identify dependency blockers, and use upstream Rector sets in dry-run mode. |
+| `phpwarden-performance` | Review recorded SPX hotspots, callers and bounded graphs through MCP, preserving capture scope and measurement limits. |
 
 Repeated installation reuses identical files and links. Different existing files, conflicting links and symlinked parent directories stop installation without overwriting them. Review customized skill files before updating them. A write failure can leave completed installation files; init reports the failure and a retry can finish it. Skill installation preserves project configuration, harness settings and hooks.
 

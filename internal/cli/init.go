@@ -133,7 +133,7 @@ func writeAgentInstallation(stdout io.Writer, result projectinit.Result) {
 	if result.AgentSkills.ClaudePath != "" {
 		fmt.Fprintf(stdout, "Claude skill link: %s\n", result.AgentSkills.ClaudePath)
 	}
-	fmt.Fprintln(stdout, "Skills: phpwarden-architecture, phpwarden-review, phpwarden-doctor, phpwarden-upgrade (use / in Cursor/Claude, $ in Codex)")
+	fmt.Fprintln(stdout, "Skills: phpwarden-architecture, phpwarden-review, phpwarden-doctor, phpwarden-upgrade, phpwarden-performance (use / in Cursor/Claude, $ in Codex)")
 }
 
 func writeHookInstallation(stdout io.Writer, result projectinit.Result) {

@@ -23,7 +23,8 @@ the complete stream before exporting function summaries. The producer flag is
 an operator assertion; it does not authenticate a capture. It accepts only the
 verified complete unsampled format, including explicit recorded/sampling counts.
 Older upstream fixtures lacking those fields are rejected rather than inferred.
-Reading reports does not install SPX, record requests or expose an MCP server.
+Reading reports does not install SPX or record requests. `performance mcp`
+serves validated views to agents through the [native MCP adapter](MCP.md).
 `performance setup|status|teardown` provides separate local runtime adapters;
 see [runtime validation and limits](RUNTIME.md).
 
@@ -93,7 +94,8 @@ gzip/Zstandard decoder instead of exporting raw MCP results. Its tests include
 malformed streams, recursion, resource limits, redaction and path confinement.
 Application setup remains separate from reading and local to each checkout:
 DDEV, Compose and bare Docker adapters preserve tracked project files. No
-default checker or MCP transport is introduced by the lifecycle commands.
+default checker is introduced by the lifecycle commands. The native MCP server
+is a separate read-only command.
 
 Native-reader validation replayed all 24 PHP 8.1–8.4 captures, the HTTP capture
 and three Drush captures from the spike without PHP or Docker. Source mapping

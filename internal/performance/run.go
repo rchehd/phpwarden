@@ -2,8 +2,10 @@ package performance
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path"
 	"slices"
@@ -28,6 +30,18 @@ func initial() Report {
 }
 
 func Run(ctx context.Context, options Options) Report {
+	return run(ctx, options, nil)
+}
+
+type captureView struct {
+	key, compression, snapshot string
+	meta                       header
+	data                       parsed
+	workspace                  *os.Root
+	container                  string
+}
+
+func run(ctx context.Context, options Options, visit func(context.Context, captureView)) Report {
 	result := initial()
 	if options.Directory == "" {
 		return InputError("--reports requires a reports directory.")
@@ -69,26 +83,32 @@ func Run(ctx context.Context, options Options) Report {
 		finish(&result, ctx)
 		return result
 	}
-	root, err := os.OpenRoot(options.Directory)
-	if err != nil {
-		record("", problem("input_unavailable", "Cannot open the reports directory."))
-		finish(&result, ctx)
-		return result
+	root := options.directoryRoot
+	var err error
+	if root == nil {
+		root, err = os.OpenRoot(options.Directory)
+		if err != nil {
+			record("", problem("input_unavailable", "Cannot open the reports directory."))
+			finish(&result, ctx)
+			return result
+		}
+		defer root.Close()
 	}
-	defer root.Close()
 	rootInfo, err := root.Stat(".")
 	if err != nil {
 		record("", problem("input_unavailable", "Cannot inspect the reports directory."))
 		finish(&result, ctx)
 		return result
 	}
-	var workspace *os.Root
+	workspace := options.workspaceRoot
 	if options.Workspace != "" {
-		workspace, err = os.OpenRoot(options.Workspace)
-		if err != nil {
-			return InputError("Cannot open the source workspace.")
+		if workspace == nil {
+			workspace, err = os.OpenRoot(options.Workspace)
+			if err != nil {
+				return InputError("Cannot open the source workspace.")
+			}
+			defer workspace.Close()
 		}
-		defer workspace.Close()
 		options.ContainerRoot = path.Clean(options.ContainerRoot)
 	}
 	keys, err := reportKeys(root, options.Key, cap.reports)
@@ -142,6 +162,13 @@ func Run(ctx context.Context, options Options) Report {
 			record(key, err)
 			continue
 		}
+		if visit != nil {
+			hash := sha256.New()
+			hash.Write(metaFile.hash[:])
+			hash.Write(body.hash[:])
+			hash.Write([]byte(compression))
+			visit(ctx, captureView{key, compression, fmt.Sprintf("%x", hash.Sum(nil)), meta, parsed, workspace, options.ContainerRoot})
+		}
 		result.Profiles = append(result.Profiles, summarize(key, compression, meta, parsed, workspace, options.ContainerRoot, options.Top, &outputLeft))
 		metaFile.data, body.data = nil, nil
 		captures = append(captures, captured{key, metaFile, body, compression})
@@ -176,6 +203,14 @@ func Run(ctx context.Context, options Options) Report {
 	if err != nil || !os.SameFile(rootInfo, currentRoot) {
 		record("", problem("input_changed", "Reports directory identity changed during analysis."))
 		result.Profiles = []Profile{}
+	}
+	if workspace != nil {
+		opened, openedErr := workspace.Stat(".")
+		current, currentErr := os.Stat(options.Workspace)
+		if openedErr != nil || currentErr != nil || !os.SameFile(opened, current) {
+			record("", problem("input_changed", "Source workspace directory identity changed during analysis."))
+			result.Profiles = []Profile{}
+		}
 	}
 	if ctx.Err() != nil {
 		record("", ctx.Err())
