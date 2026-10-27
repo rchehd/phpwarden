@@ -435,6 +435,29 @@ func TestDeclaredCalledFunctionsMustBeRecorded(t *testing.T) {
 	}
 }
 
+func TestProducerCPUCorrectionDoesNotInvalidateWallTime(t *testing.T) {
+	meta := header{Functions: 2, Calls: 2, Recorded: 2, Metrics: []string{"wt", "ct"}, wt: 0, ct: 1, Wall: 2}
+	body := "[events]\n|0|a0|a0\n|1|1000|200\n-1||-20\n-0|1000|100\n[functions]\n/project/main.php:1:main\n/project/main.php:2:child\n"
+	data, err := parseBody(context.Background(), zipped(t, []byte(body)), "gz", meta, defaults(), 1<<20)
+	if err != nil || data.cpuReliable {
+		t.Fatalf("%v %+v", err, data)
+	}
+	budget := 10000
+	profile := summarize("key", "gz", meta, data, nil, "", 10, &budget)
+	if profile.CPUMS != nil || profile.CPUOmittedReason == "" || profile.WallMS != 0.002 || profile.Calls != 2 {
+		t.Fatalf("%+v", profile)
+	}
+	for _, fn := range profile.Functions {
+		if fn.CPUSelfMS != nil {
+			t.Fatal("exported unreliable CPU timings")
+		}
+	}
+	bad := strings.Replace(body, "-1||-20", "-1|-1|-20", 1)
+	if _, err := parseBody(context.Background(), zipped(t, []byte(bad)), "gz", meta, defaults(), 1<<20); err == nil {
+		t.Fatal("accepted a regressing wall clock")
+	}
+}
+
 func FuzzDecodeEvents(f *testing.F) {
 	f.Add(string(raw(f)))
 	f.Add("[events]\n|r20|a0\n[functions]\n")

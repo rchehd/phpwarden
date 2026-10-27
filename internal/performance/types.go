@@ -69,6 +69,7 @@ type Profile struct {
 	Compression      string     `json:"compression"`
 	WallMS           float64    `json:"wall_ms"`
 	CPUMS            *float64   `json:"cpu_ms,omitempty"`
+	CPUOmittedReason string     `json:"cpu_omitted_reason,omitempty"`
 	PeakMemory       int64      `json:"peak_memory_bytes"`
 	Calls            int64      `json:"calls"`
 	TotalFunctions   int        `json:"total_functions"`

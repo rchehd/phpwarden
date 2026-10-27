@@ -206,9 +206,12 @@ func summarize(key, compression string, meta header, data parsed, workspace *os.
 	profile := Profile{Key: key, RecordedAt: time.Unix(meta.Timestamp, 0).UTC().Format(time.RFC3339), Kind: kind, Description: description,
 		Compression: compression, WallMS: float64(data.wall) / 1e6, PeakMemory: meta.Memory, Calls: meta.Recorded,
 		TotalFunctions: len(data.functions), Functions: []Function{}}
-	if meta.ct >= 0 {
+	if meta.ct >= 0 && data.cpuReliable {
 		value := float64(data.cpu) / 1e6
 		profile.CPUMS = &value
+	}
+	if meta.ct >= 0 && !data.cpuReliable {
+		profile.CPUOmittedReason = "CPU metrics omitted because producer-adjusted counters are not monotonic; wall time and call counts remain available."
 	}
 	ids := make([]int, len(data.functions))
 	for i := range ids {
@@ -228,7 +231,7 @@ func summarize(key, compression string, meta header, data parsed, workspace *os.
 		file, line, mapped := sourceLocation(workspace, container, function.file, function.line)
 		row := Function{ID: id, Name: functionName(function), Calls: stats.calls, SelfMS: float64(stats.self) / 1e6,
 			InclusiveMS: float64(stats.inclusive) / 1e6, File: file, Line: line, Mapped: mapped, Callers: []Caller{}}
-		if meta.ct >= 0 {
+		if meta.ct >= 0 && data.cpuReliable {
 			value := float64(stats.cpuSelf) / 1e6
 			row.CPUSelfMS = &value
 		}

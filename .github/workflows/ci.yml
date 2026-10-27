@@ -69,7 +69,9 @@ jobs:
       - name: Check Node helper syntax
         run: node --check internal/checker/nodecheck/helper.cjs
       - name: Check installer syntax
-        run: sh -n install.sh
+        run: |
+          sh -n install.sh
+          sh -n internal/perfruntime/build.sh
       - name: Check formatting
         run: |
           files=$(gofmt -l *.go cmd internal schemas)

@@ -30,11 +30,12 @@ type event struct {
 	values [22]int64
 }
 type parsed struct {
-	functions []functionInfo
-	stats     []statistics
-	edges     map[edge]int64
-	wall, cpu int64
-	decoded   int64
+	functions   []functionInfo
+	stats       []statistics
+	edges       map[edge]int64
+	wall, cpu   int64
+	decoded     int64
+	cpuReliable bool
 }
 
 func add(a, b int64) (int64, error) {
@@ -134,6 +135,7 @@ func decodeEvent(line string, metrics int, history *[20]event, position, count i
 }
 
 func parseBody(ctx context.Context, data []byte, compression string, meta header, cap limits, maxBytes int64) (result parsed, parseErr error) {
+	result.cpuReliable = true
 	var reader io.Reader
 	var closeReader func()
 	if compression == "gz" {
@@ -217,8 +219,11 @@ func parseBody(ctx context.Context, data []byte, compression string, meta header
 		if meta.ct >= 0 {
 			cpu = next.values[meta.ct]
 		}
-		if wall < result.wall || cpu < result.cpu {
-			return result, problem("invalid_body", "Time counters must be monotonic.")
+		if wall < result.wall {
+			return result, problem("invalid_body", "Wall-time counters must be monotonic.")
+		}
+		if cpu < result.cpu {
+			result.cpuReliable = false
 		}
 		result.wall, result.cpu = wall, cpu
 		history[position] = next
@@ -248,8 +253,14 @@ func parseBody(ctx context.Context, data []byte, compression string, meta header
 			ended := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
 			active[next.fn]--
-			duration, cpuDuration := wall-ended.wall, cpu-ended.cpu
-			if duration < ended.childrenWall || cpuDuration < ended.childrenCPU {
+			duration, cpuDuration := wall-ended.wall, int64(0)
+			if result.cpuReliable {
+				cpuDuration = cpu - ended.cpu
+				if cpuDuration < ended.childrenCPU {
+					result.cpuReliable = false
+				}
+			}
+			if duration < ended.childrenWall {
 				return result, problem("invalid_body", "Nested event timings are inconsistent.")
 			}
 			stats := &result.stats[next.fn]
@@ -257,9 +268,11 @@ func parseBody(ctx context.Context, data []byte, compression string, meta header
 			if err != nil {
 				return result, err
 			}
-			stats.cpuSelf, err = add(stats.cpuSelf, cpuDuration-ended.childrenCPU)
-			if err != nil {
-				return result, err
+			if result.cpuReliable {
+				stats.cpuSelf, err = add(stats.cpuSelf, cpuDuration-ended.childrenCPU)
+				if err != nil {
+					return result, err
+				}
 			}
 			if ended.outer {
 				stats.inclusive, err = add(stats.inclusive, duration)
@@ -273,9 +286,11 @@ func parseBody(ctx context.Context, data []byte, compression string, meta header
 				if err != nil {
 					return result, err
 				}
-				parent.childrenCPU, err = add(parent.childrenCPU, cpuDuration)
-				if err != nil {
-					return result, err
+				if result.cpuReliable {
+					parent.childrenCPU, err = add(parent.childrenCPU, cpuDuration)
+					if err != nil {
+						return result, err
+					}
 				}
 			}
 		}

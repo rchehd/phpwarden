@@ -47,6 +47,7 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
        phpwarden updates [--security] [--direct] [--no-dev] [--offline] [--runtime-version X.Y.Z] [options]
        phpwarden update [--check] [--to VERSION] [--format text|json]
        phpwarden performance --reports DIR --producer COMMIT [--report KEY] [--format text|json]
+       phpwarden performance setup|status|teardown [options]
 
 Options:
   --project PATH       Project root

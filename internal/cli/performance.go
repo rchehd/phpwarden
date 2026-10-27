@@ -12,6 +12,9 @@ import (
 )
 
 func performanceCLI(ctx context.Context, arguments []string, cwd string, stdout, stderr io.Writer) int {
+	if len(arguments) > 0 && (arguments[0] == "setup" || arguments[0] == "status" || arguments[0] == "teardown") {
+		return performanceRuntimeCLI(ctx, arguments, cwd, stdout, stderr)
+	}
 	settings := performance.Options{}
 	format := "text"
 	for i, argument := range arguments {
@@ -35,7 +38,7 @@ func performanceCLI(ctx context.Context, arguments []string, cwd string, stdout,
 	for i := 0; i < len(arguments); i++ {
 		name, value, inline := strings.Cut(arguments[i], "=")
 		if name == "--help" || name == "-h" {
-			fmt.Fprintf(stdout, "Usage: phpwarden performance --reports DIR --producer COMMIT [options]\n\nRead existing complete SPX profiles without running the project, PHP, Docker or MCP.\n\n  --reports DIR         Directory containing metadata/body report pairs\n  --report KEY          Inspect one report (default: validate the directory)\n  --producer COMMIT     Verified SPX producer: %s\n  --project PATH        Local workspace for source mapping\n  --container-root DIR  Corresponding absolute root in captured source paths\n  --limit N             Top functions per report, 1–20 (default 10)\n  --format text|json    Output format (default text)\n\nProducer identity is an explicit assertion. Unknown/sampled/partial captures are rejected.\nSource mapping needs both --project and --container-root. This command installs nothing.\n", performance.Producer)
+			fmt.Fprintf(stdout, "Usage: phpwarden performance --reports DIR --producer COMMIT [options]\n       phpwarden performance setup|status|teardown [options]\n\nRead existing complete SPX profiles without running the project, PHP, Docker or MCP.\n\n  --reports DIR         Directory containing metadata/body report pairs\n  --report KEY          Inspect one report (default: validate the directory)\n  --producer COMMIT     Verified SPX producer: %s\n  --project PATH        Local workspace for source mapping\n  --container-root DIR  Corresponding absolute root in captured source paths\n  --limit N             Top functions per report, 1–20 (default 10)\n  --format text|json    Output format (default text)\n\nProducer identity is an explicit assertion. Unknown/sampled/partial captures are rejected.\nSource mapping needs both --project and --container-root. Reading reports installs nothing.\nSee performance setup --help for local runtime installation.\n", performance.Producer)
 			return 0
 		}
 		switch name {
@@ -100,6 +103,9 @@ func writePerformance(output io.Writer, result performance.Report) {
 	fmt.Fprintf(output, "PHPWarden · performance · %s · %d report(s)\n", status, len(result.Profiles))
 	for _, profile := range result.Profiles {
 		fmt.Fprintf(output, "\n%s · %s\n  %s · %.3f ms · peak %.2f MiB · %d calls\n", profile.Key, profile.Description, profile.RecordedAt, profile.WallMS, float64(profile.PeakMemory)/(1<<20), profile.Calls)
+		if profile.CPUOmittedReason != "" {
+			fmt.Fprintln(output, "  "+profile.CPUOmittedReason)
+		}
 		fmt.Fprintln(output, "\n  Self ms   Total ms   Calls   Function")
 		for _, function := range profile.Functions {
 			fmt.Fprintf(output, "  %8.3f  %9.3f  %6d   %s\n", function.SelfMS, function.InclusiveMS, function.Calls, function.Name)
