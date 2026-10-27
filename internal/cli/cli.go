@@ -46,6 +46,7 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
        phpwarden doctor [options]
        phpwarden updates [--security] [--direct] [--no-dev] [--offline] [--runtime-version X.Y.Z] [options]
        phpwarden update [--check] [--to VERSION] [--format text|json]
+       phpwarden performance --reports DIR --producer COMMIT [--report KEY] [--format text|json]
 
 Options:
   --project PATH       Project root
@@ -157,6 +158,9 @@ func runContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	}
 	if len(arguments) > 0 && arguments[0] == "update" {
 		return updateCLI(ctx, arguments[1:], stdout, stderr)
+	}
+	if len(arguments) > 0 && arguments[0] == "performance" {
+		return performanceCLI(ctx, arguments[1:], cwd, stdout, stderr)
 	}
 	if len(arguments) == 1 && arguments[0] == "--build-info" {
 		metadata, err := buildinfo.Metadata(runtime.GOOS + "/" + runtime.GOARCH)

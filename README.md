@@ -4,6 +4,25 @@ PHPWarden runs static quality checks for PHP projects. Profiles provide the conv
 
 Drupal is currently the only available profile. Symfony and Laravel profiles are planned; WordPress is a possible future addition. The configuration and examples below use the Drupal profile.
 
+## Read recorded performance profiles (experimental)
+
+`performance` reads existing SPX captures and prints a summary of slow functions, their callers, execution time and overall peak memory. It supports text and JSON. Reading reports needs no PHP, Docker, running application or project configuration.
+
+```sh
+phpwarden performance --reports /path/to/spx-reports \
+  --producer 62b228e4f7ca5e87faf6cc1e31bac7ad3c959a07
+```
+
+Use `--report KEY` to select one capture, `--limit 5` to shorten the function list, or `--format json` for scripts and agents. To show local source locations, add both `--project /path/to/project` and `--container-root /project`, using the root recorded inside the application container. Locations identify function definitions. Mapping paths does not verify that the current source matches the captured code.
+
+`Self ms` is time spent in the function itself; `Total ms` includes its children. Recursive calls do not count the same inclusive interval twice. Durations are milliseconds; memory is the whole capture's peak, not per-function allocations. Results describe the recorded request or command, and do not establish a performance regression by themselves.
+
+This first reader supports complete, unsampled gzip or Zstandard captures from the pinned producer above. `--producer` is an explicit operator assertion, not authenticated provenance; the extension version alone cannot select the format or time units. Malformed metadata, missing bodies, unsupported/sampled/filtered recordings, mismatched counts, unbalanced events and changed inputs produce an incomplete report with exit 3. Directory mode validates all discovered report pairs; `--report` explicitly narrows that scope. Invalid arguments return 2, cancellation 130, and complete reading 0. These are performance results, separate from the static-check report schema.
+
+The reader rejects input symlinks, confines source mapping to the selected workspace, omits host/user/custom metadata and CLI arguments, and strips HTTP query strings, fragments and userinfo. Request paths and function names remain visible; inspect the output before sharing it. Inputs are bounded to 25 reports, 64 KiB metadata, 16 MiB compressed and 64 MiB decoded per report, with aggregate 64 MiB input/verification and decoded budgets. Other limits are one million events, 8,192 functions, 32,768 caller edges, 512 stack frames, 64 KiB lines and 15 seconds per invocation. Summaries show at most 20 functions and three direct callers per function, with omitted-function counts. JSON output stays below 2 MiB.
+
+This command installs nothing and does not record requests. Local SPX setup for DDEV, Compose and Docker, and MCP transport, are later steps. Profiling remains separate from `check` and agent completion hooks. See [the SPX fixtures and probe](tools/spx/README.md).
+
 ## Requirements
 
 - Linux amd64, Git, and a local Docker daemon.

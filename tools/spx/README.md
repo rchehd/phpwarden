@@ -1,6 +1,6 @@
 # SPX/MCP compatibility spike
 
-This directory records an experiment, not an installed PHPWarden integration.
+This directory records the compatibility experiment and fixtures for the experimental native report reader.
 It supplies pinned source identities, two sanitized real SPX v0.5-format profiles,
 their controlled PHP scenario and a standalone reader probe.
 
@@ -9,6 +9,24 @@ and runs it once. No application data is included. Function locations are
 definition locations; they are not the individual call sites.
 
 ## Run the reader probe
+
+Read the sanitized captures through PHPWarden without PHP, Docker or MCP:
+
+```sh
+go run ./cmd/phpwarden performance --reports tools/spx/fixtures \
+  --producer 62b228e4f7ca5e87faf6cc1e31bac7ad3c959a07 \
+  --project tools/spx/fixtures --container-root /fixture
+```
+
+Add `--format json` for the bounded, redacted report. The native reader validates
+the complete stream before exporting function summaries. The producer flag is
+an operator assertion; it does not authenticate a capture. It accepts only the
+verified complete unsampled format, including explicit recorded/sampling counts.
+Older upstream fixtures lacking those fields are rejected rather than inferred.
+This command does not install SPX, record requests or expose an MCP server.
+
+The following probe still tests the raw upstream MCP implementation and its
+known limitations, independently of the native reader:
 
 Use the exact MCP archive in `sources.json`, verify its SHA256, extract it outside
 the repository and install its locked dependencies with plugins/scripts disabled
@@ -68,7 +86,15 @@ inside disposable containers and left its artifacts outside this repository.
 - Bound compressed/decompressed input, memory, runtime and output; redact URI
   arguments and map container paths to the chosen workspace before agent access.
 
-The next implementation is a guarded read-only report adapter. Application
-setup follows separately and must remain local for each checkout: DDEV, Compose
-and bare Docker adapters, with no tracked project-file edits. No setup command
-or default checker is introduced by this spike.
+The native `performance` reader implements these guards and uses its own Go
+gzip/Zstandard decoder instead of exporting raw MCP results. Its tests include
+malformed streams, recursion, resource limits, redaction and path confinement.
+Application setup follows separately and must remain local for each checkout:
+DDEV, Compose and bare Docker adapters, with no tracked project-file edits.
+No setup command or default checker is introduced by the reader.
+
+Native-reader validation replayed all 24 PHP 8.1–8.4 captures, the HTTP capture
+and three Drush captures from the spike without PHP or Docker. Source mapping
+was also checked against the sanitized Drupal copy. Go tests cover both codecs,
+recursion, invalid metadata/events, missing/ambiguous pairs, symlinks, input
+changes, bounded summaries, cancellation and hostile terminal characters.

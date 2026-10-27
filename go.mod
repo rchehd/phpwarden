@@ -3,6 +3,7 @@ module github.com/rchehd/phpwarden
 go 1.26.5
 
 require (
+	github.com/klauspost/compress v1.20.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	go.yaml.in/yaml/v3 v3.0.5
 )
