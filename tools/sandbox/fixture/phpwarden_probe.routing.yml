@@ -1,0 +1,8 @@
+phpwarden_probe.page:
+  path: /phpwarden-probe
+  defaults:
+    _controller: '\Drupal\phpwarden_probe\Controller\ProbeController::page'
+  requirements:
+    _access: 'TRUE'
+  options:
+    no_cache: TRUE

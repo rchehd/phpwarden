@@ -44,6 +44,19 @@ func Package(ctx context.Context, binary, readme, manifest, output string) error
 	}
 	metadata, _ := json.MarshalIndent(info, "", "  ")
 	files := map[string][]byte{"phpwarden": data, "README.md": doc, "COMMIT": []byte(info.Commit + "\n"), "release.json": append(metadata, '\n')}
+	for _, entry := range []struct {
+		name string
+		args []string
+	}{
+		{"THIRD_PARTY_NOTICES.txt", []string{"--licenses"}},
+		{"dependencies.json", []string{"--licenses", "--format=json"}},
+	} {
+		result := (runner.Exec{}).Run(ctx, runner.Command{Name: binary, Args: entry.args})
+		if result.Err != nil || result.ExitCode != 0 || len(result.Stdout) == 0 || len(result.Stdout) > 1<<20 || entry.name == "dependencies.json" && !json.Valid(result.Stdout) {
+			return fmt.Errorf("binary must supply bounded embedded license material")
+		}
+		files[entry.name] = result.Stdout
+	}
 	if manifest != "" {
 		data, err := os.ReadFile(manifest)
 		if err != nil {
@@ -69,7 +82,7 @@ func Package(ctx context.Context, binary, readme, manifest, output string) error
 	var buffer bytes.Buffer
 	zip := gzip.NewWriter(&buffer)
 	archive := tar.NewWriter(zip)
-	for _, name := range []string{"phpwarden", "README.md", "COMMIT", "release.json", "compatibility.json"} {
+	for _, name := range []string{"phpwarden", "README.md", "COMMIT", "release.json", "compatibility.json", "THIRD_PARTY_NOTICES.txt", "dependencies.json"} {
 		data, exists := files[name]
 		if !exists {
 			continue

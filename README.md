@@ -4,6 +4,11 @@ PHPWarden runs static quality checks for PHP projects. Profiles provide the conv
 
 Drupal is currently the only available profile. Symfony and Laravel profiles are planned; WordPress is a possible future addition. The configuration and examples below use the Drupal profile.
 
+Development validation includes installed Drupal 10/11 sandboxes in the manual
+**Sandbox** workflow and before worker publication in **Build**. See [the
+sandbox suite](tools/sandbox/README.md). Third-party notices are available with
+`phpwarden --licenses`; see [dependency material](tools/spx/LICENSES.md).
+
 ## Read recorded performance profiles (experimental)
 
 `performance` reads existing SPX captures and prints a summary of slow functions, their callers, execution time and overall peak memory. It supports text and JSON. Reading reports needs no PHP, Docker, running application or project configuration.

@@ -1,0 +1,60 @@
+name: Sandbox
+
+on:
+  workflow_dispatch:
+    inputs:
+      drupal:
+        description: Drupal sandbox to install and test
+        type: choice
+        options: [all, "10", "11"]
+        default: all
+
+permissions:
+  contents: read
+
+jobs:
+  drupal:
+    name: Drupal ${{ matrix.drupal }} · installation and profiling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        drupal: ${{ fromJSON(inputs.drupal == '10' && '["10"]' || inputs.drupal == '11' && '["11"]' || '["10","11"]') }}
+    steps:
+      - name: Validate sandbox selection
+        env:
+          DRUPAL_SELECTION: ${{ inputs.drupal }}
+        run: |
+          case "$DRUPAL_SELECTION" in
+            all|10|11) ;;
+            *) echo "Select all, 10 or 11." >&2; exit 1 ;;
+          esac
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Build matching PHP 8.3 worker
+        run: |
+          export PHPWARDEN_VERSION="v0.0.0-dev.${GITHUB_SHA::7}"
+          export PHPWARDEN_COMMIT="$GITHUB_SHA"
+          docker buildx bake php83
+      - name: Install and exercise Drupal sandbox
+        env:
+          DRUPAL_MAJOR: ${{ matrix.drupal }}
+        run: python3 tools/sandbox/run.py --drupal "$DRUPAL_MAJOR" --output "$RUNNER_TEMP/phpwarden-sandbox-drupal$DRUPAL_MAJOR"
+      - name: Upload sandbox evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}/summary.json
+            ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}/captures.json
+            ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}/mcp-transcript.json
+            ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}/logs/
+          if-no-files-found: warn
+          retention-days: 7

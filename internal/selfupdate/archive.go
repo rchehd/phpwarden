@@ -72,7 +72,7 @@ func unpack(data []byte, tag, platform string) ([]byte, buildinfo.Info, error) {
 		if err != nil {
 			return nil, metadata, fmt.Errorf("invalid release tar archive")
 		}
-		allowed := map[string]int64{"phpwarden": MaxArchive, "release.json": 1 << 20, "compatibility.json": 1 << 20, "README.md": 1 << 20, "COMMIT": 1024}
+		allowed := map[string]int64{"phpwarden": MaxArchive, "release.json": 1 << 20, "compatibility.json": 1 << 20, "README.md": 1 << 20, "COMMIT": 1024, "THIRD_PARTY_NOTICES.txt": 1 << 20, "dependencies.json": 1 << 20}
 		limit, ok := allowed[header.Name]
 		if !ok || header.Typeflag != tar.TypeReg || header.Size < 1 || header.Size > limit || files[header.Name] != nil {
 			return nil, metadata, fmt.Errorf("unexpected, duplicate or oversized archive entry %q", header.Name)

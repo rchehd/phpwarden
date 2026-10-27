@@ -108,6 +108,23 @@ jobs:
         env:
           PHPWARDEN_TEST_IMAGE: phpwarden:static-php8.3-dev
         run: python -m unittest tests.acceptance.compose_cli -v
+      - name: Run installed Drupal 10 and 11 sandboxes
+        run: |
+          for major in 10 11; do
+            python3 tools/sandbox/run.py --drupal "$major" --output "$RUNNER_TEMP/phpwarden-sandbox-drupal$major"
+          done
+      - name: Upload sandbox evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: phpwarden-build-sandboxes-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/phpwarden-sandbox-drupal*/summary.json
+            ${{ runner.temp }}/phpwarden-sandbox-drupal*/captures.json
+            ${{ runner.temp }}/phpwarden-sandbox-drupal*/mcp-transcript.json
+            ${{ runner.temp }}/phpwarden-sandbox-drupal*/logs/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Publish tested images
         if: (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && inputs.publish_images)
         env:

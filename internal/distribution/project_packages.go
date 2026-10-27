@@ -36,12 +36,14 @@ func projectPackages(files map[string][]byte, info buildinfo.Info, output string
 	version := strings.TrimPrefix(info.Version, "v")
 	for _, manager := range []string{"composer", "npm"} {
 		contents := map[string][]byte{
-			"bin/phpwarden":      []byte(strings.ReplaceAll(packageLauncher, "@@INSTALLATION@@", manager)),
-			"payload/phpwarden":  files["phpwarden"],
-			"payload/SHA256SUMS": fmt.Appendf(nil, "%x  phpwarden\n", sha256.Sum256(files["phpwarden"])),
-			"release.json":       files["release.json"],
-			"compatibility.json": files["compatibility.json"],
-			"README.md":          files["README.md"],
+			"bin/phpwarden":           []byte(strings.ReplaceAll(packageLauncher, "@@INSTALLATION@@", manager)),
+			"payload/phpwarden":       files["phpwarden"],
+			"payload/SHA256SUMS":      fmt.Appendf(nil, "%x  phpwarden\n", sha256.Sum256(files["phpwarden"])),
+			"release.json":            files["release.json"],
+			"compatibility.json":      files["compatibility.json"],
+			"README.md":               files["README.md"],
+			"THIRD_PARTY_NOTICES.txt": files["THIRD_PARTY_NOTICES.txt"],
+			"dependencies.json":       files["dependencies.json"],
 		}
 		var metadata map[string]any
 		if manager == "composer" {
@@ -56,7 +58,7 @@ func projectPackages(files map[string][]byte, info buildinfo.Info, output string
 				"description": "PHPWarden Linux amd64 CLI with pinned worker compatibility",
 				"bin":         map[string]string{"phpwarden": "bin/phpwarden"},
 				"os":          []string{"linux"}, "cpu": []string{"x64"},
-				"files": []string{"bin", "payload", "release.json", "compatibility.json", "README.md"},
+				"files": []string{"bin", "payload", "release.json", "compatibility.json", "README.md", "THIRD_PARTY_NOTICES.txt", "dependencies.json"},
 			}
 		}
 		data, _ := json.MarshalIndent(metadata, "", "  ")

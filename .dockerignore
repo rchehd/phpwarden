@@ -3,6 +3,7 @@
 !go.sum
 !buildinfo.go
 !distribution_assets.go
+!spx.go
 !examples/
 !examples/compose/
 !examples/compose/phpwarden
@@ -17,6 +18,8 @@
 !docker/
 !docker/Dockerfile
 !tools/
+!tools/spx/
+!tools/spx/sources.json
 !tools/yaml/
 !tools/yaml/composer.json
 !tools/yaml/composer.lock

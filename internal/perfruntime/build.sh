@@ -41,6 +41,10 @@ CI=true ./configure --enable-spx --with-php-config="$php_config"
 make -j2
 mkdir -p /opt/phpwarden-spx
 cp modules/spx.so /opt/phpwarden-spx/spx.so
+cp /tmp/phpwarden-spx.tar.gz /opt/phpwarden-spx/source.tar.gz
+cp /tmp/phpwarden-spx-build.sh /opt/phpwarden-spx/build.sh
+printf '%s\n' "$expected" > /opt/phpwarden-spx/source.sha256
+chmod 0644 /opt/phpwarden-spx/source.tar.gz /opt/phpwarden-spx/build.sh /opt/phpwarden-spx/source.sha256
 "$php_bin" -n -d extension=/opt/phpwarden-spx/spx.so -r 'exit(extension_loaded("spx") ? 0 : 1);'
 cp LICENSE /opt/phpwarden-spx/LICENSE
 cd /

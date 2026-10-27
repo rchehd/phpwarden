@@ -120,7 +120,7 @@ printf '%s  %s\n' "$expected" "$local_archive" | sha256sum --status -c - || fail
 timeout 30 gzip -t -- "$local_archive" || fail "invalid gzip archive"
 timeout 30 tar -tzf "$local_archive" > "$work/entries" || fail "invalid tar archive"
 awk '
-    $0 != "phpwarden" && $0 != "README.md" && $0 != "COMMIT" && $0 != "release.json" && $0 != "compatibility.json" {bad=1}
+    $0 != "phpwarden" && $0 != "README.md" && $0 != "COMMIT" && $0 != "release.json" && $0 != "compatibility.json" && $0 != "THIRD_PARTY_NOTICES.txt" && $0 != "dependencies.json" {bad=1}
     {if (seen[$0]++) bad=1}
     END {if (bad || !seen["phpwarden"] || !seen["release.json"] || !seen["COMMIT"] || !seen["README.md"]) exit 1}
 ' "$work/entries" || fail "archive contains unexpected, duplicate or missing entries"
@@ -135,6 +135,9 @@ extract() {
 extract phpwarden 134217728
 extract release.json 1048576
 extract COMMIT 1024
+for notice in THIRD_PARTY_NOTICES.txt dependencies.json; do
+    if grep -qx "$notice" "$work/entries"; then extract "$notice" 1048576; fi
+done
 chmod 755 "$work/phpwarden" || fail "cannot prepare executable"
 timeout 15 "$work/phpwarden" --build-info > "$work/build-info.json" || fail "downloaded CLI cannot run on this platform"
 cmp -s "$work/build-info.json" "$work/release.json" || fail "CLI identity differs from release.json"

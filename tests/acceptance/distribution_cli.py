@@ -108,6 +108,10 @@ class DistributionCLI(unittest.TestCase):
     def verify_wrapper(self, wrapper, root, version):
         result = self.run_command([wrapper, "--version"], root)
         self.assertIn(version, result.stdout)
+        self.assertIn(
+            "github.com/modelcontextprotocol/go-sdk",
+            self.run_command([wrapper, "--licenses"], root).stdout,
+        )
         self.run_command([wrapper, "init", "-n", "--php-runtime", "8.3", "--pre-commit"], root)
         config = (root / ".phpwarden.yaml").read_bytes()
         self.run_command([wrapper, "init", "-n", "--pre-commit"], root)
@@ -117,6 +121,22 @@ class DistributionCLI(unittest.TestCase):
         self.assertNotIn("payload/phpwarden", hook)
         result = self.run_command([wrapper, "update", "--format=json"], root, expected=3)
         self.assertIn("not self-managed", json.loads(result.stdout)["message"])
+
+    def test_packages_retain_cli_license_material(self):
+        for output in self.releases.values():
+            with tarfile.open(output / "phpwarden-linux-amd64.tar.gz") as archive:
+                notices = archive.extractfile("THIRD_PARTY_NOTICES.txt").read()
+                inventory = archive.extractfile("dependencies.json").read()
+            self.assertIn(b"github.com/modelcontextprotocol/go-sdk", notices)
+            self.assertEqual(json.loads(inventory)["version"], 1)
+            with zipfile.ZipFile(output / "phpwarden-composer-linux-amd64.zip") as archive:
+                self.assertEqual(archive.read("THIRD_PARTY_NOTICES.txt"), notices)
+                self.assertEqual(archive.read("dependencies.json"), inventory)
+            with tarfile.open(output / "phpwarden-npm-linux-amd64.tgz") as archive:
+                self.assertEqual(
+                    archive.extractfile("package/THIRD_PARTY_NOTICES.txt").read(), notices
+                )
+                self.assertEqual(archive.extractfile("package/dependencies.json").read(), inventory)
 
     def test_composer_clean_install_reinstall_upgrade_and_rollback(self):
         root = self.project("composer-project")

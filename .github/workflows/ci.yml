@@ -83,6 +83,8 @@ jobs:
         run: go vet ./...
       - name: Unit and CLI acceptance tests
         run: go test -race ./...
+      - name: Verify pinned CLI license inventory
+        run: python3 tools/licenses.py check
       - name: Build standalone CLI
         run: CGO_ENABLED=0 go build -trimpath -o /tmp/phpwarden ./cmd/phpwarden
       - name: Lint PHP helper
@@ -117,8 +119,8 @@ jobs:
       - name: Install development checker
         run: python -m pip install -r requirements-dev.txt
       - name: Lint Python infrastructure
-        run: python -m ruff check tests internal/checker/eventhorizon/helper.py tools/eventhorizon/prepare.py tools/semgrep/prepare.py tools/distribution.py tools/spx
+        run: python -m ruff check tests internal/checker/eventhorizon/helper.py tools/eventhorizon/prepare.py tools/semgrep/prepare.py tools/distribution.py tools/licenses.py tools/spx tools/sandbox
       - name: Check Python infrastructure formatting
-        run: python -m ruff format --check tests internal/checker/eventhorizon/helper.py tools/eventhorizon/prepare.py tools/semgrep/prepare.py tools/distribution.py tools/spx
+        run: python -m ruff format --check tests internal/checker/eventhorizon/helper.py tools/eventhorizon/prepare.py tools/semgrep/prepare.py tools/distribution.py tools/licenses.py tools/spx tools/sandbox
       - name: Validate Git scenarios and expectations
         run: python -m unittest discover -s tests -v

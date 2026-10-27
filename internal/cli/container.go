@@ -32,7 +32,7 @@ func containerCLI(ctx context.Context, arguments []string, cwd string, stdin io.
 		}
 		return cacheContainerAudit(ctx, cwd, stderr)
 	}
-	if !slices.Contains([]string{"init", "check", "fix", "config", "scope", "resolve", "--version", "--build-info", "hook"}, arguments[0]) || arguments[0] == "hook" && (len(arguments) < 2 || arguments[1] != "pre-commit") {
+	if !slices.Contains([]string{"init", "check", "fix", "config", "scope", "resolve", "--version", "--build-info", "--licenses", "hook"}, arguments[0]) || arguments[0] == "hook" && (len(arguments) < 2 || arguments[1] != "pre-commit") {
 		fmt.Fprintln(stderr, "This command requires the host CLI; Compose supports init, check, fix, config, scope, resolve and hook pre-commit.")
 		return 2
 	}

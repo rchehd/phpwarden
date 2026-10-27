@@ -20,6 +20,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/launcher"
+	"github.com/rchehd/phpwarden/internal/legal"
 	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/projectinit"
 	"github.com/rchehd/phpwarden/internal/report"
@@ -60,6 +61,7 @@ Options:
   --help               Show help
   --version            Show version
   --build-info         Show executable version, commit, installation and manifest identity as JSON
+  --licenses           Show CLI third-party notices; --format=json shows dependency inventory
 
 Init options:
   --no-interaction, -n Use profile defaults; skills/hooks require explicit --agents/--hooks
@@ -156,6 +158,20 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 }
 
 func runContext(ctx context.Context, arguments []string, cwd string, stdin io.Reader, stdout, stderr io.Writer, native bool) int {
+	if len(arguments) > 0 && arguments[0] == "--licenses" {
+		data := legal.Notices
+		if len(arguments) == 2 && arguments[1] == "--format=json" || len(arguments) == 3 && arguments[1] == "--format" && arguments[2] == "json" {
+			data = legal.Dependencies
+		} else if len(arguments) != 1 {
+			fmt.Fprintln(stderr, "--licenses accepts only --format=json")
+			return 2
+		}
+		if _, err := stdout.Write(data); err != nil {
+			fmt.Fprintln(stderr, "Could not write license notices.")
+			return 3
+		}
+		return 0
+	}
 	if len(arguments) > 0 && arguments[0] == "container" {
 		return containerCLI(ctx, arguments[1:], cwd, stdin, stdout, stderr)
 	}
