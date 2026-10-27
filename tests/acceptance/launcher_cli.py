@@ -189,9 +189,10 @@ class LauncherCLITest(unittest.TestCase):
                 self.assertTrue(result.get("decision") == "block" or result.get("followup_message"))
 
     def run_completion(self, scenario, client, event, env):
-        paths = [scenario.root / name for name in (
-            ".phpwarden.yaml", "web/modules/custom/demo/demo.module"
-        )]
+        paths = [
+            scenario.root / name
+            for name in (".phpwarden.yaml", "web/modules/custom/demo/demo.module")
+        ]
         before = [path.read_bytes() for path in paths]
         completed = subprocess.run(
             [str(self.binary), "hook", "stop", "--client", client],
@@ -219,7 +220,8 @@ class LauncherCLITest(unittest.TestCase):
                     config["tools"]["phpcs"]["required"] = required
                     filename.write_text(json.dumps(config))
                     event = {
-                        "hook_event_name": "Stop", "session_id": "failure",
+                        "hook_event_name": "Stop",
+                        "session_id": "failure",
                         "cwd": str(scenario.root),
                     }
                     result, stderr = self.run_completion(scenario, "codex", event, env)
