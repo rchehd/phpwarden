@@ -1,0 +1,25 @@
+{
+  "key": "cached",
+  "exec_ts": 1793093429,
+  "host_name": "fixture",
+  "process_pid": 1,
+  "process_tid": 0,
+  "process_pwd": "/fixture",
+  "cli": 1,
+  "cli_command_line": "/fixture/scenario.php",
+  "http_request_uri": "n/a",
+  "http_method": "n/a",
+  "http_host": "n/a",
+  "custom_metadata_str": null,
+  "wall_time_ms": 15949,
+  "peak_memory_usage": 494928,
+  "called_function_count": 4,
+  "call_count": 4,
+  "recorded_call_count": 4,
+  "sampling_period_us": 0,
+  "enabled_metrics": [
+    "wt",
+    "ct",
+    "zm"
+  ]
+}
