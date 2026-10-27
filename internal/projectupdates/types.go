@@ -61,6 +61,30 @@ type Source struct {
 	Note      string `json:"note,omitempty"`
 }
 
+type Project struct {
+	Ecosystem       string   `json:"ecosystem"`
+	ID              string   `json:"id"`
+	Current         string   `json:"version"`
+	Origin          string   `json:"version_source"`
+	Paths           []string `json:"paths"`
+	Direct          bool     `json:"direct"`
+	Dev             bool     `json:"dev"`
+	Status          string   `json:"status"`
+	Reasons         []string `json:"reasons"`
+	SecurityCovered *bool    `json:"security_covered"`
+	ReleaseURL      string   `json:"release_url,omitempty"`
+}
+
+type ProfileReport struct {
+	Complete bool
+	Projects []Project
+	Sources  []Source
+	Notes    []string
+}
+
+type Metadata func(context.Context, string, string, func([]byte) error, func(context.Context) ([]byte, error)) ([]byte, Source, error)
+type ProfileFetcher func(context.Context, Metadata) ProfileReport
+
 type Report struct {
 	Version  int       `json:"version"`
 	Command  string    `json:"command"`
@@ -68,6 +92,7 @@ type Report struct {
 	ExitCode int       `json:"exit_code"`
 	PHP      PHP       `json:"php"`
 	Packages []Package `json:"packages"`
+	Projects []Project `json:"projects"`
 	Sources  []Source  `json:"sources"`
 	Notes    []string  `json:"notes"`
 }
@@ -89,6 +114,7 @@ type Request struct {
 	Toolset      string
 	Options      Options
 	Composer     ComposerFetcher
+	Profile      ProfileFetcher
 	HTTP         HTTPFetcher
 	Now          time.Time
 }

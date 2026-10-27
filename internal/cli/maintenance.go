@@ -13,6 +13,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/doctor"
 	"github.com/rchehd/phpwarden/internal/launcher"
+	"github.com/rchehd/phpwarden/internal/profile/drupal"
 	"github.com/rchehd/phpwarden/internal/projectupdates"
 	"github.com/rchehd/phpwarden/internal/runner"
 	"github.com/rchehd/phpwarden/internal/toolset"
@@ -68,7 +69,11 @@ func projectMaintenance(ctx context.Context, args options, cwd string, stdout, s
 	if discoveryErr == nil {
 		effective = facts
 	}
-	result := projectupdates.Run(ctx, projectupdates.Request{Location: location, Settings: settings, Branch: effective.Config.PHP.Runtime, ComposerRoot: effective.Config.ComposerRoot, Toolset: toolset.DevelopmentID(effective.Config.PHP.Runtime), Options: projectupdates.Options{Security: args.security, Direct: args.direct, NoDev: args.noDev, RuntimeVersion: args.runtimeVersion}, Composer: launcher.UpdatesFetcher(effective, runner.Exec{}), Now: time.Now()})
+	var profileUpdates projectupdates.ProfileFetcher
+	if effective.Config.Profile == "drupal" {
+		profileUpdates = drupal.UpdateAssessment(location.Root, effective.Config.ComposerRoot, effective.Project)
+	}
+	result := projectupdates.Run(ctx, projectupdates.Request{Location: location, Settings: settings, Branch: effective.Config.PHP.Runtime, ComposerRoot: effective.Config.ComposerRoot, Toolset: toolset.DevelopmentID(effective.Config.PHP.Runtime), Options: projectupdates.Options{Security: args.security, Direct: args.direct, NoDev: args.noDev, RuntimeVersion: args.runtimeVersion}, Composer: launcher.UpdatesFetcher(effective, runner.Exec{}), Profile: profileUpdates, Now: time.Now()})
 	if discoveryErr != nil {
 		result.Notes = append(result.Notes, "Installed dependency/layout discovery was not validated: "+discoveryErr.Error())
 	} else if err := discovery.Unchanged(location, effective); err != nil {
@@ -101,6 +106,21 @@ func writeUpdates(output io.Writer, result projectupdates.Report) {
 		fmt.Fprintln(output, "  The latest upstream release is security-tagged; this is not a CVE assessment of the current runtime.")
 	}
 	fmt.Fprintln(output, "  "+result.PHP.Note)
+	if len(result.Projects) > 0 {
+		fmt.Fprintln(output, "\nProject release status")
+		for _, item := range result.Projects {
+			fmt.Fprintf(output, "  %s/%s %s · %s\n", item.Ecosystem, item.ID, item.Current, item.Status)
+			if item.SecurityCovered != nil && !*item.SecurityCovered {
+				fmt.Fprintln(output, "    Not covered by the upstream security advisory policy; this alone does not establish a vulnerability.")
+			}
+			for _, reason := range item.Reasons {
+				fmt.Fprintln(output, "    "+reason)
+			}
+			if item.ReleaseURL != "" {
+				fmt.Fprintln(output, "    "+item.ReleaseURL)
+			}
+		}
+	}
 	for _, item := range result.Packages {
 		latest := item.Latest
 		if latest == "" {
@@ -126,7 +146,7 @@ func writeUpdates(output io.Writer, result projectupdates.Report) {
 	}
 	if len(result.Packages) == 0 {
 		if result.Complete {
-			fmt.Fprintln(output, "\nNo package updates or advisories match this selection.")
+			fmt.Fprintln(output, "\nNo Composer package updates or advisories match this selection.")
 		} else {
 			fmt.Fprintln(output, "\nNo package rows available for this selection; incomplete data cannot establish that packages are up to date.")
 		}

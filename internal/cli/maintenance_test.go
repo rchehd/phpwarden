@@ -45,7 +45,7 @@ func TestOfflineUpdatesAreExplicitlyIncompleteAndDoNotInvokeDocker(t *testing.T)
 	var stdout, stderr bytes.Buffer
 	code := Run([]string{"updates", "--project", root, "--offline", "--format=json"}, root, &stdout, &stderr)
 	var result projectupdates.Report
-	if json.Unmarshal(stdout.Bytes(), &result) != nil || code != 3 || result.Complete || len(result.Sources) != 3 || stderr.Len() != 0 {
+	if json.Unmarshal(stdout.Bytes(), &result) != nil || code != 3 || result.Complete || len(result.Sources) != 4 || stderr.Len() != 0 {
 		t.Fatalf("exit %d stdout=%s stderr=%s", code, &stdout, &stderr)
 	}
 	for _, source := range result.Sources {

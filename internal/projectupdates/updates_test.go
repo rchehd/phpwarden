@@ -309,6 +309,37 @@ func TestWorkerPlatformFilteredCacheIsRefreshed(t *testing.T) {
 	}
 }
 
+func TestProfileReleaseStatusFilters(t *testing.T) {
+	for _, test := range []struct {
+		options  Options
+		expected string
+	}{
+		{Options{Security: true}, "insecure,policy,unsupported"},
+		{Options{Security: true, Direct: true}, "insecure,unsupported"},
+		{Options{Security: true, Direct: true, NoDev: true}, "insecure"},
+	} {
+		request := requestFixture(t)
+		request.Options = test.options
+		uncovered := false
+		request.Profile = func(context.Context, Metadata) ProfileReport {
+			return ProfileReport{Complete: true, Projects: []Project{
+				{ID: "insecure", Status: "insecure", Direct: true},
+				{ID: "policy", Status: "supported", SecurityCovered: &uncovered},
+				{ID: "unsupported", Status: "unsupported", Direct: true, Dev: true},
+				{ID: "supported", Status: "supported", Direct: true},
+			}}
+		}
+		result := Run(context.Background(), request)
+		ids := []string{}
+		for _, item := range result.Projects {
+			ids = append(ids, item.ID)
+		}
+		if !result.Complete || strings.Join(ids, ",") != test.expected {
+			t.Fatalf("filters=%+v result=%+v", test.options, result)
+		}
+	}
+}
+
 func TestLivePublicMetadataAndComposer(t *testing.T) {
 	if os.Getenv("PHPWARDEN_UPDATES_LIVE") != "1" {
 		t.Skip("explicit opt-in network assessment")
