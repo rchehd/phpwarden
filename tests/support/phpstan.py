@@ -184,7 +184,8 @@ def check_phpstan_dependency_mismatch(test, configure, run):
         installed.write_text('{"packages": [{"name": "drupal/core", "version": "10.4.4"}]}\n')
         (scenario.root / "vendor/autoload.php").write_text("<?php\n")
         warnings = [
-            'composer.json: duplicate JSON key "extra"; the last value is used, as in Composer',
+            'composer.json:1:28 ($.extra): duplicate JSON key "extra"; '
+            "first defined at line 1, column 2; the last value is used, as in Composer",
             "installed drupal/core 10.4.4 conflicts with composer.lock version 11.3.16",
         ]
         for required, exit_code in ((True, 3), (False, 0)):
