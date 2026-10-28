@@ -1,7 +1,21 @@
 import hashlib
+import json
 import stat
 from contextlib import contextmanager
 from pathlib import Path
+
+
+def container_snapshot(inspection, started=False):
+    result = {
+        key: inspection[key] for key in ("Id", "Image", "Config", "HostConfig", "RestartCount")
+    }
+    result["Mounts"] = sorted(
+        inspection["Mounts"], key=lambda mount: json.dumps(mount, sort_keys=True)
+    )
+    result["running"] = inspection["State"]["Running"]
+    if started:
+        result["started"] = inspection["State"]["StartedAt"]
+    return result
 
 
 def snapshot(paths):

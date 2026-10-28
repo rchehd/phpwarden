@@ -3,7 +3,7 @@ import json
 import os
 import shutil
 
-from tools.sandbox.assertions import preserved, snapshot
+from tools.sandbox.assertions import container_snapshot, preserved, snapshot
 
 
 class ComposeInstallation:
@@ -68,12 +68,7 @@ class ComposeInstallation:
         sandbox.container = sandbox.current_container()
         inspection = json.loads(sandbox.run(["docker", "inspect", sandbox.container]))[0]
         assert inspection["State"]["Running"]
-        return {
-            key: inspection[key]
-            for key in ("Id", "Image", "Config", "HostConfig", "Mounts", "RestartCount")
-        } | {
-            "started_at": inspection["State"]["StartedAt"],
-        }
+        return container_snapshot(inspection, started=True)
 
     def database(self):
         return self.sandbox.exec(

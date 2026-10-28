@@ -2,6 +2,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from tools.sandbox.assertions import container_snapshot
+
 
 class DockerRuntime:
     def __init__(self, sandbox):
@@ -18,15 +20,7 @@ class DockerRuntime:
         return json.loads(self.sandbox.run(["docker", "inspect", container]))[0]
 
     def spec(self, container, started=False):
-        row = self.inspect(container)
-        result = {
-            key: row[key]
-            for key in ("Id", "Image", "Config", "HostConfig", "Mounts", "RestartCount")
-        }
-        result["running"] = row["State"]["Running"]
-        if started:
-            result["started"] = row["State"]["StartedAt"]
-        return result
+        return container_snapshot(self.inspect(container), started=started)
 
     def run_arguments(self, image, extra=()):
         sandbox = self.sandbox

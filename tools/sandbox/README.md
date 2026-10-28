@@ -259,6 +259,10 @@ and dependency assertions remain with their package manager. Cleanup attempts
 each remaining owned-resource step even when an earlier step fails. Any failed
 case or cleanup keeps the run unsuccessful, including after successful installs.
 
+Container preservation compares identity, configuration, restart state and every
+mount property. Mount order is normalized because `docker inspect` may reorder
+the same mounts between requests; command and environment order stay significant.
+
 CI uploads this tree on success or failure and renders an installation/scenario
 table in the job summary. Manual Drupal artifact names also include the selected
 installation method. Inspect local evidence with:

@@ -5,16 +5,115 @@ import shutil
 import tempfile
 import unittest
 from copy import deepcopy
+from itertools import permutations
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from tools.sandbox.compose import ComposeInstallation
 from tools.sandbox.docker import DockerRuntime
 from tools.sandbox.host import EXTENSIONS, HostRuntime, extension_configuration, snapshot
 from tools.sandbox.run import Sandbox
 
 
 class SandboxTest(unittest.TestCase):
+    def test_container_preservation_ignores_mount_order_but_detects_runtime_changes(self):
+        inspection = {
+            "Id": "application",
+            "Image": "sha256:fixture",
+            "Config": {"Cmd": ["php", "-S", "127.0.0.1:8080"], "Env": ["A=1", "A=2"]},
+            "HostConfig": {"ReadonlyRootfs": True},
+            "RestartCount": 0,
+            "Mounts": [
+                {
+                    "Type": "bind",
+                    "Source": "/scratch/project",
+                    "Destination": "/project",
+                    "RW": False,
+                },
+                {"Type": "bind", "Source": "/scratch/data", "Destination": "/data", "RW": True},
+                {
+                    "Type": "bind",
+                    "Source": "/scratch/files",
+                    "Destination": "/project/web/sites/default/files",
+                    "RW": True,
+                },
+            ],
+            "State": {"Running": True, "StartedAt": "2026-10-28T14:00:00Z"},
+        }
+        sandbox = SimpleNamespace(
+            name="fixture",
+            binary=None,
+            project=Path("/scratch/project"),
+            summary={"environment": "docker"},
+            current_container=lambda: "application",
+        )
+        runtime, installation = DockerRuntime(sandbox), ComposeInstallation(sandbox)
+
+        def snapshots(row):
+            sandbox.run = lambda _: json.dumps([row])
+            return runtime.spec("application", started=True), installation.application()
+
+        original = deepcopy(inspection)
+        before = snapshots(inspection)
+        for mounts in permutations(inspection["Mounts"]):
+            changed = deepcopy(inspection)
+            changed["Mounts"] = list(mounts)
+            self.assertEqual(before, snapshots(changed))
+        self.assertEqual(original, inspection)
+        for defect in (
+            "source",
+            "destination",
+            "writable",
+            "added mount",
+            "removed mount",
+            "duplicate mount",
+            "command",
+            "environment order",
+            "host config",
+            "id",
+            "image",
+            "restart",
+            "started",
+            "stopped",
+        ):
+            changed = deepcopy(inspection)
+            if defect in ("source", "destination", "writable"):
+                key, value = {
+                    "source": ("Source", "/elsewhere"),
+                    "destination": ("Destination", "/elsewhere"),
+                    "writable": ("RW", True),
+                }[defect]
+                changed["Mounts"][0][key] = value
+            elif defect == "added mount":
+                changed["Mounts"].append(
+                    {"Destination": "/socket", "Source": "/var/run/docker.sock"}
+                )
+            elif defect == "removed mount":
+                changed["Mounts"].pop()
+            elif defect == "duplicate mount":
+                changed["Mounts"].append(changed["Mounts"][0])
+            elif defect == "command":
+                changed["Config"]["Cmd"].reverse()
+            elif defect == "environment order":
+                changed["Config"]["Env"].reverse()
+            elif defect == "host config":
+                changed["HostConfig"]["ReadonlyRootfs"] = False
+            elif defect in ("id", "image"):
+                changed[defect.title()] = "replacement"
+            elif defect == "restart":
+                changed["RestartCount"] = 1
+            elif defect == "started":
+                changed["State"]["StartedAt"] = "2026-10-28T14:01:00Z"
+            else:
+                changed["State"]["Running"] = False
+                with self.assertRaises(AssertionError):
+                    snapshots(changed)
+                continue
+            with self.subTest(defect=defect):
+                for previous, actual in zip(before, snapshots(changed), strict=True):
+                    self.assertNotEqual(previous, actual)
+
     def test_host_extensions_use_private_override_and_preserve_dependency_order(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
