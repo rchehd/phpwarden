@@ -19,6 +19,7 @@ from tools.distribution import package  # noqa: E402
 from tools.sandbox.compose import ComposeInstallation  # noqa: E402
 from tools.sandbox.ddev import DdevRuntime  # noqa: E402
 from tools.sandbox.docker import DockerRuntime  # noqa: E402
+from tools.sandbox.host import HostRuntime  # noqa: E402
 from tools.sandbox.mcp import Client  # noqa: E402
 from tools.sandbox.packages import PackageInstallations  # noqa: E402
 
@@ -39,6 +40,8 @@ class Sandbox:
         repeats,
         installation="standalone",
         environment="compose",
+        host_php="php",
+        host_extensions=None,
     ):
         self.major, self.root = major, directory
         self.project, self.logs = directory / "project", directory / "logs"
@@ -72,6 +75,8 @@ class Sandbox:
         self.runtime = DdevRuntime(self) if environment == "ddev" else None
         if environment == "docker":
             self.runtime = DockerRuntime(self)
+        if environment == "host":
+            self.runtime = HostRuntime(self, host_php, host_extensions)
 
     def run(self, args, expected=(0,), cwd=None, input=None, timeout=180):
         self.sequence += 1
@@ -117,6 +122,8 @@ class Sandbox:
         )
 
     def exec(self, args, profile=False):
+        if isinstance(self.runtime, HostRuntime):
+            return self.runtime.exec(args, profile)
         command = ["docker", "exec"]
         if self.runtime:
             command += ["--user", self.user]
@@ -146,7 +153,7 @@ class Sandbox:
         return self.run(["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"])
 
     def install(self):
-        self.stage("building isolated application image and installing locked dependencies")
+        self.stage("preparing matching quality worker")
         self.worker_id = self.run(
             ["docker", "image", "inspect", self.worker, "--format", "{{.Id}}"]
         ).strip()
@@ -162,6 +169,10 @@ class Sandbox:
             raise RuntimeError(
                 "Sandbox worker differs from the existing development tag; refusing to replace it"
             )
+        if isinstance(self.runtime, HostRuntime):
+            self.runtime.install_project()
+            return
+        self.stage("building isolated application image and installing locked dependencies")
         self.run(
             [
                 "docker",
@@ -286,6 +297,9 @@ class Sandbox:
             }
         }
         (self.root / "compose.json").write_text(json.dumps(compose, indent=2))
+        self.finish_install()
+
+    def finish_install(self):
         (self.project / ".gitignore").write_text(
             "/vendor/\n/node_modules/\n/web/core/\n/web/sites/default/files/\n"
             "/web/sites/default/settings.php\n"
@@ -335,7 +349,11 @@ class Sandbox:
             hook.unlink()
         assert "modelcontextprotocol/go-sdk" in self.cli("--licenses")
         hooks = "all" if completion else "none"
-        runtime = [] if self.runtime else ["--php-runtime=8.3"]
+        runtime = (
+            ["--php-runtime=8.3"]
+            if (self.runtime is None or isinstance(self.runtime, HostRuntime))
+            else []
+        )
         self.cli("init", "-n", *runtime, "--agents=all", "--hooks=" + hooks, "--pre-commit")
         config = self.project / ".phpwarden.yaml"
         initial = config.read_bytes()
@@ -697,14 +715,15 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
 
     def execute(self):
         try:
-            self.pin = json.loads((ROOT / "tools/spx/sources.json").read_text())["spx"]
-            with urllib.request.urlopen(self.pin["url"], timeout=30) as response:
-                archive = response.read((2 << 20) + 1)
-            assert (
-                len(archive) <= 2 << 20
-                and hashlib.sha256(archive).hexdigest() == self.pin["sha256"]
-            )
-            (self.root / "spx.tar.gz").write_bytes(archive)
+            if not isinstance(self.runtime, HostRuntime):
+                self.pin = json.loads((ROOT / "tools/spx/sources.json").read_text())["spx"]
+                with urllib.request.urlopen(self.pin["url"], timeout=30) as response:
+                    archive = response.read((2 << 20) + 1)
+                assert (
+                    len(archive) <= 2 << 20
+                    and hashlib.sha256(archive).hexdigest() == self.pin["sha256"]
+                )
+                (self.root / "spx.tar.gz").write_bytes(archive)
             self.install()
             if self.runtime:
                 self.runtime.install()
@@ -728,9 +747,10 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
                         packages.run(manager)
             if self.installation in ("compose", "all"):
                 ComposeInstallation(self).run()
-            self.capture()
-            self.verify_mcp()
-            self.teardown()
+            if not isinstance(self.runtime, HostRuntime):
+                self.capture()
+                self.verify_mcp()
+                self.teardown()
             if self.runtime:
                 self.runtime.preserved()
         except Exception:
@@ -784,7 +804,13 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--worker-image", default=WORKER)
     parser.add_argument("--archive", type=Path)
-    parser.add_argument("--environment", choices=("compose", "ddev", "docker"), default="compose")
+    parser.add_argument(
+        "--environment", choices=("compose", "ddev", "docker", "host"), default="compose"
+    )
+    parser.add_argument("--host-php", default="php", help="PHP 8.3 executable for the host sandbox")
+    parser.add_argument(
+        "--host-extensions", type=Path, help="Additional native PHP extension directory"
+    )
     parser.add_argument(
         "--installation", choices=("standalone", "composer", "npm", "compose", "all")
     )
@@ -813,6 +839,8 @@ def main():
         args.repeats,
         installation,
         args.environment,
+        args.host_php,
+        args.host_extensions,
     )
     sandbox.execute()
     print(json.dumps(sandbox.summary, indent=2), flush=True)

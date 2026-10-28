@@ -61,6 +61,8 @@ class ComposeInstallation:
 
     def application(self):
         sandbox = self.sandbox
+        if sandbox.summary["environment"] == "host":
+            return sandbox.runtime.application()
         sandbox.container = sandbox.current_container()
         inspection = json.loads(sandbox.run(["docker", "inspect", sandbox.container]))[0]
         assert inspection["State"]["Running"]
@@ -266,7 +268,7 @@ class ComposeInstallation:
             assert report["complete"] and status == sandbox.git_status()
             assert preserved == self.snapshot(inputs)
             assert application_config == application_file.read_bytes()
-            assert before == self.application(), "Compose wrapper changed the application container"
+            assert before == self.application(), "Compose wrapper changed the application runtime"
             assert response == sandbox.http("off") and database == self.database()
             for path in (
                 configuration,
@@ -286,7 +288,7 @@ class ComposeInstallation:
                 "runtime_mismatch_rejected": True,
                 "foreign_hook_preserved": True,
                 "project_inputs_preserved": True,
-                "application_container_preserved": True,
+                "application_runtime_preserved": True,
                 "database_config_preserved": True,
                 "ownership_preserved": True,
                 "worker_image": image,
@@ -295,4 +297,4 @@ class ComposeInstallation:
         finally:
             sandbox.binary = self.host
             self.cleanup(image)
-            assert before == self.application(), "Quality cleanup changed the application container"
+            assert before == self.application(), "Quality cleanup changed the application runtime"

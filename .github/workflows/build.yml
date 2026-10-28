@@ -95,6 +95,12 @@ jobs:
         run: |
           sh tools/sandbox/install-ddev.sh "$RUNNER_TEMP/phpwarden-ddev/bin"
           echo "$RUNNER_TEMP/phpwarden-ddev/bin" >> "$GITHUB_PATH"
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: ctype, curl, dom, fileinfo, filter, gd, iconv, intl, mbstring, openssl, pdo, pdo_sqlite, phar, simplexml, sqlite3, tokenizer, xml, xmlreader, xmlwriter, zlib
+          coverage: none
+          tools: none
       - name: Build development worker images
         env:
           REF_TYPE: ${{ github.ref_type }}
@@ -115,9 +121,9 @@ jobs:
         env:
           PHPWARDEN_TEST_IMAGE: phpwarden:static-php8.3-dev
         run: python -m unittest tests.acceptance.compose_cli -v
-      - name: Run installed Drupal 10 and 11 sandboxes in Compose, DDEV and Docker
+      - name: Run installed Drupal 10 and 11 sandboxes in Compose, DDEV, Docker and host PHP
         run: |
-          for environment in compose ddev docker; do
+          for environment in compose ddev docker host; do
             for major in 10 11; do
               python3 tools/sandbox/run.py --drupal "$major" --environment "$environment" --output "$RUNNER_TEMP/phpwarden-sandbox-drupal$major-$environment"
             done

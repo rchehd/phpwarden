@@ -38,6 +38,8 @@ class PackageInstallations:
 
     def composer(self, *arguments):
         sandbox = self.sandbox
+        if sandbox.summary["environment"] == "host":
+            return sandbox.runtime.composer(*arguments, offline=True)
         return sandbox.run(
             [
                 "docker",
@@ -88,8 +90,12 @@ class PackageInstallations:
                         "version": row["composer_version"],
                         "dist": {
                             "type": "zip",
-                            "url": "/artifacts/"
-                            + row["composer"].relative_to(self.root).as_posix(),
+                            "url": (
+                                row["composer"].as_uri()
+                                if sandbox.summary["environment"] == "host"
+                                else "/artifacts/"
+                                + row["composer"].relative_to(self.root).as_posix()
+                            ),
                             "shasum": hashlib.sha1(row["composer"].read_bytes()).hexdigest(),
                         },
                         "bin": ["bin/phpwarden"],

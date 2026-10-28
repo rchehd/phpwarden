@@ -16,7 +16,7 @@ on:
       environment:
         description: Application environment to exercise
         type: choice
-        options: [all, compose, ddev, docker]
+        options: [all, compose, ddev, docker, host]
         default: all
 
 permissions:
@@ -24,14 +24,14 @@ permissions:
 
 jobs:
   drupal:
-    name: Drupal ${{ matrix.drupal }} · ${{ matrix.environment }} · installation and profiling
+    name: Drupal ${{ matrix.drupal }} · ${{ matrix.environment }} · acceptance
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         drupal: ${{ fromJSON(inputs.drupal == '10' && '["10"]' || inputs.drupal == '11' && '["11"]' || '["10","11"]') }}
-        environment: ${{ fromJSON(inputs.environment == 'compose' && '["compose"]' || inputs.environment == 'ddev' && '["ddev"]' || inputs.environment == 'docker' && '["docker"]' || '["compose","ddev","docker"]') }}
+        environment: ${{ fromJSON(inputs.environment == 'compose' && '["compose"]' || inputs.environment == 'ddev' && '["ddev"]' || inputs.environment == 'docker' && '["docker"]' || inputs.environment == 'host' && '["host"]' || '["compose","ddev","docker","host"]') }}
     steps:
       - name: Validate sandbox selection
         env:
@@ -43,8 +43,8 @@ jobs:
             *) echo "Select all, 10 or 11." >&2; exit 1 ;;
           esac
           case "$ENVIRONMENT_SELECTION" in
-            all|compose|ddev|docker) ;;
-            *) echo "Select all, compose, ddev or docker." >&2; exit 1 ;;
+            all|compose|ddev|docker|host) ;;
+            *) echo "Select all, compose, ddev, docker or host." >&2; exit 1 ;;
           esac
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -56,6 +56,13 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "22.22.3"
+      - uses: shivammathur/setup-php@v2
+        if: matrix.environment == 'host'
+        with:
+          php-version: "8.3"
+          extensions: ctype, curl, dom, fileinfo, filter, gd, iconv, intl, mbstring, openssl, pdo, pdo_sqlite, phar, simplexml, sqlite3, tokenizer, xml, xmlreader, xmlwriter, zlib
+          coverage: none
+          tools: none
       - name: Install pinned DDEV tools
         if: matrix.environment == 'ddev'
         run: |

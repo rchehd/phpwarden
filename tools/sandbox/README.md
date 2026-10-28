@@ -9,7 +9,8 @@ Both fixtures use PHP 8.3 on Linux amd64. The version pins are compatibility
 test cases, not production version recommendations. The local fixture-only
 Composer advisory override allows reproducing historical versions; it does
 not disable PHPWarden security checks. Dependency installation needs network
-access. The installed application runs without network or exposed host ports.
+access. Container applications run without network or exposed host ports;
+the host PHP application listens only on an ephemeral loopback port.
 Fixture manifests contain no project scripts. Only their explicitly allowed,
 locked installer/scaffold plugins run; Drupal 11 also needs its Symfony
 runtime plugin to generate `vendor/autoload_runtime.php` for the HTTP entrypoint.
@@ -56,6 +57,30 @@ sibling must retain its ID/start time throughout. Cleanup removes only UUID-owne
 fixture containers. `docker-launch.json` records the base argument vector and
 checksum, original container ID and restoration result, without the private key.
 
+Select host PHP with `--environment host`:
+
+```sh
+python3 tools/sandbox/run.py --drupal 10 --environment host --host-php /usr/bin/php8.3 --output /tmp/phpwarden-host-d10
+python3 tools/sandbox/run.py --drupal 11 --environment host --host-php /usr/bin/php8.3 --output /tmp/phpwarden-host-d11
+```
+
+This installs and serves Drupal with native PHP 8.3 and SQLite. Docker is still
+required for the quality worker; no application container is built or started.
+The harness creates its own `php.ini`, empty scan directory, temporary/session
+directories, Composer home/cache and PHP wrapper under the output directory.
+Only the listed Drupal extensions load; existing global INI files are hashed and
+must remain unchanged. Missing shared extensions may be supplied from a private
+directory with `--host-extensions DIRECTORY`; the harness never installs or
+enables system modules. Composer 2.10.3 is downloaded privately and SHA256-checked.
+
+All four installation methods exercise the same native site. HTTP, Drush,
+database configuration, settings and the server PID must survive quality checks.
+The Compose wrapper also preserves a foreign, unused Compose fixture; it never
+starts that service. Cleanup terminates only the owned PHP server. Host PHP live
+SPX setup is unsupported, so this environment explicitly records zero profiles
+and skips capture/MCP lifecycle assertions. Recorded-profile CLI/MCP coverage
+belongs to the separate Docker-less scenario.
+
 DDEV tests need DDEV, mkcert and Docker locally. CI uses the checksum-pinned
 [DDEV 1.25.4 archive](https://github.com/ddev/ddev/releases/expanded_assets/v1.25.4),
 installed into a private tools directory with `sh tools/sandbox/install-ddev.sh DIRECTORY`.
@@ -85,7 +110,7 @@ no fake published image manifest is supplied.
 
 Use `--installation standalone|composer|npm|compose|all` to select methods. The npm
 method requires host Node/npm (CI pins Node 22.22.3); Composer runs in the
-sandbox's pinned PHP application image. `--archive FILE` uses an existing
+sandbox's pinned PHP application image, or private native PHP for `host`. `--archive FILE` uses an existing
 candidate archive and its adjacent `SHA256SUMS`, selecting standalone only.
 `--worker-image` can select an existing matching worker; an existing different development tag
 is never replaced. Normal runs use three cold/warm pairs per transport;
@@ -160,10 +185,10 @@ Earlier focused DDEV/bare Docker validation is documented in
 ## CI
 
 **Actions → Sandbox → Run workflow** selects Drupal 10, Drupal 11 or both,
-Compose, DDEV, bare Docker or all three, and one installation method or all four.
+Compose, DDEV, bare Docker, host PHP or all four, and one installation method or all four.
 The manual workflow runs version/environment pairs as independent jobs and builds
 the matching worker from the selected commit. **Build** also runs both
-sandboxes in all three environments after Docker/Compose fixtures and before image publication. Ordinary
+sandboxes in all four environments after Docker/Compose fixtures and before image publication. Ordinary
 push/PR **Checks** retains its faster native and fixture tests.
 
 Failed assertions fail the job. Application and installer containers are
@@ -186,7 +211,7 @@ the shared Drupal 10/11 scenarios with representative combinations:
   including check/fix/pre-commit and unchanged application services.
 - [x] Automate isolated DDEV installation and SPX lifecycle in CI.
 - [x] Automate bare Docker launch-argument activation and restoration in CI.
-- [ ] Run Drupal on host PHP with the usual Docker-based PHPWarden worker.
+- [x] Run Drupal on host PHP with the usual Docker-based PHPWarden worker.
 - [ ] Run Docker-less CLI installation and recorded-profile CLI/MCP smoke tests;
   verify that `check` clearly reports the missing Docker dependency.
 - [ ] Share preservation, failure and cleanup assertions across environments,

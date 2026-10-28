@@ -1,5 +1,7 @@
 import hashlib
 import json
+import os
+import shutil
 import tempfile
 import unittest
 from copy import deepcopy
@@ -8,10 +10,91 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from tools.sandbox.docker import DockerRuntime
+from tools.sandbox.host import EXTENSIONS, HostRuntime, extension_configuration, snapshot
 from tools.sandbox.run import Sandbox
 
 
 class SandboxTest(unittest.TestCase):
+    def test_host_extensions_use_private_override_and_preserve_dependency_order(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            override, system = root / "override", root / "system"
+            override.mkdir()
+            system.mkdir()
+            builtin = {"pdo", "filter", "zlib"}
+            for name in set(EXTENSIONS) - builtin:
+                (system / (name + ".so")).touch()
+            (override / "mbstring.so").touch()
+            lines = extension_configuration(
+                {"modules": ["PDO", "filter", "zlib"]}, [override, system]
+            )
+            self.assertIn("extension=" + json.dumps(str(override / "mbstring.so")), lines)
+            self.assertFalse(any("/pdo.so" in line or "spx" in line for line in lines))
+            dom = "extension=" + json.dumps(str(system / "dom.so"))
+            reader = "extension=" + json.dumps(str(system / "xmlreader.so"))
+            self.assertLess(lines.index(dom), lines.index(reader))
+            (system / "pdo_sqlite.so").unlink()
+            with self.assertRaisesRegex(RuntimeError, "pdo_sqlite"):
+                extension_configuration({"modules": list(builtin)}, [override, system])
+
+    def test_host_server_cleanup_stops_owned_process_and_preserves_global_ini(self):
+        php = shutil.which("php")
+        if php is None:
+            self.skipTest("PHP executable unavailable")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project, logs = root / "project", root / "logs"
+            (project / "web").mkdir(parents=True)
+            logs.mkdir()
+            (project / "web/index.php").write_text("<?php echo 'fixture';\n")
+            ini, global_ini = root / "php.ini", root / "global.ini"
+            ini.write_text("")
+            global_ini.write_text("memory_limit=256M\n")
+            sandbox = SimpleNamespace(
+                root=root,
+                project=project,
+                logs=logs,
+                environment=os.environ.copy(),
+                summary={"host": {}},
+            )
+            runtime = HostRuntime(sandbox, php)
+            runtime.ini, runtime.command = ini, [php, "-n"]
+            runtime.global_configuration = snapshot([global_ini])
+            try:
+                runtime.start()
+                before = runtime.application()
+                runtime.start()
+                self.assertEqual(before, runtime.application())
+            finally:
+                runtime.cleanup()
+            self.assertIsNotNone(runtime.process.poll())
+            self.assertTrue(sandbox.summary["host"]["server_stopped"])
+            self.assertTrue(sandbox.summary["host"]["global_configuration_preserved"])
+            global_ini.write_text("changed\n")
+            with self.assertRaisesRegex(AssertionError, "Global PHP configuration changed"):
+                runtime.cleanup()
+
+    def test_host_exec_maps_fixture_paths_and_refuses_live_profiling(self):
+        sandbox = SimpleNamespace(root=Path("/scratch/data"), project=Path("/scratch/data/project"))
+        calls = []
+        sandbox.run = lambda command: calls.append(command)
+        runtime = HostRuntime(sandbox, shutil.which("python3"))
+        runtime.command = ["private-php"]
+        runtime.exec(["/project/vendor/drush/drush/drush.php", "--db-url=sqlite:/data/site.sqlite"])
+        self.assertEqual(
+            calls,
+            [
+                [
+                    "private-php",
+                    "/scratch/data/project/vendor/drush/drush/drush.php",
+                    "--db-url=sqlite:/scratch/data/data/site.sqlite",
+                ]
+            ],
+        )
+        with self.assertRaisesRegex(ValueError, "unsupported"):
+            runtime.exec(["-r", "echo 'profile';"], profile=True)
+        self.assertEqual(len(calls), 1)
+
     def test_bare_docker_only_accepts_expected_profile_mounts(self):
         runtime = DockerRuntime(SimpleNamespace(name="fixture", root=Path("/sandbox")))
         reports = "/sandbox/state/owned/reports"
