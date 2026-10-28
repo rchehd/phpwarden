@@ -35,27 +35,33 @@ func composerPackageVersion(version string) string {
 func projectPackages(files map[string][]byte, info buildinfo.Info, output string) error {
 	version := strings.TrimPrefix(info.Version, "v")
 	for _, manager := range []string{"composer", "npm"} {
+		description := "PHPWarden Linux amd64 CLI with pinned worker compatibility"
+		if files["compatibility.json"] == nil {
+			description = "PHPWarden development CLI requiring matching preloaded workers"
+		}
 		contents := map[string][]byte{
 			"bin/phpwarden":           []byte(strings.ReplaceAll(packageLauncher, "@@INSTALLATION@@", manager)),
 			"payload/phpwarden":       files["phpwarden"],
 			"payload/SHA256SUMS":      fmt.Appendf(nil, "%x  phpwarden\n", sha256.Sum256(files["phpwarden"])),
 			"release.json":            files["release.json"],
-			"compatibility.json":      files["compatibility.json"],
 			"README.md":               files["README.md"],
 			"THIRD_PARTY_NOTICES.txt": files["THIRD_PARTY_NOTICES.txt"],
 			"dependencies.json":       files["dependencies.json"],
+		}
+		if manifest, exists := files["compatibility.json"]; exists {
+			contents["compatibility.json"] = manifest
 		}
 		var metadata map[string]any
 		if manager == "composer" {
 			metadata = map[string]any{
 				"name": "rchehd/phpwarden", "version": composerPackageVersion(info.Version), "type": "library",
-				"description": "PHPWarden Linux amd64 CLI with pinned worker compatibility",
+				"description": description,
 				"bin":         []string{"bin/phpwarden"},
 			}
 		} else {
 			metadata = map[string]any{
 				"name": "@rchehd/phpwarden", "version": version,
-				"description": "PHPWarden Linux amd64 CLI with pinned worker compatibility",
+				"description": description,
 				"bin":         map[string]string{"phpwarden": "bin/phpwarden"},
 				"os":          []string{"linux"}, "cpu": []string{"x64"},
 				"files": []string{"bin", "payload", "release.json", "compatibility.json", "README.md", "THIRD_PARTY_NOTICES.txt", "dependencies.json"},
@@ -84,6 +90,9 @@ func projectPackages(files map[string][]byte, info buildinfo.Info, output string
 				return err
 			}
 		}
+	}
+	if files["compatibility.json"] == nil {
+		return nil
 	}
 	var manifest struct {
 		Entries []struct {

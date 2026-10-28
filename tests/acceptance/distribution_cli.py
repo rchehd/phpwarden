@@ -588,6 +588,46 @@ shutil.copyfile(Path(os.environ["INSTALL_TEST_RELEASE"]) / name, output)
         binary = home / ".local/bin/phpwarden"
         metadata = json.loads(self.run_command([binary, "--build-info"], self.root).stdout)
         self.assertEqual(metadata["distribution"], "source")
+        self.assertNotIn("manifest_sha256", metadata)
+        self.assertFalse((output / "compatibility.json").exists())
+        self.assertEqual(list(output.glob("phpwarden-compose-*.tar.gz")), [])
+        self.run_command(["sha256sum", "-c", "SHA256SUMS"], output)
+        sums = (output / "SHA256SUMS").read_text()
+        for manager in ("composer", "npm"):
+            extension = "zip" if manager == "composer" else "tgz"
+            path = output / f"phpwarden-{manager}-linux-amd64.{extension}"
+            self.assertIn(path.name, sums)
+            if manager == "composer":
+                with zipfile.ZipFile(path) as archive:
+                    entries = {name: archive.read(name) for name in archive.namelist()}
+            else:
+                with tarfile.open(path) as archive:
+                    entries = {
+                        entry.name.removeprefix("package/"): archive.extractfile(entry).read()
+                        for entry in archive
+                    }
+            self.assertNotIn("compatibility.json", entries)
+            self.assertEqual(entries["payload/phpwarden"], binary.read_bytes())
+            self.assertEqual(json.loads(entries["release.json"]), metadata)
+            manifest = json.loads(
+                entries["composer.json" if manager == "composer" else "package.json"]
+            )
+            self.assertIn("preloaded workers", manifest["description"])
+        rejected = self.run_command(
+            [
+                "go",
+                "run",
+                "./cmd/phpwarden-dist",
+                "package",
+                "--binary",
+                binary,
+                "--output",
+                self.releases["v1.0.0"],
+            ],
+            ROOT,
+            expected=1,
+        )
+        self.assertIn("use a fresh directory", rejected.stderr)
 
 
 if __name__ == "__main__":

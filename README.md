@@ -161,7 +161,7 @@ Changing `.phpwarden.yaml` cannot change an existing container's PHP. Replace `.
 
 ### Composer or npm dependency
 
-Manifest-bearing builds also produce two Linux amd64 project packages. Both contain the exact same CLI as the standalone archive and verify its SHA256 before every launch. They install no analyzer dependencies and run no install scripts. CLI acquisition happens through the package manager; its first `check` downloads the selected digest-pinned worker. Package-managed CLI updates use Composer/npm rather than `phpwarden update`.
+Builds also produce two Linux amd64 project packages. Both contain the exact same CLI as the downloadable archive and verify its SHA256 before every launch. They install no analyzer dependencies and run no install scripts. With a published compatibility manifest, the first `check` downloads the selected digest-pinned worker. Source/development packages require matching preloaded development workers and never download mutable tags. Package-managed CLI updates use Composer/npm rather than `phpwarden update`.
 
 The packages are not yet registered on Packagist or npm. Use the generated assets locally or from an exact GitHub Release URL. For npm, a downloaded asset works without a registry package:
 
@@ -195,12 +195,12 @@ The version above illustrates the format; that release must exist before using i
 Manual snapshots use a Composer version such as `dev-0.0.0-dev.a38dff3`; copy the exact value from the archive's `composer.json` into both the repository and requirement. Stable, alpha, beta and RC versions retain their normal version strings. Other prerelease labels receive the `dev-` prefix because Composer accepts fewer prerelease formats than npm. The embedded CLI keeps its original version and worker manifest.
 
 ```sh
-composer require --dev rchehd/phpwarden:0.1.0-rc.1 --no-scripts --no-plugins
+composer require --dev rchehd/phpwarden:0.1.0-rc.1 --no-scripts
 vendor/bin/phpwarden init -n --pre-commit
 vendor/bin/phpwarden check --commits 2
 ```
 
-Commit `composer.json` and `composer.lock`. `composer install --no-scripts --no-plugins` reinstalls the pin; change the package repository version/URL and requirement together for an upgrade or rollback. Downloaded assets should first be verified against the matching `SHA256SUMS`; the wrapper independently checks its embedded executable. Existing hooks are preserved; new hooks call the installed package wrapper, which remains at a stable project path across package updates.
+Commit `composer.json` and `composer.lock`. `composer install --no-scripts` reinstalls the pin; change the package repository version/URL and requirement together for an upgrade or rollback. Keep the project's trusted installer plugins enabled: disabling them can relocate existing Drupal packages. PHPWarden adds no Composer plugins or scripts. Downloaded assets should first be verified against the matching `SHA256SUMS`; the wrapper independently checks its embedded executable. Existing hooks are preserved; new hooks call the installed package wrapper, which remains at a stable project path across package updates.
 
 Package wrappers support host installations with a local Docker daemon. Installing them inside an application container alone does not supply Docker access or map its paths to the host. Use the separate Compose integration for that workflow.
 
@@ -268,9 +268,9 @@ Use `-f target=all -f publish_images=true` to build both targets and publish the
 
 Build runs that include the CLI produce a `phpwarden-linux-amd64-<commit>` Actions artifact containing `phpwarden-linux-amd64.tar.gz` and `SHA256SUMS`. Extract the downloaded artifact, run `sha256sum --ignore-missing -c SHA256SUMS`, then extract the tarball. It contains the executable, README, source commit SHA and `release.json` build identity.
 
-With `all` + `publish_images=true`, the image job records real published digests, then the CLI job embeds that manifest. This development snapshot has a `v0.0.0-dev.<commit>` version, supports automatic worker downloads, and can later update to a published stable CLI. The archive includes `compatibility.json`, also uploaded separately. The same artifact also includes checksum-listed Composer/npm packages and four Compose integration archives. CLI-only or unpublished builds produce only the development CLI archive. `internal/toolset/publication-v1.json` declares framework ranges: Drupal 10.0–10.6 on PHP 8.1–8.4 and Drupal 11.0–11.4 on PHP 8.3–8.4. Project Composer requirements can further restrict a combination. The ranges describe declared compatibility, not proof of every application/tool combination.
+With `all` + `publish_images=true`, the image job records real published digests, then the CLI job embeds that manifest. This development snapshot has a `v0.0.0-dev.<commit>` version, supports automatic worker downloads, and can later update to a published stable CLI. The archive includes `compatibility.json`, also uploaded separately. The same artifact also includes checksum-listed Composer/npm packages and four Compose integration archives. CLI-only or unpublished builds produce the development CLI archive and Composer/npm packages, without Compose archives or a published compatibility manifest. `internal/toolset/publication-v1.json` declares framework ranges: Drupal 10.0–10.6 on PHP 8.1–8.4 and Drupal 11.0–11.4 on PHP 8.3–8.4. Project Composer requirements can further restrict a combination. The ranges describe declared compatibility, not proof of every application/tool combination.
 
-CLI-only builds and builds without image publication retain the source/development manifest and require locally prepared images. They do not claim release compatibility or support self-replacement. `--version` reports the embedded version and commit; `--build-info` provides JSON including installation type and manifest checksum. GHCR contains worker images, while CLI archives are available through Actions artifacts and versioned GitHub Releases. Manifest-bearing builds also include Compose and Composer/npm packages; those package names are not yet registered in public package registries.
+CLI-only builds and builds without image publication use source/development compatibility and require locally prepared images. They do not claim release compatibility or support self-replacement. `--version` reports the embedded version and commit; `--build-info` provides JSON including installation type and, when available, manifest checksum. GHCR contains worker images, while CLI archives are available through Actions artifacts and versioned GitHub Releases. Composer/npm package names are not yet registered in public package registries.
 
 ### Update PHPWarden
 

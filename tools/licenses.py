@@ -76,7 +76,11 @@ def generate():
             record["license_files"].append(
                 {"path": relative, "sha256": hashlib.sha256(data).hexdigest()}
             )
-            text += [f"===== {name} {version}: {relative} =====\n", data.decode("utf-8"), "\n\n"]
+            text += [
+                f"===== {name} {version}: {relative} =====\n",
+                data.decode("utf-8").replace("\r\n", "\n"),
+                "\n\n",
+            ]
         inventory["components"].append(record)
     return {
         "THIRD_PARTY_NOTICES.txt": "".join(text).encode(),

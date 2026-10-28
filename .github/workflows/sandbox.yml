@@ -8,6 +8,11 @@ on:
         type: choice
         options: [all, "10", "11"]
         default: all
+      installation:
+        description: PHPWarden installation methods to exercise
+        type: choice
+        options: [all, standalone, composer, npm, compose]
+        default: all
 
 permissions:
   contents: read
@@ -37,6 +42,9 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.22.3"
       - name: Build matching PHP 8.3 worker
         run: |
           export PHPWARDEN_VERSION="v0.0.0-dev.${GITHUB_SHA::7}"
@@ -45,7 +53,8 @@ jobs:
       - name: Install and exercise Drupal sandbox
         env:
           DRUPAL_MAJOR: ${{ matrix.drupal }}
-        run: python3 tools/sandbox/run.py --drupal "$DRUPAL_MAJOR" --output "$RUNNER_TEMP/phpwarden-sandbox-drupal$DRUPAL_MAJOR"
+          INSTALLATION: ${{ inputs.installation }}
+        run: python3 tools/sandbox/run.py --drupal "$DRUPAL_MAJOR" --installation "$INSTALLATION" --output "$RUNNER_TEMP/phpwarden-sandbox-drupal$DRUPAL_MAJOR"
       - name: Upload sandbox evidence
         if: always()
         uses: actions/upload-artifact@v7

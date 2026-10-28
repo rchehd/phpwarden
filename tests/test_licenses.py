@@ -1,12 +1,40 @@
+import hashlib
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from tools.licenses import json_stream, notices
+from tools.licenses import generate, json_stream, notices
 
 
 class LicenseInventoryTest(unittest.TestCase):
+    def test_notice_text_normalizes_line_endings_but_hashes_original_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            raw = b"Upstream license\r\nSecond line\r\n"
+            (root / "LICENSE").write_bytes(raw)
+            module = {
+                "Path": "fixture/module",
+                "Version": "v1.0.0",
+                "Sum": "h1:pinned",
+                "Dir": str(root),
+            }
+            responses = [
+                json.dumps({"Module": module}),
+                json.dumps({"GOROOT": str(root), "GOVERSION": "go1.25.0"}),
+            ]
+            with (
+                patch("tools.licenses.go", side_effect=responses),
+                patch("tools.licenses.subprocess.run"),
+            ):
+                output = generate()
+            self.assertNotIn(b"\r", output["THIRD_PARTY_NOTICES.txt"])
+            records = json.loads(output["dependencies.json"])["components"]
+            self.assertEqual(
+                records[1]["license_files"][0]["sha256"], hashlib.sha256(raw).hexdigest()
+            )
+
     def test_stream_rejects_truncated_module_data(self):
         values = list(json_stream(' {"Path":"first"}\n {"Path":"second"}\n'))
         self.assertEqual([v["Path"] for v in values], ["first", "second"])

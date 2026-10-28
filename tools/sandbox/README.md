@@ -24,10 +24,19 @@ python3 tools/sandbox/run.py --drupal 10 --output /tmp/phpwarden-sandbox-d10
 python3 tools/sandbox/run.py --drupal 11 --output /tmp/phpwarden-sandbox-d11
 ```
 
-The output directory must not exist. The script builds a development CLI
-archive and installs it through the real `install.sh`. `--archive FILE` uses
-an existing candidate archive and its adjacent `SHA256SUMS`. `--worker-image`
-can select an existing matching worker; an existing different development tag
+The output directory must not exist. By default the suite tests standalone,
+Composer, npm and the Compose wrapper in sequence on each installed site.
+It builds a development CLI archive for the real `install.sh`, plus two versioned development packages
+for package-manager upgrade and rollback. They use the current source with
+different version identities, not two historical implementations. Packages
+retain source/development identity and require the matching preloaded worker;
+no fake published image manifest is supplied.
+
+Use `--installation standalone|composer|npm|compose|all` to select methods. The npm
+method requires host Node/npm (CI pins Node 22.22.3); Composer runs in the
+sandbox's pinned PHP application image. `--archive FILE` uses an existing
+candidate archive and its adjacent `SHA256SUMS`, selecting standalone only.
+`--worker-image` can select an existing matching worker; an existing different development tag
 is never replaced. Normal runs use three cold/warm pairs per transport;
 `--repeats 1` runs one pair each as a shorter smoke test.
 
@@ -36,10 +45,27 @@ GD and the SQLite CLI for Drupal installation. Its local SPX derivative is
 built by the actual `performance setup --apply` command. This is test runtime
 preparation, not a worker publication or a change to a user's application.
 
+The Compose installation scenario copies the development wrapper templates and
+pins a local image ID. Its private test image inherits the selected worker's
+tools and adds the current CLI built with container identity. No published
+digest is invented, and existing worker tags are not replaced. The application
+starts before wrapper checks; its container ID, start time, mounts, configuration,
+HTTP response and database configuration hash must survive those checks.
+
 ## Coverage
 
 - Fresh installation and replacement through the shell installer, including
   embedded CLI license notices.
+- Composer/npm installation, reinstall, upgrade and rollback on each complete
+  Drupal site, real check/fix and correct package-wrapper paths in hooks.
+  Composer operations preserve existing locked Drupal dependencies and their
+  installer paths. npm preserves an existing frontend dependency and settings;
+  install scripts stay disabled. Package-managed self-update is refused.
+- Compose wrapper repeat init, 14-checker full analysis, an actual PHPCS edit
+  and host pre-commit success/failure, including staged/working-tree mismatch.
+  Runtime mismatch, invalid image references and unsupported host-only commands
+  fail explicitly. Foreign hooks, skills, application Compose files, `.env`,
+  Composer dependencies and file ownership are preserved.
 - Repeat `init`, shared skills, three completion-hook adapters and Git
   pre-commit; existing project config remains unchanged on repeat.
 - Actual Drupal version discovery and configuration, doctor invocation,
@@ -55,6 +81,17 @@ preparation, not a worker publication or a change to a user's application.
 - SPX source archive SHA256, retained license/build script, applied teardown,
   extension unloading, preserved recordings and a clean fixture Git checkout.
 
+Between installation methods the suite removes only its byte-verified fixture
+pre-commit hook and installs the next method's hook. This tests each method;
+it does not claim automatic migration of an existing standalone hook to a
+different executable. Within each method, reinstall/upgrade/rollback keep the
+same hook and project config. The Compose wrapper supports Git pre-commit;
+completion hooks, doctor, update and performance commands require a host CLI.
+After Compose checks, the last selected host installation runs SPX/MCP; a
+Compose-only run installs a host CLI for that separate lifecycle. Summary
+evidence identifies the environment and each method. Quality and application
+containers use separate Compose project names and cleanup.
+
 Cold means after `drush cache:rebuild`; OS page cache and OPcache are not
 flushed. Timing output is evidence from the fixture under profiling, not a
 stable benchmark or a pass/fail speed threshold. Interactive agent clients,
@@ -64,7 +101,8 @@ Existing local DDEV/bare Docker validation is documented in
 
 ## CI
 
-**Actions → Sandbox → Run workflow** selects Drupal 10, Drupal 11 or both.
+**Actions → Sandbox → Run workflow** selects Drupal 10, Drupal 11 or both,
+and one installation method or all four.
 The manual workflow runs the versions as independent matrix jobs and builds
 the matching worker from the selected commit. **Build** also runs both
 sandboxes after Docker/Compose fixtures and before image publication. Ordinary
@@ -84,9 +122,9 @@ the shared Drupal 10/11 scenarios with representative combinations:
 
 - [x] Standalone installer with a Compose application and SQLite, verified locally.
 - [x] Separate fixture tests for standalone, Composer/npm packages and Compose wrappers.
-- [ ] Run Composer/npm install, repeat, upgrade/rollback and wrapper-hook checks
+- [x] Run Composer/npm install, repeat, upgrade/rollback and wrapper-hook checks
   against fully installed Drupal sites.
-- [ ] Run the Compose installation wrapper against the installed sites,
+- [x] Run the Compose installation wrapper against the installed sites,
   including check/fix/pre-commit and unchanged application services.
 - [ ] Automate isolated DDEV installation and SPX lifecycle in CI.
 - [ ] Automate bare Docker launch-argument activation and restoration in CI.
@@ -104,7 +142,8 @@ sessions and additional database engines remain separate work.
 ## Update fixtures
 
 Update a fixture by changing its explicit package versions and regenerating
-its Composer lock in the same PHP runtime. Never use `composer update` during
-the acceptance run. The official release pages document the pinned
+its Composer lock in the same PHP runtime. Application dependencies are never
+updated during acceptance; only PHPWarden's candidate package is targeted by
+Composer updates. The official release pages document the pinned
 [Drupal 10.6.0](https://www.drupal.org/project/drupal/releases/10.6.0) and
 [Drupal 11.4.1](https://www.drupal.org/project/drupal/releases/11.4.1) versions.

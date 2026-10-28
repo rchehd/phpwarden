@@ -31,6 +31,20 @@ func Package(ctx context.Context, binary, readme, manifest, output string) error
 	if probe.Err != nil || probe.ExitCode != 0 || json.Unmarshal(probe.Stdout, &info) != nil || info.Platform != "linux/amd64" || !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(info.Commit) {
 		return fmt.Errorf("binary must report a linux/amd64 build with an exact Git commit")
 	}
+	if normalized, err := selfupdate.Version(info.Version); err != nil || normalized != info.Version {
+		return fmt.Errorf("package binary requires a canonical release or development version")
+	}
+	if manifest == "" {
+		for _, pattern := range []string{"compatibility.json", "phpwarden-compose-php*.tar.gz"} {
+			matches, err := filepath.Glob(filepath.Join(output, pattern))
+			if err != nil {
+				return err
+			}
+			if len(matches) != 0 {
+				return fmt.Errorf("development package output contains published compatibility files; use a fresh directory")
+			}
+		}
+	}
 	data, err := os.ReadFile(binary)
 	if err != nil {
 		return err
@@ -72,9 +86,6 @@ func Package(ctx context.Context, binary, readme, manifest, output string) error
 		if identity.Release != info.Version || info.ManifestSHA256 != fmt.Sprintf("%x", sha256.Sum256(data)) || info.Distribution != "standalone" {
 			return fmt.Errorf("binary and release manifest identity differ")
 		}
-		if normalized, err := selfupdate.Version(info.Version); err != nil || normalized != info.Version {
-			return fmt.Errorf("standalone binary requires a canonical release version")
-		}
 		files["compatibility.json"] = data
 	} else if info.ManifestSHA256 != "" || info.Distribution != "source" {
 		return fmt.Errorf("development archive must not claim standalone release compatibility")
@@ -115,13 +126,13 @@ func Package(ctx context.Context, binary, readme, manifest, output string) error
 		if err := os.WriteFile(filepath.Join(output, "compatibility.json"), data, 0o644); err != nil {
 			return err
 		}
-		if err := projectPackages(files, info, output); err != nil {
-			return err
-		}
 	}
-	names := []string{name}
+	if err := projectPackages(files, info, output); err != nil {
+		return err
+	}
+	names := []string{name, "phpwarden-composer-linux-amd64.zip", "phpwarden-npm-linux-amd64.tgz"}
 	if files["compatibility.json"] != nil {
-		names = append(names, "compatibility.json", "phpwarden-composer-linux-amd64.zip", "phpwarden-npm-linux-amd64.tgz")
+		names = append(names, "compatibility.json")
 		compose, err := filepath.Glob(filepath.Join(output, "phpwarden-compose-php*.tar.gz"))
 		if err != nil {
 			return err

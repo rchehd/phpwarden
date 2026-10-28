@@ -16,7 +16,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from tools.distribution import package  # noqa: E402
+from tools.sandbox.compose import ComposeInstallation  # noqa: E402
 from tools.sandbox.mcp import Client  # noqa: E402
+from tools.sandbox.packages import PackageInstallations  # noqa: E402
 
 WORKER = "phpwarden:static-php8.3-dev"
 
@@ -26,7 +28,7 @@ def sha(path):
 
 
 class Sandbox:
-    def __init__(self, major, directory, worker, archive, repeats):
+    def __init__(self, major, directory, worker, archive, repeats, installation="standalone"):
         self.major, self.root = major, directory
         self.project, self.logs = directory / "project", directory / "logs"
         self.logs.mkdir(parents=True)
@@ -34,15 +36,25 @@ class Sandbox:
         self.name = "phpwarden-sandbox-" + uuid.uuid4().hex[:12]
         self.image = self.name + ":application"
         self.worker, self.archive, self.repeats = worker, archive, repeats
+        self.installation = installation
+        self.repository = ROOT
+        self.user = f"{os.getuid()}:{os.getgid()}"
         self.environment = os.environ | {
             "XDG_CACHE_HOME": str(directory / "cache"),
             "CLAUDE_CONFIG_DIR": str(directory / "claude"),
+            "npm_config_cache": str(directory / "npm-cache"),
         }
         (directory / "claude").mkdir()
         self.binary = directory / "bin/phpwarden"
         self.alias = False
+        self.precommit_contents = None
         self.sequence = 0
-        self.summary = {"drupal_major": major, "passed": False}
+        self.summary = {
+            "drupal_major": major,
+            "environment": "compose",
+            "installation_selection": installation,
+            "passed": False,
+        }
 
     def run(self, args, expected=(0,), cwd=None, input=None, timeout=180):
         self.sequence += 1
@@ -69,6 +81,7 @@ class Sandbox:
         return self.run([self.binary, *args], expected=expected, input=input)
 
     def stage(self, message):
+        self.summary["stage"] = message
         print(f"Drupal {self.major}: {message}", flush=True)
 
     def compose(self, *args):
@@ -237,7 +250,7 @@ class Sandbox:
                         "/project/web",
                         "/project/web/index.php",
                     ],
-                    "working_dir": "/project",
+                    "working_dir": "/project/web",
                     "user": f"{os.getuid()}:{os.getgid()}",
                     "network_mode": "none",
                     "read_only": True,
@@ -254,7 +267,8 @@ class Sandbox:
         }
         (self.root / "compose.json").write_text(json.dumps(compose, indent=2))
         (self.project / ".gitignore").write_text(
-            "/vendor/\n/web/core/\n/web/sites/default/files/\n/web/sites/default/settings.php\n"
+            "/vendor/\n/node_modules/\n/web/core/\n/web/sites/default/files/\n"
+            "/web/sites/default/settings.php\n"
         )
         self.run(["git", "init", "-q"])
         self.run(["git", "add", "--all"])
@@ -271,8 +285,8 @@ class Sandbox:
             ]
         )
 
-    def installation_checks(self):
-        self.stage("checking installer, init, fix, static checks and completion protocols")
+    def standalone_checks(self):
+        self.stage("checking standalone install and reinstall")
         self.run(
             ["sh", ROOT / "install.sh", "--archive", self.archive, "--dir", self.binary.parent]
         )
@@ -287,15 +301,31 @@ class Sandbox:
                 "--force",
             ]
         )
+        self.project_checks("standalone")
+        self.summary.setdefault("installations", {})["standalone"] = {
+            "installed": True,
+            "reinstalled": True,
+        }
+
+    def project_checks(self, method, completion=True, require_fix=False):
+        self.stage(f"checking {method} init, fix, static checks and hooks")
+        hook = self.project / ".git/hooks/pre-commit"
+        if self.precommit_contents is not None:
+            assert hook.read_bytes() == self.precommit_contents
+            hook.unlink()
         assert "modelcontextprotocol/go-sdk" in self.cli("--licenses")
-        self.cli("init", "-n", "--php-runtime=8.3", "--agents=all", "--hooks=all", "--pre-commit")
+        hooks = "all" if completion else "none"
+        self.cli(
+            "init", "-n", "--php-runtime=8.3", "--agents=all", "--hooks=" + hooks, "--pre-commit"
+        )
         config = self.project / ".phpwarden.yaml"
         initial = config.read_bytes()
-        self.cli("init", "-n", "--agents=all", "--hooks=all", "--pre-commit")
+        self.cli("init", "-n", "--agents=all", "--hooks=" + hooks, "--pre-commit")
         assert initial == config.read_bytes()
         effective = json.loads(self.cli("config", "show", "--format=json"))["effective"]["config"]
         assert effective["framework"]["version"].startswith(str(self.major) + ".")
-        self.cli("doctor", "--format=json", expected=(0, 3))
+        if completion:
+            self.cli("doctor", "--format=json", expected=(0, 3))
         checks = (
             "syntax,debug,whitespace,yaml,phpcs,phpstan,dead-code,eventhorizon,"
             "rector,semgrep,jscpd,phpmd,drupal-config,composer-validate"
@@ -317,6 +347,9 @@ class Sandbox:
             )
         )
         assert fixed["complete"], fixed
+        if require_fix:
+            assert source.relative_to(self.project).as_posix() in fixed["fixed_files"], fixed
+            assert "$size = 0;" in source.read_text()
         original = source.read_bytes()
         simple = {
             "version": 1,
@@ -329,10 +362,10 @@ class Sandbox:
         }
         config.write_text(json.dumps(simple))
         source.write_text("<?php\nvar_dump('sandbox-blocking-fixture');\n")
-        for client in ["codex", "cursor", "claude"]:
+        for client in ["codex", "cursor", "claude"] if completion else []:
             event = {
                 "hook_event_name": "stop" if client == "cursor" else "Stop",
-                "session_id": self.name,
+                "session_id": self.name + "-" + method,
                 "cwd": str(self.project),
             }
             decision = json.loads(
@@ -350,6 +383,12 @@ class Sandbox:
         self.run(["git", "add", "web/modules/custom"])
         self.run([self.project / ".git/hooks/pre-commit"])
         config.write_bytes(initial)
+        self.checkpoint(f"Verified {method} installation")
+        self.precommit_contents = hook.read_bytes()
+
+    def checkpoint(self, message):
+        if not self.git_status():
+            return
         self.run(["git", "add", "--all"])
         self.run(
             [
@@ -362,7 +401,7 @@ class Sandbox:
                 "user.email=fixture@example.invalid",
                 "commit",
                 "-qm",
-                "Installed PHPWarden fixture",
+                message,
             ]
         )
         assert self.git_status() == ""
@@ -612,7 +651,26 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
             )
             (self.root / "spx.tar.gz").write_bytes(archive)
             self.install()
-            self.installation_checks()
+            if self.installation in ("standalone", "all"):
+                self.standalone_checks()
+            elif self.installation == "compose":
+                self.run(
+                    [
+                        "sh",
+                        ROOT / "install.sh",
+                        "--archive",
+                        self.archive,
+                        "--dir",
+                        self.binary.parent,
+                    ]
+                )
+            if self.installation in ("composer", "npm", "all"):
+                packages = PackageInstallations(self)
+                for manager in ("composer", "npm"):
+                    if self.installation in (manager, "all"):
+                        packages.run(manager)
+            if self.installation in ("compose", "all"):
+                ComposeInstallation(self).run()
             self.capture()
             self.verify_mcp()
             self.teardown()
@@ -628,7 +686,11 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
                 errors.append(str(error))
             try:
                 if (self.root / "compose.json").exists():
-                    self.compose("down", "--remove-orphans")
+                    try:
+                        if not self.summary["passed"]:
+                            self.compose("logs", "--no-color", "--tail=100", "php")
+                    finally:
+                        self.compose("down", "--remove-orphans")
             except Exception as error:
                 errors.append(str(error))
             try:
@@ -655,19 +717,29 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--worker-image", default=WORKER)
     parser.add_argument("--archive", type=Path)
+    parser.add_argument(
+        "--installation", choices=("standalone", "composer", "npm", "compose", "all")
+    )
     parser.add_argument("--repeats", type=int, choices=range(1, 4), default=3)
     args = parser.parse_args()
+    installation = args.installation or ("standalone" if args.archive else "all")
+    if args.archive and installation != "standalone":
+        parser.error(
+            "--archive selects standalone installation; other candidates are built from source"
+        )
     directory = args.output.resolve()
     directory.mkdir(parents=True, exist_ok=False)
     archive = (
         args.archive.resolve() if args.archive else directory / "dist/phpwarden-linux-amd64.tar.gz"
     )
-    if not args.archive:
+    if not args.archive and installation in ("standalone", "compose", "all"):
         commit = subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
         ).stdout.strip()
         package("v0.0.0-dev." + commit[:7], commit, None, directory / "dist")
-    sandbox = Sandbox(args.drupal, directory, args.worker_image, archive, args.repeats)
+    sandbox = Sandbox(
+        args.drupal, directory, args.worker_image, archive, args.repeats, installation
+    )
     sandbox.execute()
     print(json.dumps(sandbox.summary, indent=2), flush=True)
 
