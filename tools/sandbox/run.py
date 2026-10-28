@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from tools.distribution import package  # noqa: E402
 from tools.sandbox.compose import ComposeInstallation  # noqa: E402
+from tools.sandbox.ddev import DdevRuntime  # noqa: E402
 from tools.sandbox.mcp import Client  # noqa: E402
 from tools.sandbox.packages import PackageInstallations  # noqa: E402
 
@@ -28,7 +29,16 @@ def sha(path):
 
 
 class Sandbox:
-    def __init__(self, major, directory, worker, archive, repeats, installation="standalone"):
+    def __init__(
+        self,
+        major,
+        directory,
+        worker,
+        archive,
+        repeats,
+        installation="standalone",
+        environment="compose",
+    ):
         self.major, self.root = major, directory
         self.project, self.logs = directory / "project", directory / "logs"
         self.logs.mkdir(parents=True)
@@ -51,10 +61,14 @@ class Sandbox:
         self.sequence = 0
         self.summary = {
             "drupal_major": major,
-            "environment": "compose",
+            "environment": environment,
             "installation_selection": installation,
             "passed": False,
         }
+        self.container_root = "/project"
+        self.ini = "/usr/local/etc/php/conf.d/99-phpwarden-spx.ini"
+        self.http_url = "http://127.0.0.1:8080/phpwarden-probe"
+        self.runtime = DdevRuntime(self) if environment == "ddev" else None
 
     def run(self, args, expected=(0,), cwd=None, input=None, timeout=180):
         self.sequence += 1
@@ -77,8 +91,8 @@ class Sandbox:
             )
         return result.stdout
 
-    def cli(self, *args, expected=(0,), input=None):
-        return self.run([self.binary, *args], expected=expected, input=input)
+    def cli(self, *args, expected=(0,), input=None, timeout=180):
+        return self.run([self.binary, *args], expected=expected, input=input, timeout=timeout)
 
     def stage(self, message):
         self.summary["stage"] = message
@@ -101,6 +115,8 @@ class Sandbox:
 
     def exec(self, args, profile=False):
         command = ["docker", "exec"]
+        if self.runtime:
+            command += ["--user", self.user]
         if profile:
             for entry in [
                 "SPX_ENABLED=1",
@@ -109,7 +125,8 @@ class Sandbox:
                 "SPX_SAMPLING_PERIOD=0",
             ]:
                 command += ["--env", entry]
-        return self.run([*command, self.container, "php", *args])
+        mapped = [str(arg).replace("/project", self.container_root) for arg in args]
+        return self.run([*command, self.container, "php", *mapped])
 
     def drush(self, *args, profile=False):
         return self.exec(
@@ -315,15 +332,15 @@ class Sandbox:
             hook.unlink()
         assert "modelcontextprotocol/go-sdk" in self.cli("--licenses")
         hooks = "all" if completion else "none"
-        self.cli(
-            "init", "-n", "--php-runtime=8.3", "--agents=all", "--hooks=" + hooks, "--pre-commit"
-        )
+        runtime = [] if self.runtime else ["--php-runtime=8.3"]
+        self.cli("init", "-n", *runtime, "--agents=all", "--hooks=" + hooks, "--pre-commit")
         config = self.project / ".phpwarden.yaml"
         initial = config.read_bytes()
         self.cli("init", "-n", "--agents=all", "--hooks=" + hooks, "--pre-commit")
         assert initial == config.read_bytes()
         effective = json.loads(self.cli("config", "show", "--format=json"))["effective"]["config"]
         assert effective["framework"]["version"].startswith(str(self.major) + ".")
+        assert effective["php"]["runtime"] == "8.3"
         if completion:
             self.cli("doctor", "--format=json", expected=(0, 3))
         checks = (
@@ -417,25 +434,33 @@ class Sandbox:
                 self.root / "state",
                 "--format=json",
                 *args,
+                timeout=960,
             )
         )
 
     def http(self, mode="on"):
-        code = """$headers="";
+        code = (
+            """$headers="";
 if ("MODE" !== "off") {
-  $ini=parse_ini_file("/usr/local/etc/php/conf.d/99-phpwarden-spx.ini");
+  $ini=parse_ini_file("INI_PATH");
   $key="MODE" === "bad" ? "wrong-fixture-key" : $ini["spx.http_key"];
   $headers="Cookie: SPX_ENABLED=1; SPX_KEY=".$key."; SPX_REPORT=full; ";
   $headers.="SPX_METRICS=wt,ct,zm; SPX_SAMPLING_PERIOD=0\\r\\n";
 }
 $context=stream_context_create(["http"=>["header"=>$headers,"ignore_errors"=>true,"timeout"=>45]]);
-$body=file_get_contents("http://127.0.0.1:8080/phpwarden-probe?token=fixture-query-secret",false,$context);
+$body=file_get_contents("HTTP_URL?token=fixture-query-secret",false,$context);
 $decoded=json_decode($body,true);
 $preview=$decoded === null ? substr($body,0,2000) : null;
 if (!empty($key) && $preview !== null) { $preview=str_replace($key,"[redacted]",$preview); }
 echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
   "preview"=>$preview]);""".replace("MODE", mode)
+            .replace("INI_PATH", self.ini)
+            .replace("HTTP_URL", self.http_url)
+        )
         result = json.loads(self.exec(["-r", code]))
+        if mode == "bad":
+            assert "200" in result["status"], result
+            return result
         assert (
             "200" in result["status"]
             and isinstance(result["body"], dict)
@@ -444,11 +469,17 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
         assert result["body"]["driver"] == "sqlite"
         return result["body"]
 
-    def capture(self):
-        self.stage("recording database-backed HTTP/Drush cold and warm profiles")
-        self.compose("up", "-d", "--no-build", "--pull", "never", "php")
-        setup = self.lifecycle(
-            "setup",
+    def current_container(self):
+        return (
+            self.runtime.current_container()
+            if self.runtime
+            else self.compose("ps", "-q", "php").strip()
+        )
+
+    def setup_arguments(self):
+        if self.runtime:
+            return self.runtime.setup_arguments()
+        return [
             "--environment=compose",
             "--php=8.3",
             "--service=php",
@@ -457,13 +488,27 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
             "--compose-project",
             self.name,
             "--container-root=/project",
+        ]
+
+    def start_runtime(self):
+        if self.runtime:
+            self.runtime.start()
+        else:
+            self.compose("up", "-d", "--no-build", "--pull", "never", "php")
+
+    def capture(self):
+        self.stage("recording database-backed HTTP/Drush cold and warm profiles")
+        self.start_runtime()
+        setup = self.lifecycle(
+            "setup",
+            *self.setup_arguments(),
             "--http",
             "--spx-archive",
             self.root / "spx.tar.gz",
             "--apply",
         )
         assert setup["loaded"] and setup["state"] == "active"
-        self.container = self.compose("ps", "-q", "php").strip()
+        self.container = self.current_container()
         retained = json.loads(
             self.exec(
                 [
@@ -622,7 +667,7 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
         self.lifecycle("disconnect", "--client=all")
         assert self.lifecycle("teardown", "--apply")["state"] == "removed"
         assert self.lifecycle("teardown", "--apply")["state"] == "removed"
-        self.container = self.compose("ps", "-q", "php").strip()
+        self.container = self.current_container()
         assert self.exec(["-r", 'echo extension_loaded("spx")?"yes":"no";']) == "no"
         self.http("off")
         assert hashes == {p.name: sha(p) for p in self.reports.iterdir()}
@@ -651,6 +696,8 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
             )
             (self.root / "spx.tar.gz").write_bytes(archive)
             self.install()
+            if self.runtime:
+                self.runtime.install()
             if self.installation in ("standalone", "all"):
                 self.standalone_checks()
             elif self.installation == "compose":
@@ -674,6 +721,11 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
             self.capture()
             self.verify_mcp()
             self.teardown()
+            if self.runtime:
+                self.runtime.preserved()
+        except Exception:
+            self.summary["passed"] = False
+            raise
         finally:
             errors = []
             try:
@@ -683,6 +735,11 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
                     timeout=30,
                 )
             except (OSError, subprocess.TimeoutExpired) as error:
+                errors.append(str(error))
+            try:
+                if self.runtime:
+                    self.runtime.cleanup()
+            except Exception as error:
                 errors.append(str(error))
             try:
                 if (self.root / "compose.json").exists():
@@ -717,6 +774,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--worker-image", default=WORKER)
     parser.add_argument("--archive", type=Path)
+    parser.add_argument("--environment", choices=("compose", "ddev"), default="compose")
     parser.add_argument(
         "--installation", choices=("standalone", "composer", "npm", "compose", "all")
     )
@@ -738,7 +796,13 @@ def main():
         ).stdout.strip()
         package("v0.0.0-dev." + commit[:7], commit, None, directory / "dist")
     sandbox = Sandbox(
-        args.drupal, directory, args.worker_image, archive, args.repeats, installation
+        args.drupal,
+        directory,
+        args.worker_image,
+        archive,
+        args.repeats,
+        installation,
+        args.environment,
     )
     sandbox.execute()
     print(json.dumps(sandbox.summary, indent=2), flush=True)

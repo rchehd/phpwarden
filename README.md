@@ -4,7 +4,7 @@ PHPWarden runs static quality checks for PHP projects. Profiles provide the conv
 
 Drupal is currently the only available profile. Symfony and Laravel profiles are planned; WordPress is a possible future addition. The configuration and examples below use the Drupal profile.
 
-Development validation includes installed Drupal 10/11 sandboxes in the manual
+Development validation includes installed Drupal 10/11 sandboxes using Compose and DDEV in the manual
 **Sandbox** workflow and before worker publication in **Build**. See [the
 sandbox suite](tools/sandbox/README.md). Third-party notices are available with
 `phpwarden --licenses`; see [dependency material](tools/spx/LICENSES.md).

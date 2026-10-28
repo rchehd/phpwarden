@@ -13,27 +13,38 @@ on:
         type: choice
         options: [all, standalone, composer, npm, compose]
         default: all
+      environment:
+        description: Application environment to exercise
+        type: choice
+        options: [all, compose, ddev]
+        default: all
 
 permissions:
   contents: read
 
 jobs:
   drupal:
-    name: Drupal ${{ matrix.drupal }} · installation and profiling
+    name: Drupal ${{ matrix.drupal }} · ${{ matrix.environment }} · installation and profiling
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         drupal: ${{ fromJSON(inputs.drupal == '10' && '["10"]' || inputs.drupal == '11' && '["11"]' || '["10","11"]') }}
+        environment: ${{ fromJSON(inputs.environment == 'compose' && '["compose"]' || inputs.environment == 'ddev' && '["ddev"]' || '["compose","ddev"]') }}
     steps:
       - name: Validate sandbox selection
         env:
           DRUPAL_SELECTION: ${{ inputs.drupal }}
+          ENVIRONMENT_SELECTION: ${{ inputs.environment }}
         run: |
           case "$DRUPAL_SELECTION" in
             all|10|11) ;;
             *) echo "Select all, 10 or 11." >&2; exit 1 ;;
+          esac
+          case "$ENVIRONMENT_SELECTION" in
+            all|compose|ddev) ;;
+            *) echo "Select all, compose or ddev." >&2; exit 1 ;;
           esac
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -45,6 +56,11 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "22.22.3"
+      - name: Install pinned DDEV tools
+        if: matrix.environment == 'ddev'
+        run: |
+          sh tools/sandbox/install-ddev.sh "$RUNNER_TEMP/phpwarden-ddev/bin"
+          echo "$RUNNER_TEMP/phpwarden-ddev/bin" >> "$GITHUB_PATH"
       - name: Build matching PHP 8.3 worker
         run: |
           export PHPWARDEN_VERSION="v0.0.0-dev.${GITHUB_SHA::7}"
@@ -54,16 +70,17 @@ jobs:
         env:
           DRUPAL_MAJOR: ${{ matrix.drupal }}
           INSTALLATION: ${{ inputs.installation }}
-        run: python3 tools/sandbox/run.py --drupal "$DRUPAL_MAJOR" --installation "$INSTALLATION" --output "$RUNNER_TEMP/phpwarden-sandbox-drupal$DRUPAL_MAJOR"
+          SANDBOX_ENVIRONMENT: ${{ matrix.environment }}
+        run: python3 tools/sandbox/run.py --drupal "$DRUPAL_MAJOR" --environment "$SANDBOX_ENVIRONMENT" --installation "$INSTALLATION" --output "$RUNNER_TEMP/phpwarden-sandbox-drupal$DRUPAL_MAJOR-$SANDBOX_ENVIRONMENT"
       - name: Upload sandbox evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ github.sha }}
+          name: phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}-${{ github.sha }}
           path: |
-            ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}/summary.json
-            ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}/captures.json
-            ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}/mcp-transcript.json
-            ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}/logs/
+            ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}/summary.json
+            ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}/captures.json
+            ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}/mcp-transcript.json
+            ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}/logs/
           if-no-files-found: warn
           retention-days: 7

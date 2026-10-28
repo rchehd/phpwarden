@@ -91,6 +91,10 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Install pinned DDEV tools
+        run: |
+          sh tools/sandbox/install-ddev.sh "$RUNNER_TEMP/phpwarden-ddev/bin"
+          echo "$RUNNER_TEMP/phpwarden-ddev/bin" >> "$GITHUB_PATH"
       - name: Build development worker images
         env:
           REF_TYPE: ${{ github.ref_type }}
@@ -111,10 +115,12 @@ jobs:
         env:
           PHPWARDEN_TEST_IMAGE: phpwarden:static-php8.3-dev
         run: python -m unittest tests.acceptance.compose_cli -v
-      - name: Run installed Drupal 10 and 11 sandboxes
+      - name: Run installed Drupal 10 and 11 sandboxes in Compose and DDEV
         run: |
-          for major in 10 11; do
-            python3 tools/sandbox/run.py --drupal "$major" --output "$RUNNER_TEMP/phpwarden-sandbox-drupal$major"
+          for environment in compose ddev; do
+            for major in 10 11; do
+              python3 tools/sandbox/run.py --drupal "$major" --environment "$environment" --output "$RUNNER_TEMP/phpwarden-sandbox-drupal$major-$environment"
+            done
           done
       - name: Upload sandbox evidence
         if: always()

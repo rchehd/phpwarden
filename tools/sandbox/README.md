@@ -24,6 +24,33 @@ python3 tools/sandbox/run.py --drupal 10 --output /tmp/phpwarden-sandbox-d10
 python3 tools/sandbox/run.py --drupal 11 --output /tmp/phpwarden-sandbox-d11
 ```
 
+Select DDEV with `--environment ddev`; the default is `compose`. Both support
+the same installation-method selection and installed Drupal fixtures:
+
+```sh
+python3 tools/sandbox/run.py --drupal 10 --environment ddev --output /tmp/phpwarden-ddev-d10
+python3 tools/sandbox/run.py --drupal 11 --environment ddev --output /tmp/phpwarden-ddev-d11
+```
+
+DDEV tests need DDEV, mkcert and Docker locally. CI uses the checksum-pinned
+[DDEV 1.25.4 archive](https://github.com/ddev/ddev/releases/expanded_assets/v1.25.4),
+installed into a private tools directory with `sh tools/sandbox/install-ddev.sh DIRECTORY`.
+That script extracts tools without sudo, changing system binaries or installing
+a host CA. The runtime uses private DDEV global configuration, a private web
+cache, no router/SSH agent/database containers, no Mutagen and no settings-file
+management. SQLite stays in the sandbox's data directory. DDEV serves the site
+through Nginx/FPM; requests run over loopback inside its web container.
+
+Shared fixture provisioning installs locked dependencies and the database with
+the PHP 8.3 worker. DDEV then mounts that site under `/var/www/html`; a cache
+rebuild clears old container paths before HTTP checks. `init` discovers the
+runtime from `.ddev/config.yaml`. Application PHP/SQLite and DDEV versions are
+recorded separately from worker versions. DDEV's generated runtime adapters
+are locally Git-excluded and removed during teardown. Existing router/SSH-agent
+IDs/start times, personal DDEV settings, `/etc/hosts`, fixture settings and
+database configuration must remain unchanged. Cleanup stops/unlists only the
+unique fixture project; it never calls global `ddev poweroff` or prunes Docker.
+
 The output directory must not exist. By default the suite tests standalone,
 Composer, npm and the Compose wrapper in sequence on each installed site.
 It builds a development CLI archive for the real `install.sh`, plus two versioned development packages
@@ -81,6 +108,12 @@ HTTP response and database configuration hash must survive those checks.
 - SPX source archive SHA256, retained license/build script, applied teardown,
   extension unloading, preserved recordings and a clean fixture Git checkout.
 
+An incorrect SPX key must create no recording. With DDEV's display-errors setting,
+the negative request may include an upstream SPX notice before the body; only
+that control permits a non-JSON response. Unprofiled and authorized requests
+must still return the complete expected Drupal JSON. A failing late preservation
+assertion clears success in the saved summary.
+
 Between installation methods the suite removes only its byte-verified fixture
 pre-commit hook and installs the next method's hook. This tests each method;
 it does not claim automatic migration of an existing standalone hook to a
@@ -95,17 +128,17 @@ containers use separate Compose project names and cleanup.
 Cold means after `drush cache:rebuild`; OS page cache and OPcache are not
 flushed. Timing output is evidence from the fixture under profiling, not a
 stable benchmark or a pass/fail speed threshold. Interactive agent clients,
-MariaDB/PostgreSQL, DDEV and bare Docker lifecycle coverage remain separate.
-Existing local DDEV/bare Docker validation is documented in
+MariaDB/PostgreSQL and bare Docker lifecycle coverage remain separate.
+Earlier focused DDEV/bare Docker validation is documented in
 [`../spx/RUNTIME.md`](../spx/RUNTIME.md).
 
 ## CI
 
 **Actions → Sandbox → Run workflow** selects Drupal 10, Drupal 11 or both,
-and one installation method or all four.
-The manual workflow runs the versions as independent matrix jobs and builds
+Compose, DDEV or both, and one installation method or all four.
+The manual workflow runs version/environment pairs as independent jobs and builds
 the matching worker from the selected commit. **Build** also runs both
-sandboxes after Docker/Compose fixtures and before image publication. Ordinary
+sandboxes in both environments after Docker/Compose fixtures and before image publication. Ordinary
 push/PR **Checks** retains its faster native and fixture tests.
 
 Failed assertions fail the job. Application and installer containers are
@@ -126,7 +159,7 @@ the shared Drupal 10/11 scenarios with representative combinations:
   against fully installed Drupal sites.
 - [x] Run the Compose installation wrapper against the installed sites,
   including check/fix/pre-commit and unchanged application services.
-- [ ] Automate isolated DDEV installation and SPX lifecycle in CI.
+- [x] Automate isolated DDEV installation and SPX lifecycle in CI.
 - [ ] Automate bare Docker launch-argument activation and restoration in CI.
 - [ ] Run Drupal on host PHP with the usual Docker-based PHPWarden worker.
 - [ ] Run Docker-less CLI installation and recorded-profile CLI/MCP smoke tests;

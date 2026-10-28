@@ -61,9 +61,7 @@ class ComposeInstallation:
 
     def application(self):
         sandbox = self.sandbox
-        containers = sandbox.compose("ps", "-q", "php").split()
-        assert len(containers) == 1, containers
-        sandbox.container = containers[0]
+        sandbox.container = sandbox.current_container()
         inspection = json.loads(sandbox.run(["docker", "inspect", sandbox.container]))[0]
         assert inspection["State"]["Running"]
         return {
@@ -236,7 +234,7 @@ class ComposeInstallation:
             ".agents/skills/project-preserved/SKILL.md",
         )
         preserved = self.snapshot(inputs)
-        sandbox.compose("up", "-d", "--no-build", "--pull", "never", "php")
+        sandbox.start_runtime()
         before = self.application()
         response, database = sandbox.http("off"), self.database()
         configuration = sandbox.project / ".phpwarden.yaml"
