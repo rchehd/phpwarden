@@ -223,6 +223,18 @@ func TestDockerFailuresCannotReturnClean(t *testing.T) {
 	}
 }
 
+func TestMissingDockerCLIHasInstallationGuidance(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "")
+	t.Setenv("DOCKER_CONTEXT", "")
+	process := processFunc(func(context.Context, runner.Command) runner.Result {
+		return runner.Result{ExitCode: -1, Unavailable: true, Err: errors.New("not found")}
+	})
+	err := localEndpoint(context.Background(), process)
+	if err == nil || !strings.Contains(err.Error(), "install Docker") || !strings.Contains(err.Error(), "PATH") {
+		t.Fatalf("missing Docker CLI did not explain installation: %v", err)
+	}
+}
+
 func bytesReplace(data []byte, old, replacement string) []byte {
 	return []byte(strings.ReplaceAll(string(data), old, replacement))
 }

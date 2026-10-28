@@ -4,27 +4,55 @@ on:
   workflow_dispatch:
     inputs:
       drupal:
-        description: Drupal sandbox to install and test
+        description: Drupal version for application jobs
         type: choice
         options: [all, "10", "11"]
         default: all
       installation:
-        description: PHPWarden installation methods to exercise
+        description: PHPWarden installation methods for Drupal application jobs
         type: choice
         options: [all, standalone, composer, npm, compose]
         default: all
       environment:
-        description: Application environment to exercise
+        description: Application environment or independent Docker-less CLI smoke
         type: choice
-        options: [all, compose, ddev, docker, host]
+        options: [all, compose, ddev, docker, host, dockerless]
         default: all
 
 permissions:
   contents: read
 
 jobs:
+  dockerless:
+    name: Docker-less · CLI installation and recorded profiles
+    if: inputs.environment == 'all' || inputs.environment == 'dockerless'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Exercise offline installer and native readers without Docker or PHP
+        run: python3 tools/sandbox/dockerless.py --output "$RUNNER_TEMP/phpwarden-sandbox-dockerless"
+      - name: Upload Docker-less evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: phpwarden-sandbox-dockerless-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/phpwarden-sandbox-dockerless/*.json
+            ${{ runner.temp }}/phpwarden-sandbox-dockerless/*.txt
+            ${{ runner.temp }}/phpwarden-sandbox-dockerless/logs/
+          if-no-files-found: warn
+          retention-days: 7
+
   drupal:
     name: Drupal ${{ matrix.drupal }} · ${{ matrix.environment }} · acceptance
+    if: inputs.environment != 'dockerless'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:

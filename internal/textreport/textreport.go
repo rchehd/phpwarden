@@ -29,7 +29,7 @@ var hints = map[string]hint{
 	"compatibility_invalid":       {"Check php.runtime and php.target in .phpwarden.yaml; development images support runtime 8.1–8.4 and targets from 8.1 up to the runtime.", ""},
 	"config_invalid":              {"Fix the configuration; phpwarden config validate shows the details.", ""},
 	"discovery_invalid":           {"Fix the project metadata named above; phpwarden config show lists what discovery found.", ""},
-	"docker_unavailable":          {"Start the local Docker daemon or check DOCKER_HOST.", ""},
+	"docker_unavailable":          {"Check the Docker CLI installation, local daemon and DOCKER_HOST.", ""},
 	"image_unavailable":           {"Build the development images: docker buildx bake", "docker buildx bake"},
 	"published_image_unavailable": {"Use the worker image pinned by this CLI; check registry access and runner.image_pull.", ""},
 	"stale":                       {"Run the check again once the files stop changing.", ""},

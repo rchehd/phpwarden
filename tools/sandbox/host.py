@@ -186,7 +186,7 @@ class HostRuntime:
         aliases = {"/project": str(sandbox.project), "/data": str(sandbox.root / "data")}
         mapped = [
             re.sub(
-                r"(?<![\w/])/(?:project|data)(?=/|$)",
+                r"(?<!\w)/(?:project|data)(?=/|$)",
                 lambda match: aliases[match.group()],
                 str(arg),
             )

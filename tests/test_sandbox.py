@@ -80,7 +80,13 @@ class SandboxTest(unittest.TestCase):
         sandbox.run = lambda command: calls.append(command)
         runtime = HostRuntime(sandbox, shutil.which("python3"))
         runtime.command = ["private-php"]
-        runtime.exec(["/project/vendor/drush/drush/drush.php", "--db-url=sqlite:/data/site.sqlite"])
+        runtime.exec(
+            [
+                "/project/vendor/drush/drush/drush.php",
+                "--db-url=sqlite:/data/site.sqlite",
+                "--db-url=sqlite://localhost//data/site.sqlite",
+            ]
+        )
         self.assertEqual(
             calls,
             [
@@ -88,6 +94,7 @@ class SandboxTest(unittest.TestCase):
                     "private-php",
                     "/scratch/data/project/vendor/drush/drush/drush.php",
                     "--db-url=sqlite:/scratch/data/data/site.sqlite",
+                    "--db-url=sqlite://localhost//scratch/data/data/site.sqlite",
                 ]
             ],
         )

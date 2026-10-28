@@ -205,6 +205,19 @@ jobs:
           manifest=()
           if [ -f published/compatibility.json ]; then manifest=(--manifest published/compatibility.json); fi
           python3 tools/distribution.py package --version "$version" --commit "$GITHUB_SHA" "${manifest[@]}" --output dist
+      - name: Exercise the packaged CLI without Docker or PHP
+        run: python3 tools/sandbox/dockerless.py --archive "$GITHUB_WORKSPACE/dist/phpwarden-linux-amd64.tar.gz" --output "$RUNNER_TEMP/phpwarden-build-dockerless"
+      - name: Upload Docker-less evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: phpwarden-build-dockerless-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/phpwarden-build-dockerless/*.json
+            ${{ runner.temp }}/phpwarden-build-dockerless/*.txt
+            ${{ runner.temp }}/phpwarden-build-dockerless/logs/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Upload CLI archive and checksum
         uses: actions/upload-artifact@v7
         with:

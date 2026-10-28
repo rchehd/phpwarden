@@ -4,13 +4,15 @@ import subprocess
 
 
 class Client:
-    def __init__(self, command):
+    def __init__(self, command, *, env=None, cwd=None):
         self.process = subprocess.Popen(
             command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            env=env,
+            cwd=cwd,
         )
         self.identity = 0
         self.messages = []

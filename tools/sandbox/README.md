@@ -81,6 +81,31 @@ SPX setup is unsupported, so this environment explicitly records zero profiles
 and skips capture/MCP lifecycle assertions. Recorded-profile CLI/MCP coverage
 belongs to the separate Docker-less scenario.
 
+Run the Docker-less scenario separately:
+
+```sh
+python3 tools/sandbox/dockerless.py --output /tmp/phpwarden-dockerless
+```
+
+Go builds the candidate archive before testing. With `--archive FILE`, the suite
+uses an existing archive and adjacent `SHA256SUMS` instead. The offline installer
+runs with an allowlist of shell/Git helpers; Docker, Podman, PHP, Composer, npm,
+Node, Go and download tools are absent from its `PATH`. The harness creates a
+small Git fixture from the Drupal 10 lock and a custom module; it does not claim
+to install or run Drupal. CLI installation/reinstallation, checksum failure
+preservation, help/version/licenses and repeat `init` must work without those
+runtimes. `check` must exit 3 with `complete: false`, a missing-Docker diagnostic,
+no findings and no executed checks; text output must say `NOT RUN`.
+
+Recorded-profile CLI and MCP commands then run with an entirely empty `PATH`.
+The committed SPX `repeated` and `cached` recordings provide known call counts
+and source definitions. All five MCP tools, timing units, source mapping,
+redaction, traversal rejection and incomplete capture rejection are exercised.
+Project files and recordings must remain unchanged; MCP processes must exit
+cleanly. No runtime setup, new captures, global client settings or Docker daemon
+operations are involved. Summary, readable/JSON reports, the MCP transcript and
+command logs stay in the output directory.
+
 DDEV tests need DDEV, mkcert and Docker locally. CI uses the checksum-pinned
 [DDEV 1.25.4 archive](https://github.com/ddev/ddev/releases/expanded_assets/v1.25.4),
 installed into a private tools directory with `sh tools/sandbox/install-ddev.sh DIRECTORY`.
@@ -191,6 +216,13 @@ the matching worker from the selected commit. **Build** also runs both
 sandboxes in all four environments after Docker/Compose fixtures and before image publication. Ordinary
 push/PR **Checks** retains its faster native and fixture tests.
 
+Selecting `dockerless` runs only the independent native smoke job; selecting
+`all` includes it once alongside the Drupal jobs. Drupal version and installation
+method selections apply to the Drupal jobs; Docker-less always tests the offline
+standalone installer and recorded readers. **Build** exercises its actual CLI
+archive with the same Docker-less harness before uploading the CLI artifact or
+publishing a CLI release. Image-only builds retain their application scenarios.
+
 Failed assertions fail the job. Application and installer containers are
 removed in cleanup. Captures and test images stay local; no global Docker
 pruning or personal client configuration is used. Summary, command logs,
@@ -212,7 +244,7 @@ the shared Drupal 10/11 scenarios with representative combinations:
 - [x] Automate isolated DDEV installation and SPX lifecycle in CI.
 - [x] Automate bare Docker launch-argument activation and restoration in CI.
 - [x] Run Drupal on host PHP with the usual Docker-based PHPWarden worker.
-- [ ] Run Docker-less CLI installation and recorded-profile CLI/MCP smoke tests;
+- [x] Run Docker-less CLI installation and recorded-profile CLI/MCP smoke tests;
   verify that `check` clearly reports the missing Docker dependency.
 - [ ] Share preservation, failure and cleanup assertions across environments,
   and label evidence by Drupal version, installation method and environment.

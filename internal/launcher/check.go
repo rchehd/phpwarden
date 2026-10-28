@@ -250,6 +250,9 @@ func localEndpoint(ctx context.Context, process runner.Process) error {
 	endpoint := os.Getenv("DOCKER_HOST")
 	if endpoint == "" || os.Getenv("DOCKER_CONTEXT") != "" {
 		result := process.Run(ctx, runner.Command{Name: "docker", Args: []string{"context", "inspect", "--format", "{{json .Endpoints.docker.Host}}"}})
+		if result.Unavailable {
+			return fmt.Errorf("Docker CLI is unavailable; install Docker and make sure docker is in PATH")
+		}
 		if result.Err != nil || result.ExitCode != 0 {
 			return fmt.Errorf("Docker context is unavailable: %s %v", strings.TrimSpace(string(result.Stderr)), result.Err)
 		}
