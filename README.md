@@ -463,6 +463,8 @@ phpwarden config show
 
 PHPWarden looks for `.phpwarden.yaml` from the current directory up to the Git root. Use `--project PATH` or `--config PATH` to point elsewhere, for example to a Drupal project inside a monorepo.
 
+Input diagnostics name the source file and include one-based line/column and a JSONPath where available, for example `.phpwarden.yaml:6:5 ($.tools.debug.enabled)`. Paths quote literal keys when needed, so `$.repositories[0]["a.b"]` identifies a key containing a dot. YAML duplicates report both definitions and are rejected; Composer metadata duplicates remain warnings, report both definitions and retain Composer's last-value behavior. A parser that exposes only a line does not invent a column. Input errors stop analysis with exit 2; the same locations appear in text and JSON diagnostic messages.
+
 ## Run checks
 
 ```sh

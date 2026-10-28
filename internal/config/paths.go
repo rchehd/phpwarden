@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rchehd/phpwarden/internal/inputsource"
 	"github.com/rchehd/phpwarden/internal/projectpath"
 )
 
@@ -95,19 +96,19 @@ func Load(location Location) (Effective, error) {
 	}
 	result, err := Parse(data)
 	if err != nil {
-		return Effective{}, err
+		return Effective{}, inputsource.WithFile(err, location.Path)
 	}
 	result.SourceHash = fmt.Sprintf("%x", sha256.Sum256(data))
 	for name, paths := range map[string][]string{
 		"scope.include":       result.Config.Scope.Include,
 		"tools.debug.include": result.Config.Tools.Debug.Include,
 	} {
-		for _, value := range paths {
+		for i, value := range paths {
 			if err := projectpath.Validate(value); err != nil {
-				return Effective{}, fmt.Errorf("%s: %w", name, err)
+				return Effective{}, &inputsource.Error{File: location.Path, Path: fmt.Sprintf("$.%s[%d]", name, i), Message: err.Error(), Err: err}
 			}
 			if err := projectpath.Within(location.Root, value); err != nil {
-				return Effective{}, fmt.Errorf("%s: %w", name, err)
+				return Effective{}, &inputsource.Error{File: location.Path, Path: fmt.Sprintf("$.%s[%d]", name, i), Message: err.Error(), Err: err}
 			}
 		}
 	}

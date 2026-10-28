@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rchehd/phpwarden/internal/inputsource"
 	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/projectpath"
 	"github.com/rchehd/phpwarden/schemas"
@@ -432,14 +433,14 @@ func Parse(data []byte) (Effective, error) {
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	var document yaml.Node
 	if err := decoder.Decode(&document); err != nil {
-		return Effective{}, fmt.Errorf("read YAML: %w", err)
+		return Effective{}, yamlSyntax(err)
 	}
 	var extra yaml.Node
 	if err := decoder.Decode(&extra); err != io.EOF {
 		if err != nil {
-			return Effective{}, fmt.Errorf("read YAML: %w", err)
+			return Effective{}, yamlSyntax(err)
 		}
-		return Effective{}, fmt.Errorf("expected one YAML document")
+		return Effective{}, yamlSource(&extra, "", "expected one YAML document")
 	}
 	if len(document.Content) != 1 {
 		return Effective{}, fmt.Errorf("expected a YAML mapping")
@@ -448,7 +449,7 @@ func Parse(data []byte) (Effective, error) {
 	if root.Kind == yaml.MappingNode {
 		for i := 0; i < len(root.Content); i += 2 {
 			if root.Content[i].Value == "version" && root.Content[i+1].ShortTag() != "!!int" {
-				return Effective{}, fmt.Errorf("version must be an integer")
+				return Effective{}, yamlSource(root.Content[i+1], "$.version", "version must be an integer")
 			}
 		}
 	}
@@ -457,7 +458,7 @@ func Parse(data []byte) (Effective, error) {
 		return Effective{}, err
 	}
 	if err := schemas.ValidateConfig(value); err != nil {
-		return Effective{}, fmt.Errorf("invalid configuration: %w", err)
+		return Effective{}, schemaSource(root, err)
 	}
 	input := value.(map[string]any)
 	defaults, ok := profile.Lookup(input["profile"].(string))
@@ -626,7 +627,7 @@ func Parse(data []byte) (Effective, error) {
 	result.Config.Scope.Exclude = append(append([]string{}, coreExcludes...), result.Config.Scope.Exclude...)
 	result.Config.ComposerRoot = path.Clean(result.Config.ComposerRoot)
 	if err := validateValues(result.Config); err != nil {
-		return Effective{}, err
+		return Effective{}, semanticSource(root, err)
 	}
 	if result.Config.Framework.Version == "auto" {
 		result.Pending = append(result.Pending, "framework.version")
@@ -640,7 +641,7 @@ func Parse(data []byte) (Effective, error) {
 
 func jsonValue(node *yaml.Node, location string) (any, error) {
 	if node.Anchor != "" || node.Kind == yaml.AliasNode {
-		return nil, fmt.Errorf("%s: YAML anchors and aliases are not supported", location)
+		return nil, yamlSource(node, location, "YAML anchors and aliases are not supported")
 	}
 	switch node.Kind {
 	case yaml.MappingNode:
@@ -648,15 +649,19 @@ func jsonValue(node *yaml.Node, location string) (any, error) {
 			break
 		}
 		result := make(map[string]any)
+		keys := make(map[string]*yaml.Node)
 		for i := 0; i < len(node.Content); i += 2 {
 			key := node.Content[i]
 			if key.Kind != yaml.ScalarNode || key.ShortTag() != "!!str" || key.Value == "<<" || key.Anchor != "" {
-				return nil, fmt.Errorf("%s: expected string keys without merge keys", location)
+				return nil, yamlSource(key, location, "expected string keys without merge keys")
 			}
 			if _, exists := result[key.Value]; exists {
-				return nil, fmt.Errorf("%s: duplicate key %q", location, key.Value)
+				err := yamlSource(key, inputsource.Member(location, key.Value), fmt.Sprintf("duplicate key %q; keep a single definition", key.Value))
+				err.Previous = &inputsource.Position{Line: keys[key.Value].Line, Column: keys[key.Value].Column}
+				return nil, err
 			}
-			value, err := jsonValue(node.Content[i+1], location+"."+key.Value)
+			keys[key.Value] = key
+			value, err := jsonValue(node.Content[i+1], inputsource.Member(location, key.Value))
 			if err != nil {
 				return nil, err
 			}
@@ -681,15 +686,15 @@ func jsonValue(node *yaml.Node, location string) (any, error) {
 		case "!!str", "!!bool", "!!int", "!!float", "!!null":
 			var value any
 			if err := node.Decode(&value); err != nil {
-				return nil, fmt.Errorf("%s: %w", location, err)
+				return nil, yamlSource(node, location, err.Error())
 			}
 			if number, ok := value.(float64); ok && (math.IsNaN(number) || math.IsInf(number, 0)) {
-				return nil, fmt.Errorf("%s: numbers must be finite", location)
+				return nil, yamlSource(node, location, "numbers must be finite")
 			}
 			return value, nil
 		}
 	}
-	return nil, fmt.Errorf("%s: unsupported YAML type %q", location, node.Tag)
+	return nil, yamlSource(node, location, fmt.Sprintf("unsupported YAML type %q", node.Tag))
 }
 
 func markProvenance(values map[string]any, prefix string, sources map[string]string) {
@@ -711,10 +716,10 @@ func validateValues(cfg Config) error {
 		return fmt.Errorf("updates.max_stale_hours must be at least updates.max_age_hours")
 	}
 	if cfg.Tools.Deptrac.Config != "" && !strings.HasSuffix(cfg.Tools.Deptrac.Config, ".yaml") && !strings.HasSuffix(cfg.Tools.Deptrac.Config, ".yml") && !strings.HasSuffix(cfg.Tools.Deptrac.Config, ".yaml.dist") && !strings.HasSuffix(cfg.Tools.Deptrac.Config, ".yml.dist") {
-		return fmt.Errorf("Deptrac config must be a local YAML file")
+		return fmt.Errorf("tools.deptrac.config must be a local YAML file")
 	}
 	if cfg.Tools.Rector.Config != "" && path.Ext(cfg.Tools.Rector.Config) != ".php" {
-		return fmt.Errorf("Rector config must be a local PHP file")
+		return fmt.Errorf("tools.rector.config must be a local PHP file")
 	}
 
 	for _, name := range append(append([]string{cfg.Tools.Semgrep.Config}, cfg.Tools.Semgrep.Rulesets...), cfg.Tools.Semgrep.Baseline) {

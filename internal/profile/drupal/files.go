@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/rchehd/phpwarden/internal/inputsource"
 	"github.com/rchehd/phpwarden/internal/projectpath"
 )
 
@@ -87,68 +89,97 @@ func (reader reader) document(name string) (any, bool, error) {
 	reader.inputs[name] = fmt.Sprintf("sha256:%x", sha256.Sum256(data))
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
-	duplicates := []string{}
-	value, err := jsonValue(decoder, 0, "", &duplicates)
+	duplicates := []*inputsource.Error{}
+	value, err := jsonValue(decoder, data, 0, "$", &duplicates)
 	if err != nil {
-		return nil, true, fmt.Errorf("%s: %w", name, err)
+		return nil, true, inputsource.WithFile(err, name)
 	}
-	for _, key := range duplicates {
-		*reader.warnings = append(*reader.warnings, fmt.Sprintf("%s: duplicate JSON key %q; the last value is used, as in Composer", name, key))
+	for _, duplicate := range duplicates {
+		*reader.warnings = append(*reader.warnings, inputsource.WithFile(duplicate, name).Error()+"; the last value is used, as in Composer")
 	}
+	offset := inputsource.TokenStart(data, decoder.InputOffset())
 	if _, err := decoder.Token(); err != io.EOF {
-		return nil, true, fmt.Errorf("%s: expected one JSON document", name)
+		return nil, true, &inputsource.Error{File: name, Position: inputsource.At(data, offset), Path: "$", Message: "expected one JSON document"}
 	}
 	return value, true, nil
 }
 
-func jsonValue(decoder *json.Decoder, depth int, parent string, duplicates *[]string) (any, error) {
+func jsonValue(decoder *json.Decoder, data []byte, depth int, parent string, duplicates *[]*inputsource.Error) (any, error) {
+	offset := inputsource.TokenStart(data, decoder.InputOffset())
 	if depth > 128 {
-		return nil, fmt.Errorf("JSON nesting exceeds discovery limit")
+		return nil, &inputsource.Error{Position: inputsource.At(data, offset), Path: parent, Message: "JSON nesting exceeds discovery limit"}
 	}
 	token, err := decoder.Token()
 	if err != nil {
-		return nil, err
+		return nil, jsonSource(data, decoder, parent, err)
 	}
 	if token == json.Delim('{') {
 		result := map[string]any{}
+		keys := map[string]int64{}
 		for decoder.More() {
+			keyOffset := inputsource.TokenStart(data, decoder.InputOffset())
 			key, err := decoder.Token()
 			if err != nil {
-				return nil, err
+				return nil, jsonSource(data, decoder, parent, err)
 			}
 			name, ok := key.(string)
 			if !ok {
-				return nil, fmt.Errorf("expected a JSON object key")
+				return nil, &inputsource.Error{Position: inputsource.At(data, keyOffset), Path: parent, Message: "expected a JSON object key"}
 			}
-			child := strings.TrimPrefix(parent+"."+name, ".")
-			if _, exists := result[name]; exists {
-				*duplicates = append(*duplicates, child)
+			child := inputsource.Member(parent, name)
+			if previous, exists := keys[name]; exists {
+				first := inputsource.At(data, previous)
+				*duplicates = append(*duplicates, &inputsource.Error{Position: inputsource.At(data, keyOffset), Path: child,
+					Previous: &first, Message: fmt.Sprintf("duplicate JSON key %q", name)})
+			} else {
+				keys[name] = keyOffset
 			}
-			value, err := jsonValue(decoder, depth+1, child, duplicates)
+			value, err := jsonValue(decoder, data, depth+1, child, duplicates)
 			if err != nil {
 				return nil, err
 			}
 			result[name] = value
 		}
 		_, err := decoder.Token()
-		return result, err
+		if err != nil {
+			return nil, jsonSource(data, decoder, parent, err)
+		}
+		return result, nil
 	}
 	if token == json.Delim('[') {
 		result := []any{}
 		for decoder.More() {
-			value, err := jsonValue(decoder, depth+1, fmt.Sprintf("%s[%d]", parent, len(result)), duplicates)
+			value, err := jsonValue(decoder, data, depth+1, fmt.Sprintf("%s[%d]", parent, len(result)), duplicates)
 			if err != nil {
 				return nil, err
 			}
 			result = append(result, value)
 		}
 		_, err := decoder.Token()
-		return result, err
+		if err != nil {
+			return nil, jsonSource(data, decoder, parent, err)
+		}
+		return result, nil
 	}
 	if _, isDelimiter := token.(json.Delim); isDelimiter {
-		return nil, fmt.Errorf("unexpected JSON delimiter")
+		return nil, &inputsource.Error{Position: inputsource.At(data, offset), Path: parent, Message: "unexpected JSON delimiter"}
 	}
 	return token, nil
+}
+
+func jsonSource(data []byte, decoder *json.Decoder, path string, err error) error {
+	offset := inputsource.TokenStart(data, decoder.InputOffset())
+	var syntax *json.SyntaxError
+	if errors.As(err, &syntax) {
+		var raw json.RawMessage
+		if absolute := json.Unmarshal(data, &raw); absolute != nil {
+			errors.As(absolute, &syntax)
+		}
+		offset = syntax.Offset - 1
+	} else if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		offset = int64(len(data))
+	}
+	return &inputsource.Error{Position: inputsource.At(data, offset), Path: path, Message: err.Error(), Err: err}
 }
 
 func objectAt(object map[string]any, keys ...string) (map[string]any, error) {

@@ -101,12 +101,13 @@ func TestDuplicateKeysUseLastValueWithWarning(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "composer.json", `{"extra":{"drupal-scaffold":{"locations":{"web-root":"docroot"}}},"extra":{"drupal-scaffold":{"locations":{"web-root":"web"},"locations":{"web-root":"web"}}}}`)
 	facts, err := Discover(root)
-	want := []string{
-		`composer.json: duplicate JSON key "extra"; the last value is used, as in Composer`,
-		`composer.json: duplicate JSON key "extra.drupal-scaffold.locations"; the last value is used, as in Composer`,
-	}
-	if err != nil || facts.WebRoot == nil || *facts.WebRoot != "web" || !slices.Equal(facts.Warnings, want) {
+	if err != nil || facts.WebRoot == nil || *facts.WebRoot != "web" || len(facts.Warnings) != 2 {
 		t.Fatalf("duplicate keys not resolved like Composer: %+v %v", facts, err)
+	}
+	for i, want := range []string{"$.extra", `$.extra["drupal-scaffold"].locations`} {
+		if !strings.Contains(facts.Warnings[i], want) || !strings.Contains(facts.Warnings[i], "first defined at line 1, column") {
+			t.Fatal(facts.Warnings[i])
+		}
 	}
 }
 

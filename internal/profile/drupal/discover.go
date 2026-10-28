@@ -3,6 +3,7 @@ package drupal
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rchehd/phpwarden/internal/inputsource"
 	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/projectpath"
 )
@@ -27,6 +29,10 @@ func Discover(root string) (profile.Facts, error) {
 func DiscoverIn(root, composerRoot string) (profile.Facts, error) {
 	facts, err := discover(filepath.Join(root, filepath.FromSlash(composerRoot)))
 	if err != nil {
+		var source *inputsource.Error
+		if composerRoot != "." && errors.As(err, &source) {
+			err = inputsource.WithFile(err, path.Join(composerRoot, source.File))
+		}
 		return facts, err
 	}
 	if composerRoot != "." {
@@ -341,7 +347,7 @@ func relocate(facts *profile.Facts, composerRoot string) {
 	prefix := func(value string) string { return path.Join(composerRoot, value) }
 	described := func(value *string) {
 		if value != nil && strings.HasPrefix(*value, "composer.") {
-			*value = prefix(*value)
+			*value = composerRoot + "/" + *value
 		}
 	}
 	if facts.WebRoot != nil {
