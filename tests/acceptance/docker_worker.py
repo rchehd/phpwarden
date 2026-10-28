@@ -220,6 +220,25 @@ class DockerWorkerTest(unittest.TestCase):
             self.assertIn("read-only", completed.stderr.lower())
             self.assertFalse((scenario.root / "unexpected").exists())
 
+    def test_coverage_driver_is_pinned_and_disabled_until_requested(self):
+        version = self.metadata["Config"]["Labels"]["io.phpwarden.pcov-version"]
+        self.assertEqual(version, "1.0.12")
+        with tempfile.TemporaryDirectory(prefix="phpwarden-coverage-runtime-") as root:
+            for enabled in (False, True):
+                arguments = ["-d", "pcov.enabled=1"] if enabled else []
+                arguments += [
+                    "-r",
+                    'echo json_encode(["version"=>phpversion("pcov"),'
+                    '"enabled"=>(bool)ini_get("pcov.enabled"),'
+                    '"license"=>is_file("/usr/local/lib/phpwarden/pcov/LICENSE")]);',
+                ]
+                completed = self.run_container(Path(root), arguments, entrypoint="php")
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertEqual(
+                    json.loads(completed.stdout),
+                    {"version": version, "enabled": enabled, "license": True},
+                )
+
     def test_syntax_findings_include_errors_outside_diff(self):
         def run(scenario, arguments):
             before = snapshot(scenario.root)

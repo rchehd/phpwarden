@@ -29,26 +29,27 @@ type PHPRequirement struct {
 }
 
 type Defaults struct {
-	UnitTestDirectory         string
-	PHPUnitConfig             string
-	DebugFunctions            []string
-	DebugJSFunctions          []string
-	DebugTwigFunctions        []string
-	JSExtensions              []string
-	PHPExtensions             []string
-	ModuleConfigDirectories   []string
-	ModuleConfigForbiddenKeys []string
-	PHPCSStandards            []string
-	PHPStanDrupal             bool
-	SemgrepEnabled            bool
-	EventHorizonEnabled       bool
-	DeadCodeEnabled           bool
-	RectorEnabled             bool
-	PHPMDRulesets             []string
-	PHPMDExcludeRules         []string
-	TwigExtensions            []string
-	TwigCSFixerRemovedRules   []string
-	ProjectFiles              []string
+	UnitTestDirectory          string
+	CoverageExcludeDirectories []string
+	PHPUnitConfig              string
+	DebugFunctions             []string
+	DebugJSFunctions           []string
+	DebugTwigFunctions         []string
+	JSExtensions               []string
+	PHPExtensions              []string
+	ModuleConfigDirectories    []string
+	ModuleConfigForbiddenKeys  []string
+	PHPCSStandards             []string
+	PHPStanDrupal              bool
+	SemgrepEnabled             bool
+	EventHorizonEnabled        bool
+	DeadCodeEnabled            bool
+	RectorEnabled              bool
+	PHPMDRulesets              []string
+	PHPMDExcludeRules          []string
+	TwigExtensions             []string
+	TwigCSFixerRemovedRules    []string
+	ProjectFiles               []string
 }
 
 func Lookup(id string) (Defaults, bool) {
@@ -56,22 +57,23 @@ func Lookup(id string) (Defaults, bool) {
 		return Defaults{}, false
 	}
 	return Defaults{
-		UnitTestDirectory:         "tests/src/Unit",
-		PHPUnitConfig:             "core/phpunit.xml.dist",
-		DebugFunctions:            []string{"var_dump", "print_r", "dpm", "dvm", "dsm", "ksm", "kint", "kpr", "dd", "ddm", "ddebug_backtrace", "xdebug_break", "die"},
-		DebugJSFunctions:          []string{"console.log", "console.debug", "console.trace", "console.dir"},
-		DebugTwigFunctions:        []string{"dump", "kint"},
-		JSExtensions:              []string{".js"},
-		PHPExtensions:             []string{".php", ".module", ".inc", ".install", ".theme", ".profile", ".engine", ".test"},
-		ModuleConfigDirectories:   []string{"config/install", "config/optional", "config/schema"},
-		ModuleConfigForbiddenKeys: []string{"uuid", "_core"},
-		PHPCSStandards:            []string{"Drupal", "DrupalPractice"},
-		PHPStanDrupal:             true,
-		SemgrepEnabled:            true,
-		EventHorizonEnabled:       true,
-		DeadCodeEnabled:           true,
-		RectorEnabled:             true,
-		PHPMDRulesets:             []string{"unusedcode", "codesize"},
+		UnitTestDirectory:          "tests/src/Unit",
+		PHPUnitConfig:              "core/phpunit.xml.dist",
+		CoverageExcludeDirectories: []string{"tests"},
+		DebugFunctions:             []string{"var_dump", "print_r", "dpm", "dvm", "dsm", "ksm", "kint", "kpr", "dd", "ddm", "ddebug_backtrace", "xdebug_break", "die"},
+		DebugJSFunctions:           []string{"console.log", "console.debug", "console.trace", "console.dir"},
+		DebugTwigFunctions:         []string{"dump", "kint"},
+		JSExtensions:               []string{".js"},
+		PHPExtensions:              []string{".php", ".module", ".inc", ".install", ".theme", ".profile", ".engine", ".test"},
+		ModuleConfigDirectories:    []string{"config/install", "config/optional", "config/schema"},
+		ModuleConfigForbiddenKeys:  []string{"uuid", "_core"},
+		PHPCSStandards:             []string{"Drupal", "DrupalPractice"},
+		PHPStanDrupal:              true,
+		SemgrepEnabled:             true,
+		EventHorizonEnabled:        true,
+		DeadCodeEnabled:            true,
+		RectorEnabled:              true,
+		PHPMDRulesets:              []string{"unusedcode", "codesize"},
 		// Drupal hooks and interface methods have fixed signatures.
 		PHPMDExcludeRules: []string{"UnusedFormalParameter"},
 		TwigExtensions:    []string{".twig"},

@@ -33,6 +33,15 @@ ADD --checksum=sha256:780047c94f5cb5ee7b6093484e232cf2dc5106cc6b01a0609a2d15d5b7
 RUN python3 prepare.py --platform musllinux_1_2_x86_64 --wheel-archive /tmp/semgrep.whl --source-archive /tmp/semgrep-source.tar.gz \
     && rm /tmp/semgrep.whl /tmp/semgrep-source.tar.gz
 
+FROM ${PHP_IMAGE} AS coverage-driver
+
+RUN apk add --no-cache $PHPIZE_DEPS
+ADD --checksum=sha256:d0740c67136c8a6e3ade0db6cd69e9879d34dcadb35e3a841fb921d2ab6081a1 https://codeload.github.com/krakjoe/pcov/tar.gz/e16c08e14da0a74fd19e2e14960382bc8f28292d /tmp/pcov.tar.gz
+WORKDIR /build/pcov
+RUN tar -xzf /tmp/pcov.tar.gz --strip-components=1 \
+    && phpize && ./configure --enable-pcov && make -j2 \
+    && mkdir /out && cp modules/pcov.so LICENSE /out/
+
 FROM ${PHP_IMAGE} AS tools
 
 ARG PHP_RUNTIME
@@ -121,6 +130,11 @@ RUN apk add --no-cache git ca-certificates libstdc++ python3 \
     && git config --system --add safe.directory /workspace \
     && php -r 'if (!function_exists("token_get_all") || PHP_VERSION !== getenv("PHP_VERSION") || PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION !== getenv("PHP_RUNTIME")) { exit(1); }'
 
+COPY --from=coverage-driver /out /usr/local/lib/phpwarden/pcov
+COPY tools/coverage/sources.json /usr/local/lib/phpwarden/pcov/sources.json
+RUN printf '%s\n' 'extension=/usr/local/lib/phpwarden/pcov/pcov.so' 'pcov.enabled=0' > /usr/local/etc/php/conf.d/phpwarden-pcov.ini \
+    && php -r 'if (phpversion("pcov") !== "1.0.12" || ini_get("pcov.enabled") !== "0") { exit(1); }'
+
 COPY --from=node-tools /usr/local/bin/node /usr/local/bin/node
 COPY --from=node-tools /opt/phpwarden/tools/node /usr/local/lib/phpwarden/node
 COPY --from=tools /opt/phpwarden/tools/yaml /usr/local/lib/phpwarden/yaml
@@ -142,6 +156,7 @@ LABEL org.opencontainers.image.title="PHPWarden static worker" \
     org.opencontainers.image.version="${BUILD_VERSION}" \
     org.opencontainers.image.revision="${BUILD_COMMIT}" \
     org.opencontainers.image.source="https://github.com/rchehd/phpwarden" \
+    io.phpwarden.pcov-version="1.0.12" \
     io.phpwarden.protocol="2" \
     io.phpwarden.toolset="${TOOLSET_ID}" \
     io.phpwarden.php-version="${PHP_VERSION}" \

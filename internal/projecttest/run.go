@@ -17,17 +17,18 @@ import (
 )
 
 type Report struct {
-	Version        int      `json:"version"`
-	Command        string   `json:"command"`
-	Status         string   `json:"status"`
-	Complete       bool     `json:"complete"`
-	ExitCode       int      `json:"exit_code"`
-	Plan           *Plan    `json:"selection,omitempty"`
-	PHPUnitVersion string   `json:"phpunit_version,omitempty"`
-	Counts         Counts   `json:"counts"`
-	Cases          []Case   `json:"cases"`
-	Artifacts      string   `json:"artifacts,omitempty"`
-	Diagnostics    []string `json:"diagnostics"`
+	Coverage       *CoverageReport `json:"coverage,omitempty"`
+	Version        int             `json:"version"`
+	Command        string          `json:"command"`
+	Status         string          `json:"status"`
+	Complete       bool            `json:"complete"`
+	ExitCode       int             `json:"exit_code"`
+	Plan           *Plan           `json:"selection,omitempty"`
+	PHPUnitVersion string          `json:"phpunit_version,omitempty"`
+	Counts         Counts          `json:"counts"`
+	Cases          []Case          `json:"cases"`
+	Artifacts      string          `json:"artifacts,omitempty"`
+	Diagnostics    []string        `json:"diagnostics"`
 }
 
 type Execute func(context.Context, string, string, []string) runner.Result
@@ -95,7 +96,15 @@ func Run(ctx context.Context, plan Plan, output string, execute Execute) (result
 		return fail(fmt.Errorf("project PHPUnit could not start with the selected PHP runtime; inspect phpunit-version.stdout/stderr and install compatible locked dev dependencies"))
 	}
 	result.PHPUnitVersion = string(version[1])
+	configuration := plan.Config
 	paths := plan.Paths
+	if plan.Coverage.Enabled {
+		configuration, err = prepareCoverage(ctx, plan, checkout, directory, result.PHPUnitVersion, execute)
+		if err != nil {
+			return fail(err)
+		}
+		paths = []string{""}
+	}
 	if len(paths) == 0 {
 		paths = []string{""}
 	}
@@ -104,7 +113,13 @@ func Run(ctx context.Context, plan Plan, output string, execute Execute) (result
 		progress.Stage(ctx, fmt.Sprintf("Running project tests · %d/%d", index+1, len(paths)))
 		prefix := fmt.Sprintf("phpunit-%03d", index+1)
 		junit := prefix + ".xml"
-		args := []string{"/workspace/" + plan.Executable, "--configuration", "/workspace/" + plan.Config, "--colors=never", "--do-not-cache-result", "--no-coverage", "--log-junit", "/artifacts/" + junit}
+		args := []string{"/workspace/" + plan.Executable, "--configuration", "/workspace/" + configuration, "--colors=never", "--do-not-cache-result", "--log-junit", "/artifacts/" + junit}
+		if plan.Coverage.Enabled {
+			args = append([]string{"-d", "pcov.enabled=1", "-d", "pcov.directory=/workspace"}, args...)
+			args = append(args, "--coverage-xml", "/artifacts/coverage/xml", "--coverage-html", "/artifacts/coverage/html", "--coverage-clover", "/artifacts/coverage/clover.xml", "--coverage-crap4j", "/artifacts/coverage/crap4j.xml")
+		} else {
+			args = append(args, "--no-coverage")
+		}
 		if plan.Suite != "" {
 			args = append(args, "--testsuite", plan.Suite)
 		}
@@ -167,10 +182,17 @@ func Run(ctx context.Context, plan Plan, output string, execute Execute) (result
 	if err := writeArtifact(directory, "junit.xml", append([]byte(xml.Header), data...)); err != nil {
 		return fail(err)
 	}
+	if plan.Coverage.Enabled {
+		result.Coverage, err = readCoverage(directory)
+		if err != nil {
+			return fail(fmt.Errorf("incomplete coverage: %w; inspect PHPUnit stdout/stderr", err))
+		}
+	}
 	result.Complete, result.Status, result.ExitCode = true, "passed", 0
 	if result.Counts.Failures+result.Counts.Errors > 0 {
 		result.Status, result.ExitCode = "failed", 1
 	}
+	coverageThresholds(plan, &result)
 	if result.Counts.Tests == result.Counts.Skipped {
 		result.Complete, result.Status, result.ExitCode = false, "not_run", 3
 		if result.Counts.Tests == 0 {

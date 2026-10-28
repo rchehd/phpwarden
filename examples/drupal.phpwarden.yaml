@@ -14,6 +14,7 @@ scope:
 runner:
   result_cache: false
 tests:
+  coverage: {enabled: false, include: [], exclude: []}
   phpunit: auto
   config: auto
   timeout_seconds: 300

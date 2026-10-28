@@ -33,7 +33,16 @@ type Config struct {
 	Tools        Tools     `json:"tools"`
 }
 
+type Coverage struct {
+	Enabled         bool     `json:"enabled"`
+	Include         []string `json:"include"`
+	Exclude         []string `json:"exclude"`
+	MinLineCoverage *float64 `json:"min_line_coverage,omitempty"`
+	MaxCRAP         *float64 `json:"max_crap,omitempty"`
+}
+
 type Tests struct {
+	Coverage       Coverage `json:"coverage"`
 	PHPUnit        string   `json:"phpunit"`
 	Config         string   `json:"config"`
 	Paths          []string `json:"paths"`
@@ -482,7 +491,7 @@ func Parse(data []byte) (Effective, error) {
 			Runner:       Runner{Concurrency: 1, TimeoutSeconds: 300, ImagePull: "missing"},
 			Agents:       Agents{Completion: Completion{Enabled: true, MaxAttempts: 2, TimeoutSeconds: 300}},
 			Updates:      Updates{TimeoutSeconds: 120, MaxAgeHours: 24, MaxStaleHours: 168},
-			Tests:        Tests{PHPUnit: "auto", Config: "auto", Paths: []string{}, TimeoutSeconds: 300},
+			Tests:        Tests{Coverage: Coverage{Include: []string{}, Exclude: []string{}}, PHPUnit: "auto", Config: "auto", Paths: []string{}, TimeoutSeconds: 300},
 			Tools: Tools{PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
 				Includes: []string{}, BootstrapFiles: []string{}, ScanDirectories: []string{}, StubFiles: []string{}, Autoload: "auto",
 				Drupal: defaults.PHPStanDrupal, Deprecations: true, MemoryLimitMB: 512, ExtraExtensions: []string{}, StrictRules: StrictRules{All: true, Rules: map[string]bool{}}},
@@ -545,6 +554,10 @@ func Parse(data []byte) (Effective, error) {
 		},
 		Pending: []string{},
 	}
+	for _, field := range []string{"enabled", "include", "exclude", "min_line_coverage", "max_crap"} {
+		result.Provenance["tests.coverage."+field] = "core_default"
+	}
+
 	for _, field := range []string{"enabled", "max_attempts", "timeout_seconds"} {
 		result.Provenance["agents.completion."+field] = "core_default"
 	}
@@ -723,6 +736,11 @@ func markProvenance(values map[string]any, prefix string, sources map[string]str
 }
 
 func validateValues(cfg Config) error {
+	for _, name := range append(slices.Clone(cfg.Tests.Coverage.Include), cfg.Tests.Coverage.Exclude...) {
+		if err := projectpath.Validate(name); err != nil {
+			return fmt.Errorf("tests.coverage: %w", err)
+		}
+	}
 	if strings.ContainsAny(cfg.Tests.Suite, "\x00\r\n") {
 		return fmt.Errorf("tests.suite must be a single-line suite name")
 	}

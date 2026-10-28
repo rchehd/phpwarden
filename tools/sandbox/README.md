@@ -325,3 +325,7 @@ updated during acceptance; only PHPWarden's candidate package is targeted by
 Composer updates. The official release pages document the pinned
 [Drupal 10.6.0](https://www.drupal.org/project/drupal/releases/10.6.0) and
 [Drupal 11.4.1](https://www.drupal.org/project/drupal/releases/11.4.1) versions.
+
+The `project-tests` case also checks PCOV line coverage and method CRAP on the
+locked PHPUnit 9/11 fixtures, union across two test files, HTML/XML artifacts,
+and opt-in thresholds without modifying the original project.

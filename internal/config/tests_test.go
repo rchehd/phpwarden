@@ -14,7 +14,10 @@ func TestProjectTestsSettingsAndValidation(t *testing.T) {
 	for _, extra := range []string{
 		"tests: {timeout_seconds: 0}", "tests: {timeout_seconds: 3601}",
 		"tests: {paths: [../escape]}", "tests: {phpunit: /outside/phpunit}", "tests: {config: ../phpunit.xml}",
-		"tests: {paths: [tests], suite: unit}", "tests: {unknown: true}",
+		"tests: {paths: [tests], suite: unit}",
+		"tests: {coverage: {min_line_coverage: -1}}", "tests: {coverage: {min_line_coverage: 101}}",
+		"tests: {coverage: {max_crap: -1}}", "tests: {coverage: {include: [../outside]}}",
+		"tests: {coverage: {exclude: [/outside]}}", "tests: {coverage: {unknown: true}}", "tests: {unknown: true}",
 	} {
 		if _, err := Parse([]byte(base + extra + "\n")); err == nil {
 			t.Fatalf("accepted %s", extra)

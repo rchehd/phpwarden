@@ -81,7 +81,17 @@ func configurationReference(cfg config.Config) ([]byte, error) {
 		return nil, err
 	}
 	output.WriteString("\n# tests:\n\n")
-	if err := writeSection("  ", configurationFields(cfg.Tests), nil); err != nil {
+	testFields := []setting{}
+	for _, field := range configurationFields(cfg.Tests) {
+		if field.name != "coverage" {
+			testFields = append(testFields, field)
+		}
+	}
+	if err := writeSection("  ", testFields, nil); err != nil {
+		return nil, err
+	}
+	output.WriteString("\n  # coverage:\n\n")
+	if err := writeSection("    ", configurationFields(cfg.Tests.Coverage), nil); err != nil {
 		return nil, err
 	}
 	output.WriteString("\n# Per-tool include/exclude only narrow scope; fail_on: error, warning, or never.\n# Config paths below are examples: uncomment only when those files exist.\ntools:\n")
@@ -142,6 +152,12 @@ func configurationFields(value any) []setting {
 			field = reflect.MakeSlice(field.Type(), 0, 0)
 		}
 		item := field.Interface()
+		if name == "min_line_coverage" && field.IsNil() {
+			item = 80
+		}
+		if name == "max_crap" && field.IsNil() {
+			item = 30
+		}
 		if name == "level" && field.IsNil() {
 			item = 3
 		}

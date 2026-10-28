@@ -20,28 +20,35 @@ import (
 var ErrUnavailable = errors.New("test prerequisites unavailable")
 
 type Options struct {
-	Config string
-	Paths  []string
-	Suite  string
-	Filter string
-	Output string
+	Coverage bool
+	Config   string
+	Paths    []string
+	Suite    string
+	Filter   string
+	Output   string
 }
 
 type Plan struct {
-	Root           string   `json:"-"`
-	ComposerRoot   string   `json:"composer_root"`
-	Executable     string   `json:"phpunit"`
-	Config         string   `json:"config"`
-	Paths          []string `json:"paths"`
-	Suite          string   `json:"suite,omitempty"`
-	Filter         string   `json:"filter,omitempty"`
-	TimeoutSeconds int      `json:"timeout_seconds"`
+	Coverage                   config.Coverage `json:"coverage"`
+	CoverageExtensions         []string        `json:"coverage_extensions,omitempty"`
+	CoverageExcludeDirectories []string        `json:"coverage_exclude_directories,omitempty"`
+	Root                       string          `json:"-"`
+	ComposerRoot               string          `json:"composer_root"`
+	Executable                 string          `json:"phpunit"`
+	Config                     string          `json:"config"`
+	Paths                      []string        `json:"paths"`
+	Suite                      string          `json:"suite,omitempty"`
+	Filter                     string          `json:"filter,omitempty"`
+	TimeoutSeconds             int             `json:"timeout_seconds"`
 }
 
 func Build(ctx context.Context, root string, effective config.Effective, options Options) (Plan, error) {
 	cfg := effective.Config
-	plan := Plan{Root: root, ComposerRoot: cfg.ComposerRoot, Executable: cfg.Tests.PHPUnit, Config: cfg.Tests.Config,
+	plan := Plan{Coverage: cfg.Tests.Coverage, Root: root, ComposerRoot: cfg.ComposerRoot, Executable: cfg.Tests.PHPUnit, Config: cfg.Tests.Config,
 		Paths: slices.Clone(cfg.Tests.Paths), Suite: cfg.Tests.Suite, Filter: options.Filter, TimeoutSeconds: cfg.Tests.TimeoutSeconds}
+	if options.Coverage {
+		plan.Coverage.Enabled = true
+	}
 	if options.Config != "" {
 		plan.Config = options.Config
 	}
@@ -85,6 +92,10 @@ func Build(ctx context.Context, root string, effective config.Effective, options
 	}
 	if err := regularFile(root, plan.Executable); err != nil {
 		return plan, fmt.Errorf("%w: project PHPUnit is unavailable at %s; install the project's locked dev dependencies (composer install): %v", ErrUnavailable, plan.Executable, err)
+	}
+	profileConfig := ""
+	if effective.Project != nil && effective.Project.WebRoot != nil {
+		profileConfig = path.Join(*effective.Project.WebRoot, defaults.PHPUnitConfig)
 	}
 	if plan.Config == "auto" {
 		candidates := []string{path.Join(cfg.ComposerRoot, "phpunit.xml"), path.Join(cfg.ComposerRoot, "phpunit.xml.dist")}
@@ -166,6 +177,32 @@ func Build(ctx context.Context, root string, effective config.Effective, options
 		}
 	}
 	plan.Paths = unique
+	if plan.Coverage.Enabled {
+		plan.CoverageExtensions = slices.Clone(defaults.PHPExtensions)
+		plan.CoverageExcludeDirectories = slices.Clone(defaults.CoverageExcludeDirectories)
+		plan.Coverage.Include = slices.Clone(plan.Coverage.Include)
+		if len(plan.Coverage.Include) == 0 && plan.Config == profileConfig && effective.Project != nil {
+			for _, name := range effective.Project.SourceRoots {
+				if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(name))); err == nil {
+					plan.Coverage.Include = append(plan.Coverage.Include, name)
+				}
+			}
+			if len(plan.Coverage.Include) == 0 {
+				return plan, fmt.Errorf("coverage requires custom source roots or tests.coverage.include")
+			}
+		}
+		for _, name := range append(slices.Clone(plan.Coverage.Include), plan.Coverage.Exclude...) {
+			if err := projectpath.Validate(name); err != nil {
+				return plan, err
+			}
+			if err := projectpath.Within(root, name); err != nil {
+				return plan, err
+			}
+			if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(name))); err != nil {
+				return plan, err
+			}
+		}
+	}
 	return plan, nil
 }
 

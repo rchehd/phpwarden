@@ -14,6 +14,13 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "coverage": {"type": "object", "additionalProperties": false, "properties": {
+          "enabled": {"type": "boolean", "default": false},
+          "include": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true, "default": []},
+          "exclude": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true, "default": []},
+          "min_line_coverage": {"type": "number", "minimum": 0, "maximum": 100},
+          "max_crap": {"type": "number", "minimum": 0}
+        }},
         "phpunit": {"type": "string", "minLength": 1, "default": "auto"},
         "config": {"type": "string", "minLength": 1, "default": "auto"},
         "paths": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true, "default": []},

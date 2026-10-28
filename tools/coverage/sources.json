@@ -1,0 +1,11 @@
+{
+  "pcov": {
+    "version": "1.0.12",
+    "repository": "krakjoe/pcov",
+    "commit": "e16c08e14da0a74fd19e2e14960382bc8f28292d",
+    "url": "https://codeload.github.com/krakjoe/pcov/tar.gz/e16c08e14da0a74fd19e2e14960382bc8f28292d",
+    "sha256": "d0740c67136c8a6e3ade0db6cd69e9879d34dcadb35e3a841fb921d2ab6081a1",
+    "license": "PHP-3.01",
+    "usage": "worker extension, disabled except during opt-in project test coverage; license shipped beside pcov.so"
+  }
+}

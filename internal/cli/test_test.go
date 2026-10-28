@@ -17,6 +17,8 @@ func TestProjectTestHelpAndInvalidArguments(t *testing.T) {
 	}
 	for _, args := range [][]string{
 		{"test", "--format=json", "--format=json"},
+		{"test", "--format=json", "--coverage=false"},
+		{"test", "--format=json", "--coverage", "--coverage"},
 		{"test", "--format=json", "--unknown=value"},
 		{"test", "--format=json", "--testsuite=unit", "tests"},
 		{"test", "--format=json", "--project=/missing"},

@@ -548,10 +548,43 @@ text shows the first ten failed tests and points to the complete artifacts.
 JUnit can record several errors for one testcase; the report retains every error.
 Empty selections, all-skipped suites, malformed/missing JUnit, stale project
 inputs and bootstrap/runtime failures cannot produce a successful result.
-Exit codes are 0 for passing tests, 1 for test failures/errors, 2 for invalid
+Exit codes are 0 for passing tests, 1 for test failures/errors or coverage thresholds, 2 for invalid
 configuration/selection, 3 for incomplete execution, and 130 for interruption.
 
-Coverage, CRAP reports and Infection remain planned additions to this command.
+Use `phpwarden test --coverage` for line coverage and method CRAP with the
+worker's pinned PCOV driver (disabled for ordinary tests). PHPUnit 9–12 is supported.
+All selected paths run together, so shared source coverage is combined by PHPUnit.
+The isolated configuration keeps the native bootstrap and extensions. With the
+Drupal core fallback, coverage includes custom source roots and excludes `tests`
+directories; project-native source filters are otherwise preserved. Uncovered
+source files are included. `tests.coverage.include` replaces the native source
+filter; `exclude` adds project-relative files/directories. These use literal paths,
+not static-check globs, and remain independent of test selection.
+
+```yaml
+tests:
+  coverage:
+    enabled: false
+    include: [web/modules/custom/my_module/src]
+    exclude: [web/modules/custom/my_module/src/Generated]
+    min_line_coverage: 80
+    max_crap: 30
+```
+
+Coverage and CRAP are advisory unless thresholds are configured. A threshold failure
+returns 1 with `complete: true`; missing driver/reports or zero executable lines
+return 3. Thresholds apply only when coverage is enabled. Lower CRAP is better:
+it combines method complexity with how much code the selected tests cover. It is
+not a mutation score. Reports use upstream php-code-coverage values, with method
+positions from coverage XML and complexity from Crap4J. Procedural functions count
+toward line coverage; the CRAP summary and gate currently cover class/trait methods.
+A CRAP gate with no measurable methods is incomplete. PCOV provides line coverage,
+not branch/path coverage.
+
+Artifacts include `coverage/html/index.html`, native `coverage/xml/`, `clover.xml`
+and `crap4j.xml` under `coverage/`, alongside JUnit and `report.json`. Text shows the
+ten highest method CRAP scores; JSON retains every method and full totals.
+Infection remains a planned, separate opt-in mode.
 
 ## Analyzer concurrency
 

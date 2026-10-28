@@ -21,6 +21,7 @@ const testUsage = `Usage: phpwarden test [PATH...] [options]
   --config FILE           PHPWarden configuration, relative to caller
   --phpunit-config FILE   Native PHPUnit XML, relative to project root
   --testsuite NAME        Run a configured suite instead of discovered unit paths
+  --coverage              Collect line coverage, HTML/XML and method CRAP
   --filter PATTERN        PHPUnit test-name filter
   --output DIR            New artifact directory, relative to caller
   --format text|json      Report format (default: text)
@@ -32,7 +33,8 @@ The project's PHPUnit and dev dependencies must already be installed.
 Tests run in an isolated copy using the selected PHP worker; Docker is required.
 Artifacts: report.json, junit.xml, per-directory JUnit and PHPUnit stdout/stderr.
 Default artifacts live in the user cache under phpwarden/tests/run-*.
-Exit: 0 passed; 1 failed tests; 2 input/setup selection; 3 incomplete run; 130 interrupted.
+Coverage thresholds: tests.coverage.min_line_coverage / max_crap (optional).
+Exit: 0 passed; 1 failed tests or coverage thresholds; 2 input/setup selection; 3 incomplete run; 130 interrupted.
 `
 
 func testCLI(ctx context.Context, arguments []string, cwd string, stdout, stderr io.Writer) int {
@@ -77,6 +79,13 @@ func testCLI(ctx context.Context, arguments []string, cwd string, stdout, stderr
 			return invalid("Duplicate test option: " + name)
 		}
 		seen[name] = true
+		if name == "--coverage" {
+			if inline {
+				return invalid("--coverage does not accept a value")
+			}
+			options.Coverage = true
+			continue
+		}
 		if !inline {
 			if i+1 >= len(arguments) || strings.HasPrefix(arguments[i+1], "--") {
 				return invalid("Test option requires a value: " + name)
@@ -141,6 +150,17 @@ func writeTests(output io.Writer, result projecttest.Report) {
 	fmt.Fprintf(output, "PHPWarden · project tests · %s\n", result.Status)
 	if result.PHPUnitVersion != "" {
 		fmt.Fprintf(output, "PHPUnit %s · %d tests · %d assertions · %d failures · %d errors · %d skipped\n", result.PHPUnitVersion, result.Counts.Tests, result.Counts.Assertions, result.Counts.Failures, result.Counts.Errors, result.Counts.Skipped)
+	}
+	if result.Coverage != nil {
+		coverage := result.Coverage
+		fmt.Fprintf(output, "Coverage: %.2f%% lines · %d/%d lines · maximum CRAP %.2f\n", coverage.LinePercent, coverage.CoveredLines, coverage.ExecutableLines, coverage.MaxCRAP)
+		for i, method := range coverage.Methods {
+			if i == 10 {
+				fmt.Fprintf(output, "  … %d more methods in report.json.\n", len(coverage.Methods)-i)
+				break
+			}
+			fmt.Fprintf(output, "  CRAP %.2f · complexity %d · %.2f%% lines · %s::%s\n    %s:%d\n", method.CRAP, method.Complexity, method.LinePercent, method.Class, method.Name, method.File, method.Line)
+		}
 	}
 	shown, total := 0, 0
 	for _, test := range result.Cases {
