@@ -1,6 +1,5 @@
 import argparse
 import gzip
-import hashlib
 import json
 import os
 import shutil
@@ -11,7 +10,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from tools.distribution import package  # noqa: E402
+from tools.sandbox.assertions import preserved, tree_snapshot  # noqa: E402
 from tools.sandbox.commands import Commands  # noqa: E402
+from tools.sandbox.evidence import Evidence  # noqa: E402
 from tools.sandbox.mcp import Client  # noqa: E402
 
 HELPERS = (
@@ -59,14 +60,6 @@ def restricted_path(directory):
     assert all(shutil.which(name, path=str(directory)) is None for name in FORBIDDEN)
 
 
-def fingerprint(directory):
-    return {
-        path.relative_to(directory).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in directory.rglob("*")
-        if path.is_file() and ".git" not in path.parts
-    }
-
-
 class DockerlessSandbox(Commands):
     def __init__(self, directory, archive):
         self.root, self.archive = directory, archive
@@ -79,6 +72,8 @@ class DockerlessSandbox(Commands):
             "installation_selection": "standalone",
             "passed": False,
         }
+        self.evidence = Evidence(self)
+        self.processes = []
         self.binary = directory / "bin/phpwarden"
         self.reports = directory / "reports"
         self.producer = json.loads((ROOT / "tools/spx/sources.json").read_text())["spx"]["commit"]
@@ -141,9 +136,9 @@ class DockerlessSandbox(Commands):
             self.cli(command, "--help")
         assert "modelcontextprotocol/go-sdk" in self.cli("--licenses")
         self.cli("init", "-n", "--php-runtime=8.3", "--agents=all", "--hooks=none")
-        config = (self.project / ".phpwarden.yaml").read_bytes()
-        self.cli("init", "-n", "--agents=all", "--hooks=none")
-        assert config == (self.project / ".phpwarden.yaml").read_bytes()
+        assert (self.project / ".phpwarden.yaml").is_file()
+        with preserved([self.project / ".phpwarden.yaml"]):
+            self.cli("init", "-n", "--agents=all", "--hooks=none")
         self.run(["git", "add", "--all"])
         self.run(
             [
@@ -218,6 +213,7 @@ class DockerlessSandbox(Commands):
             env=self.environment,
             cwd=self.project,
         ) as client:
+            self.processes.append(client.process)
             assert {row["name"] for row in client.request("tools/list")["tools"]} == TOOLS
             assert client.call("find_reports", {})["total"] == 2
             for key, calls in (("repeated", 24), ("cached", 1)):
@@ -273,6 +269,7 @@ class DockerlessSandbox(Commands):
             env=self.environment,
             cwd=self.project,
         ) as client:
+            self.processes.append(client.process)
             result = client.call("get_flat_profile", {"report_key": "repeated"}, complete=False)
             assert result["exit_code"] == 3 and not result.get("functions")
         (self.root / "incomplete-profile.json").write_text(json.dumps(report, indent=2))
@@ -280,25 +277,32 @@ class DockerlessSandbox(Commands):
 
     def execute(self):
         try:
-            self.prepare()
-            self.install()
-            project, reports = fingerprint(self.project), fingerprint(self.reports)
-            self.missing_docker()
-            self.performance()
-            self.incomplete()
-            for name in ("performance.json", "performance.txt", "mcp-transcript.json"):
-                text = (self.root / name).read_text()
-                assert all(
-                    value not in text
-                    for value in (
-                        "dockerless-cli-secret",
-                        "dockerless-private-host",
-                        "dockerless-private-metadata",
+            with self.case("provision"):
+                self.prepare()
+            with self.case("install", "standalone"):
+                self.install()
+            project, reports = tree_snapshot(self.project), tree_snapshot(self.reports)
+            with self.case("missing-docker", "standalone"):
+                self.missing_docker()
+            with self.case("reader", "standalone"):
+                self.performance()
+            with self.case("incomplete", "standalone"):
+                self.incomplete()
+            with self.case("preservation"):
+                for name in ("performance.json", "performance.txt", "mcp-transcript.json"):
+                    text = (self.root / name).read_text()
+                    assert all(
+                        value not in text
+                        for value in (
+                            "dockerless-cli-secret",
+                            "dockerless-private-host",
+                            "dockerless-private-metadata",
+                        )
                     )
-                )
-            assert project == fingerprint(self.project) and reports == fingerprint(self.reports)
-            self.environment["PATH"] = str(self.root / "helpers")
-            assert not self.run(["git", "status", "--porcelain=v1", "--untracked-files=all"])
+                assert project == tree_snapshot(self.project)
+                assert reports == tree_snapshot(self.reports)
+                self.environment["PATH"] = str(self.root / "helpers")
+                assert not self.run(["git", "status", "--porcelain=v1", "--untracked-files=all"])
             self.summary.update(
                 passed=True,
                 project_preserved=True,
@@ -307,7 +311,18 @@ class DockerlessSandbox(Commands):
                 git_clean=True,
             )
         finally:
+            errors = self.cleanup_steps([("readers", self.cleanup_readers)])
+            self.evidence.finalize()
             (self.root / "summary.json").write_text(json.dumps(self.summary, indent=2))
+            if errors:
+                raise RuntimeError("Docker-less cleanup failed; see summary.json")
+
+    def cleanup_readers(self):
+        running = [process for process in self.processes if process.poll() is None]
+        for process in running:
+            process.kill()
+            process.wait(timeout=5)
+        assert not running, "MCP reader did not exit normally"
 
 
 def main():

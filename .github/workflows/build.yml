@@ -128,6 +128,9 @@ jobs:
               python3 tools/sandbox/run.py --drupal "$major" --environment "$environment" --output "$RUNNER_TEMP/phpwarden-sandbox-drupal$major-$environment"
             done
           done
+      - name: Summarize installed sandbox scenarios
+        if: always()
+        run: python3 tools/sandbox/report.py "$RUNNER_TEMP"/phpwarden-sandbox-drupal* --output "$GITHUB_STEP_SUMMARY"
       - name: Upload sandbox evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -139,6 +142,7 @@ jobs:
             ${{ runner.temp }}/phpwarden-sandbox-drupal*/mcp-transcript.json
             ${{ runner.temp }}/phpwarden-sandbox-drupal*/docker-launch.json
             ${{ runner.temp }}/phpwarden-sandbox-drupal*/logs/
+            ${{ runner.temp }}/phpwarden-sandbox-drupal*/evidence/
           if-no-files-found: warn
           retention-days: 7
       - name: Publish tested images
@@ -207,6 +211,9 @@ jobs:
           python3 tools/distribution.py package --version "$version" --commit "$GITHUB_SHA" "${manifest[@]}" --output dist
       - name: Exercise the packaged CLI without Docker or PHP
         run: python3 tools/sandbox/dockerless.py --archive "$GITHUB_WORKSPACE/dist/phpwarden-linux-amd64.tar.gz" --output "$RUNNER_TEMP/phpwarden-build-dockerless"
+      - name: Summarize packaged CLI scenarios
+        if: always()
+        run: python3 tools/sandbox/report.py "$RUNNER_TEMP/phpwarden-build-dockerless" --output "$GITHUB_STEP_SUMMARY"
       - name: Upload Docker-less evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -216,6 +223,7 @@ jobs:
             ${{ runner.temp }}/phpwarden-build-dockerless/*.json
             ${{ runner.temp }}/phpwarden-build-dockerless/*.txt
             ${{ runner.temp }}/phpwarden-build-dockerless/logs/
+            ${{ runner.temp }}/phpwarden-build-dockerless/evidence/
           if-no-files-found: warn
           retention-days: 7
       - name: Upload CLI archive and checksum

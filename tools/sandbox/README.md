@@ -230,6 +230,48 @@ capture identities, bare Docker launch evidence and the MCP transcript are uploa
 without uploading the private key, project settings, database or runtime
 receipt. Artifact retention is seven days.
 
+## Scenario evidence
+
+The shared harness records each installation and runtime phase separately:
+
+```text
+summary.json
+evidence/index.json
+evidence/11/compose/standalone/install/result.json
+evidence/11/compose/composer/install/result.json
+evidence/11/compose/npm/install/result.json
+evidence/11/compose/compose/install/result.json
+evidence/11/compose/shared/capture/result.json
+evidence/11/compose/shared/cleanup-compose/result.json
+```
+
+Each case has its own `logs/` directory with globally numbered stdout/stderr
+files, command exit codes and timeout markers. Partial output survives command
+timeouts. The index identifies Drupal version, application environment,
+installation method and scenario; `native/dockerless` identifies the independent
+recorded-reader suite. Runtime capture/MCP/teardown and application cleanup are
+shared phases, not claims of a separate profiler installation for each package.
+
+All application environments reuse the init/check/fix/hook scenario. Shared
+preservation guards compare file contents, ownership, modes, absence and symlink
+targets during repeat operations and expected failures. Package-specific lock
+and dependency assertions remain with their package manager. Cleanup attempts
+each remaining owned-resource step even when an earlier step fails. Any failed
+case or cleanup keeps the run unsuccessful, including after successful installs.
+
+CI uploads this tree on success or failure and renders an installation/scenario
+table in the job summary. Manual Drupal artifact names also include the selected
+installation method. Inspect local evidence with:
+
+```sh
+python3 tools/sandbox/report.py /tmp/phpwarden-sandbox-d11 /tmp/phpwarden-dockerless
+```
+
+The report command exits nonzero for failed, missing or invalid evidence.
+It summarizes existing results; it does not execute a sandbox. Fast push/PR
+Checks still run unit/fixture validation; installed application scenarios remain
+in manual Sandbox and Build gates.
+
 ## TODO: installation and environment matrix
 
 Installation method and application environment are independent axes. Extend
@@ -246,7 +288,7 @@ the shared Drupal 10/11 scenarios with representative combinations:
 - [x] Run Drupal on host PHP with the usual Docker-based PHPWarden worker.
 - [x] Run Docker-less CLI installation and recorded-profile CLI/MCP smoke tests;
   verify that `check` clearly reports the missing Docker dependency.
-- [ ] Share preservation, failure and cleanup assertions across environments,
+- [x] Share preservation, failure and cleanup assertions across environments,
   and label evidence by Drupal version, installation method and environment.
 - [ ] Run the new GitHub Sandbox workflow after commit/push and inspect its artifacts.
 

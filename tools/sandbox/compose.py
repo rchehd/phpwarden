@@ -3,6 +3,8 @@ import json
 import os
 import shutil
 
+from tools.sandbox.assertions import preserved, snapshot
+
 
 class ComposeInstallation:
     def __init__(self, sandbox):
@@ -86,14 +88,7 @@ class ComposeInstallation:
 
     def snapshot(self, names):
         root = self.sandbox.project
-        return {
-            name: (
-                (root / name).read_bytes(),
-                (root / name).stat().st_uid,
-                (root / name).stat().st_gid,
-            )
-            for name in names
-        }
+        return snapshot(root / name for name in names)
 
     def failures(self):
         sandbox = self.sandbox
@@ -106,8 +101,8 @@ class ComposeInstallation:
                 ("update",),
                 ("performance", "--help"),
             ):
-                sandbox.cli(*arguments, expected=(2,))
-                assert configuration.read_bytes() == original
+                with preserved([configuration]):
+                    sandbox.cli(*arguments, expected=(2,))
             configuration.write_bytes(original.replace(b'runtime: "8.3"', b'runtime: "8.4"'))
             assert configuration.read_bytes() != original
             mismatch = json.loads(

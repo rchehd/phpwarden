@@ -38,6 +38,9 @@ jobs:
           python-version: "3.12"
       - name: Exercise offline installer and native readers without Docker or PHP
         run: python3 tools/sandbox/dockerless.py --output "$RUNNER_TEMP/phpwarden-sandbox-dockerless"
+      - name: Summarize Docker-less scenarios
+        if: always()
+        run: python3 tools/sandbox/report.py "$RUNNER_TEMP/phpwarden-sandbox-dockerless" --output "$GITHUB_STEP_SUMMARY"
       - name: Upload Docker-less evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -47,6 +50,7 @@ jobs:
             ${{ runner.temp }}/phpwarden-sandbox-dockerless/*.json
             ${{ runner.temp }}/phpwarden-sandbox-dockerless/*.txt
             ${{ runner.temp }}/phpwarden-sandbox-dockerless/logs/
+            ${{ runner.temp }}/phpwarden-sandbox-dockerless/evidence/
           if-no-files-found: warn
           retention-days: 7
 
@@ -107,16 +111,23 @@ jobs:
           INSTALLATION: ${{ inputs.installation }}
           SANDBOX_ENVIRONMENT: ${{ matrix.environment }}
         run: python3 tools/sandbox/run.py --drupal "$DRUPAL_MAJOR" --environment "$SANDBOX_ENVIRONMENT" --installation "$INSTALLATION" --output "$RUNNER_TEMP/phpwarden-sandbox-drupal$DRUPAL_MAJOR-$SANDBOX_ENVIRONMENT"
+      - name: Summarize installation and runtime scenarios
+        if: always()
+        env:
+          DRUPAL_MAJOR: ${{ matrix.drupal }}
+          SANDBOX_ENVIRONMENT: ${{ matrix.environment }}
+        run: python3 tools/sandbox/report.py "$RUNNER_TEMP/phpwarden-sandbox-drupal$DRUPAL_MAJOR-$SANDBOX_ENVIRONMENT" --output "$GITHUB_STEP_SUMMARY"
       - name: Upload sandbox evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}-${{ github.sha }}
+          name: phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}-${{ inputs.installation }}-${{ github.sha }}
           path: |
             ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}/summary.json
             ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}/captures.json
             ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}/mcp-transcript.json
             ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}/docker-launch.json
             ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}/logs/
+            ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}/evidence/
           if-no-files-found: warn
           retention-days: 7

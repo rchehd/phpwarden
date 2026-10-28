@@ -185,6 +185,7 @@ class SandboxTest(unittest.TestCase):
                 raise RuntimeError("post-validation failure")
 
             sandbox.install = fail
+            sandbox.cleanup_installer = lambda: None
             with (
                 patch("tools.sandbox.run.ROOT", repository),
                 patch("tools.sandbox.run.urllib.request.urlopen") as response,

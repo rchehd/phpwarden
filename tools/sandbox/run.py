@@ -16,10 +16,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from tools.distribution import package  # noqa: E402
+from tools.sandbox.assertions import preserved  # noqa: E402
 from tools.sandbox.commands import Commands  # noqa: E402
 from tools.sandbox.compose import ComposeInstallation  # noqa: E402
 from tools.sandbox.ddev import DdevRuntime  # noqa: E402
 from tools.sandbox.docker import DockerRuntime  # noqa: E402
+from tools.sandbox.evidence import Evidence  # noqa: E402
 from tools.sandbox.host import HostRuntime  # noqa: E402
 from tools.sandbox.mcp import Client  # noqa: E402
 from tools.sandbox.packages import PackageInstallations  # noqa: E402
@@ -70,6 +72,7 @@ class Sandbox(Commands):
             "installation_selection": installation,
             "passed": False,
         }
+        self.evidence = Evidence(self)
         self.container_root = "/project"
         self.ini = "/usr/local/etc/php/conf.d/99-phpwarden-spx.ini"
         self.http_url = "http://127.0.0.1:8080/phpwarden-probe"
@@ -334,8 +337,8 @@ class Sandbox(Commands):
         self.cli("init", "-n", *runtime, "--agents=all", "--hooks=" + hooks, "--pre-commit")
         config = self.project / ".phpwarden.yaml"
         initial = config.read_bytes()
-        self.cli("init", "-n", "--agents=all", "--hooks=" + hooks, "--pre-commit")
-        assert initial == config.read_bytes()
+        with preserved([config]):
+            self.cli("init", "-n", "--agents=all", "--hooks=" + hooks, "--pre-commit")
         effective = json.loads(self.cli("config", "show", "--format=json"))["effective"]["config"]
         assert effective["framework"]["version"].startswith(str(self.major) + ".")
         assert effective["php"]["runtime"] == "8.3"
@@ -692,85 +695,97 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
 
     def execute(self):
         try:
-            if not isinstance(self.runtime, HostRuntime):
-                self.pin = json.loads((ROOT / "tools/spx/sources.json").read_text())["spx"]
-                with urllib.request.urlopen(self.pin["url"], timeout=30) as response:
-                    archive = response.read((2 << 20) + 1)
-                assert (
-                    len(archive) <= 2 << 20
-                    and hashlib.sha256(archive).hexdigest() == self.pin["sha256"]
-                )
-                (self.root / "spx.tar.gz").write_bytes(archive)
-            self.install()
-            if self.runtime:
-                self.runtime.install()
+            with self.case("provision"):
+                if not isinstance(self.runtime, HostRuntime):
+                    self.prepare_source()
+                self.install()
+                if self.runtime:
+                    self.runtime.install()
             if self.installation in ("standalone", "all"):
-                self.standalone_checks()
+                with self.case("install", "standalone"):
+                    self.standalone_checks()
             elif self.installation == "compose":
-                self.run(
-                    [
-                        "sh",
-                        ROOT / "install.sh",
-                        "--archive",
-                        self.archive,
-                        "--dir",
-                        self.binary.parent,
-                    ]
-                )
+                with self.case("host-helper"):
+                    self.run(
+                        [
+                            "sh",
+                            ROOT / "install.sh",
+                            "--archive",
+                            self.archive,
+                            "--dir",
+                            self.binary.parent,
+                        ]
+                    )
             if self.installation in ("composer", "npm", "all"):
-                packages = PackageInstallations(self)
+                with self.case("packages"):
+                    packages = PackageInstallations(self)
                 for manager in ("composer", "npm"):
                     if self.installation in (manager, "all"):
-                        packages.run(manager)
+                        with self.case("install", manager):
+                            packages.run(manager)
             if self.installation in ("compose", "all"):
-                ComposeInstallation(self).run()
+                with self.case("install", "compose"):
+                    ComposeInstallation(self).run()
             if not isinstance(self.runtime, HostRuntime):
-                self.capture()
-                self.verify_mcp()
-                self.teardown()
+                with self.case("capture"):
+                    self.capture()
+                with self.case("mcp"):
+                    self.verify_mcp()
+                with self.case("teardown"):
+                    self.teardown()
             if self.runtime:
-                self.runtime.preserved()
+                with self.case("preservation"):
+                    self.runtime.preserved()
         except Exception:
             self.summary["passed"] = False
             raise
         finally:
-            errors = []
-            try:
-                subprocess.run(
-                    ["docker", "rm", "--force", self.name + "-install"],
-                    capture_output=True,
-                    timeout=30,
-                )
-            except (OSError, subprocess.TimeoutExpired) as error:
-                errors.append(str(error))
-            try:
-                if self.runtime:
-                    self.runtime.cleanup()
-            except Exception as error:
-                errors.append(str(error))
-            try:
-                if self.runtime is None and (self.root / "compose.json").exists():
-                    try:
-                        if not self.summary["passed"]:
-                            self.compose("logs", "--no-color", "--tail=100", "php")
-                    finally:
-                        self.compose("down", "--remove-orphans")
-            except Exception as error:
-                errors.append(str(error))
-            try:
-                if self.alias:
-                    current = self.run(
-                        ["docker", "image", "inspect", WORKER, "--format", "{{.Id}}"]
-                    ).strip()
-                    if current == self.worker_id:
-                        self.run(["docker", "image", "rm", WORKER])
-            except Exception as error:
-                errors.append(str(error))
-            if errors:
-                self.summary.update(passed=False, cleanup_errors=errors)
+            steps = [("installer", self.cleanup_installer)]
+            if self.runtime:
+                steps.append(("runtime", self.cleanup_runtime))
+            elif (self.root / "compose.json").exists():
+                steps.append(("compose", self.cleanup_compose))
+            if self.alias:
+                steps.append(("alias", self.cleanup_alias))
+            errors = self.cleanup_steps(steps)
+            self.evidence.finalize()
             (self.root / "summary.json").write_text(json.dumps(self.summary, indent=2))
             if errors:
                 raise RuntimeError("Sandbox cleanup failed; see summary.json")
+
+    def prepare_source(self):
+        self.pin = json.loads((ROOT / "tools/spx/sources.json").read_text())["spx"]
+        with urllib.request.urlopen(self.pin["url"], timeout=30) as response:
+            archive = response.read((2 << 20) + 1)
+        assert len(archive) <= 2 << 20 and hashlib.sha256(archive).hexdigest() == self.pin["sha256"]
+        (self.root / "spx.tar.gz").write_bytes(archive)
+
+    def cleanup_installer(self):
+        self.run(["docker", "rm", "--force", self.name + "-install"], expected=(0, 1), timeout=30)
+        remaining = self.run(
+            ["docker", "ps", "-aq", "--filter", "name=^/" + self.name + "-install$"]
+        )
+        assert not remaining.strip(), "Installer container survived cleanup"
+
+    def cleanup_runtime(self):
+        if self.runtime:
+            self.runtime.cleanup()
+
+    def cleanup_compose(self):
+        if self.runtime is None and (self.root / "compose.json").exists():
+            try:
+                if not self.summary["passed"]:
+                    self.compose("logs", "--no-color", "--tail=100", "php")
+            finally:
+                self.compose("down", "--remove-orphans")
+
+    def cleanup_alias(self):
+        if self.alias:
+            current = self.run(
+                ["docker", "image", "inspect", WORKER, "--format", "{{.Id}}"]
+            ).strip()
+            if current == self.worker_id:
+                self.run(["docker", "image", "rm", WORKER])
 
 
 def main():

@@ -7,6 +7,7 @@ import zipfile
 from copy import deepcopy
 
 from tools.distribution import package
+from tools.sandbox.assertions import preserved
 
 
 class PackageInstallations:
@@ -275,8 +276,8 @@ class PackageInstallations:
         for release in (second, first):
             install(release)
             self.verify(release, manager)
-            sandbox.cli("init", "-n", "--agents=all", "--hooks=all", "--pre-commit")
-            assert config == (sandbox.project / ".phpwarden.yaml").read_bytes()
+            with preserved([sandbox.project / ".phpwarden.yaml"]):
+                sandbox.cli("init", "-n", "--agents=all", "--hooks=all", "--pre-commit")
         sandbox.checkpoint(f"Verified {manager} upgrades")
         sandbox.summary.setdefault("installations", {})[manager] = {
             "installed": True,
