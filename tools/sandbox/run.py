@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 from tools.distribution import package  # noqa: E402
 from tools.sandbox.compose import ComposeInstallation  # noqa: E402
 from tools.sandbox.ddev import DdevRuntime  # noqa: E402
+from tools.sandbox.docker import DockerRuntime  # noqa: E402
 from tools.sandbox.mcp import Client  # noqa: E402
 from tools.sandbox.packages import PackageInstallations  # noqa: E402
 
@@ -69,6 +70,8 @@ class Sandbox:
         self.ini = "/usr/local/etc/php/conf.d/99-phpwarden-spx.ini"
         self.http_url = "http://127.0.0.1:8080/phpwarden-probe"
         self.runtime = DdevRuntime(self) if environment == "ddev" else None
+        if environment == "docker":
+            self.runtime = DockerRuntime(self)
 
     def run(self, args, expected=(0,), cwd=None, input=None, timeout=180):
         self.sequence += 1
@@ -423,7 +426,7 @@ class Sandbox:
         )
         assert self.git_status() == ""
 
-    def lifecycle(self, action, *args):
+    def lifecycle(self, action, *args, expected=(0,)):
         return json.loads(
             self.cli(
                 "performance",
@@ -434,6 +437,7 @@ class Sandbox:
                 self.root / "state",
                 "--format=json",
                 *args,
+                expected=expected,
                 timeout=960,
             )
         )
@@ -507,6 +511,8 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
             self.root / "spx.tar.gz",
             "--apply",
         )
+        if self.runtime and hasattr(self.runtime, "activate"):
+            setup = self.runtime.activate(setup)
         assert setup["loaded"] and setup["state"] == "active"
         self.container = self.current_container()
         retained = json.loads(
@@ -665,8 +671,12 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
         self.stage("checking teardown, preserved profiles and unchanged Git")
         hashes = {p.name: sha(p) for p in self.reports.iterdir()}
         self.lifecycle("disconnect", "--client=all")
-        assert self.lifecycle("teardown", "--apply")["state"] == "removed"
-        assert self.lifecycle("teardown", "--apply")["state"] == "removed"
+        arguments = ["--apply"]
+        if self.runtime and hasattr(self.runtime, "restore"):
+            self.runtime.restore()
+            arguments = []
+        assert self.lifecycle("teardown", *arguments)["state"] == "removed"
+        assert self.lifecycle("teardown", *arguments)["state"] == "removed"
         self.container = self.current_container()
         assert self.exec(["-r", 'echo extension_loaded("spx")?"yes":"no";']) == "no"
         self.http("off")
@@ -742,7 +752,7 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
             except Exception as error:
                 errors.append(str(error))
             try:
-                if (self.root / "compose.json").exists():
+                if self.runtime is None and (self.root / "compose.json").exists():
                     try:
                         if not self.summary["passed"]:
                             self.compose("logs", "--no-color", "--tail=100", "php")
@@ -774,7 +784,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--worker-image", default=WORKER)
     parser.add_argument("--archive", type=Path)
-    parser.add_argument("--environment", choices=("compose", "ddev"), default="compose")
+    parser.add_argument("--environment", choices=("compose", "ddev", "docker"), default="compose")
     parser.add_argument(
         "--installation", choices=("standalone", "composer", "npm", "compose", "all")
     )

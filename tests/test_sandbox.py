@@ -2,13 +2,55 @@ import hashlib
 import json
 import tempfile
 import unittest
+from copy import deepcopy
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from tools.sandbox.docker import DockerRuntime
 from tools.sandbox.run import Sandbox
 
 
 class SandboxTest(unittest.TestCase):
+    def test_bare_docker_only_accepts_expected_profile_mounts(self):
+        runtime = DockerRuntime(SimpleNamespace(name="fixture", root=Path("/sandbox")))
+        reports = "/sandbox/state/owned/reports"
+        setup = {
+            "image": "phpwarden-spx:fixture",
+            "reports": reports,
+            "launch_arguments": [
+                "--mount",
+                f"type=bind,src={reports},dst=/var/lib/phpwarden-spx",
+                "--mount",
+                "type=bind,src=/sandbox/state/owned/spx.ini,"
+                "dst=/usr/local/etc/php/conf.d/99-phpwarden-spx.ini,readonly",
+                "phpwarden-spx:fixture",
+            ],
+        }
+        self.assertEqual(runtime.launch_arguments(setup), setup["launch_arguments"][:-1])
+        for defect in (
+            "extra privilege",
+            "socket mount",
+            "writable config",
+            "other image",
+            "outside",
+        ):
+            value = deepcopy(setup)
+            if defect == "extra privilege":
+                value["launch_arguments"].insert(0, "--privileged")
+            elif defect == "socket mount":
+                value["launch_arguments"][1] = "type=bind,src=/var/run/docker.sock,dst=/socket"
+            elif defect == "writable config":
+                value["launch_arguments"][3] = value["launch_arguments"][3].removesuffix(
+                    ",readonly"
+                )
+            elif defect == "other image":
+                value["launch_arguments"][-1] = "other:latest"
+            else:
+                value["reports"] = "/outside/reports"
+            with self.subTest(defect=defect), self.assertRaises(AssertionError):
+                runtime.launch_arguments(value)
+
     def http(self, mode, status="HTTP/1.1 200 OK"):
         sandbox = Sandbox.__new__(Sandbox)
         sandbox.ini, sandbox.http_url = "/fixture.ini", "http://127.0.0.1/fixture"

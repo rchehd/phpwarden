@@ -115,9 +115,9 @@ jobs:
         env:
           PHPWARDEN_TEST_IMAGE: phpwarden:static-php8.3-dev
         run: python -m unittest tests.acceptance.compose_cli -v
-      - name: Run installed Drupal 10 and 11 sandboxes in Compose and DDEV
+      - name: Run installed Drupal 10 and 11 sandboxes in Compose, DDEV and Docker
         run: |
-          for environment in compose ddev; do
+          for environment in compose ddev docker; do
             for major in 10 11; do
               python3 tools/sandbox/run.py --drupal "$major" --environment "$environment" --output "$RUNNER_TEMP/phpwarden-sandbox-drupal$major-$environment"
             done
@@ -131,6 +131,7 @@ jobs:
             ${{ runner.temp }}/phpwarden-sandbox-drupal*/summary.json
             ${{ runner.temp }}/phpwarden-sandbox-drupal*/captures.json
             ${{ runner.temp }}/phpwarden-sandbox-drupal*/mcp-transcript.json
+            ${{ runner.temp }}/phpwarden-sandbox-drupal*/docker-launch.json
             ${{ runner.temp }}/phpwarden-sandbox-drupal*/logs/
           if-no-files-found: warn
           retention-days: 7

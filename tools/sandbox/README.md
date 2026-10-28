@@ -32,6 +32,30 @@ python3 tools/sandbox/run.py --drupal 10 --environment ddev --output /tmp/phpwar
 python3 tools/sandbox/run.py --drupal 11 --environment ddev --output /tmp/phpwarden-ddev-d11
 ```
 
+Select bare Docker with `--environment docker`:
+
+```sh
+python3 tools/sandbox/run.py --drupal 10 --environment docker --output /tmp/phpwarden-docker-d10
+python3 tools/sandbox/run.py --drupal 11 --environment docker --output /tmp/phpwarden-docker-d11
+```
+
+This runtime uses a known `docker run` recipe, a read-only project mount,
+writable SQLite/public-files mounts, the host UID/GID and no network or host
+ports. The standalone installation case needs no Compose application. Selecting
+the Compose installation method still exercises that separate quality wrapper.
+
+`performance setup --apply` must build the SPX image and return launch arguments
+while the original container keeps running unchanged. The harness then explicitly
+stops and renames its own original, starts the known recipe with only the returned
+image/report/INI additions, and verifies status and repeat setup. It rejects
+unexpected launch flags/mounts and checks that `teardown --apply` refuses automatic
+bare-container recreation. After capture, the harness removes the profiled
+container, renames/restarts the retained original, verifies its exact ID, image,
+configuration and mounts, then removes adapters without `--apply`. A controlled
+sibling must retain its ID/start time throughout. Cleanup removes only UUID-owned
+fixture containers. `docker-launch.json` records the base argument vector and
+checksum, original container ID and restoration result, without the private key.
+
 DDEV tests need DDEV, mkcert and Docker locally. CI uses the checksum-pinned
 [DDEV 1.25.4 archive](https://github.com/ddev/ddev/releases/expanded_assets/v1.25.4),
 installed into a private tools directory with `sh tools/sandbox/install-ddev.sh DIRECTORY`.
@@ -105,7 +129,7 @@ HTTP response and database configuration hash must survive those checks.
 - Five native MCP tools launched from generated project client settings;
   counts, callers, graph edges, source definitions and time units are checked.
 - Redaction, path traversal, truncated bodies and malformed metadata.
-- SPX source archive SHA256, retained license/build script, applied teardown,
+- SPX source archive SHA256, retained license/build script, runtime restoration,
   extension unloading, preserved recordings and a clean fixture Git checkout.
 
 An incorrect SPX key must create no recording. With DDEV's display-errors setting,
@@ -123,28 +147,29 @@ completion hooks, doctor, update and performance commands require a host CLI.
 After Compose checks, the last selected host installation runs SPX/MCP; a
 Compose-only run installs a host CLI for that separate lifecycle. Summary
 evidence identifies the environment and each method. Quality and application
-containers use separate Compose project names and cleanup.
+containers use separate lifecycle controls and cleanup. Compose quality services
+have their own project name even when the application runs in bare Docker.
 
 Cold means after `drush cache:rebuild`; OS page cache and OPcache are not
 flushed. Timing output is evidence from the fixture under profiling, not a
 stable benchmark or a pass/fail speed threshold. Interactive agent clients,
-MariaDB/PostgreSQL and bare Docker lifecycle coverage remain separate.
+MariaDB/PostgreSQL coverage remains separate.
 Earlier focused DDEV/bare Docker validation is documented in
 [`../spx/RUNTIME.md`](../spx/RUNTIME.md).
 
 ## CI
 
 **Actions → Sandbox → Run workflow** selects Drupal 10, Drupal 11 or both,
-Compose, DDEV or both, and one installation method or all four.
+Compose, DDEV, bare Docker or all three, and one installation method or all four.
 The manual workflow runs version/environment pairs as independent jobs and builds
 the matching worker from the selected commit. **Build** also runs both
-sandboxes in both environments after Docker/Compose fixtures and before image publication. Ordinary
+sandboxes in all three environments after Docker/Compose fixtures and before image publication. Ordinary
 push/PR **Checks** retains its faster native and fixture tests.
 
 Failed assertions fail the job. Application and installer containers are
 removed in cleanup. Captures and test images stay local; no global Docker
 pruning or personal client configuration is used. Summary, command logs,
-capture identities and the MCP transcript are uploaded even on failure,
+capture identities, bare Docker launch evidence and the MCP transcript are uploaded even on failure,
 without uploading the private key, project settings, database or runtime
 receipt. Artifact retention is seven days.
 
@@ -160,7 +185,7 @@ the shared Drupal 10/11 scenarios with representative combinations:
 - [x] Run the Compose installation wrapper against the installed sites,
   including check/fix/pre-commit and unchanged application services.
 - [x] Automate isolated DDEV installation and SPX lifecycle in CI.
-- [ ] Automate bare Docker launch-argument activation and restoration in CI.
+- [x] Automate bare Docker launch-argument activation and restoration in CI.
 - [ ] Run Drupal on host PHP with the usual Docker-based PHPWarden worker.
 - [ ] Run Docker-less CLI installation and recorded-profile CLI/MCP smoke tests;
   verify that `check` clearly reports the missing Docker dependency.
