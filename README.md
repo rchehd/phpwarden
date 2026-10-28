@@ -500,6 +500,59 @@ phpwarden fix --only twig-cs-fixer web/themes/custom/my_theme
 
 Fixes may change any line in the selected files, including lines outside diff hunks. The final check covers all lines of the original selection. Formatters prepare edits with the project still mounted read-only; the launcher validates input hashes and applies replacements on the host, preserving permission bits. Concurrent changes detected before writing abort the operation. Each file replacement is atomic; a later write failure can leave earlier replacements applied. JSON reports list those files in `fixed_files`, and text reports show the same list. Other findings can remain after formatting and determine the final exit code.
 
+## Run project tests
+
+`phpwarden test` runs the project's installed PHPUnit using the configured PHP worker.
+Install the project's development dependencies first; PHPWarden does not install or
+replace PHPUnit. Drupal projects typically need the matching `drupal/core-dev`.
+
+```sh
+phpwarden test
+phpwarden test web/modules/custom/my_module/tests/src/Unit
+phpwarden test --filter=testBoundary --output artifacts/phpunit
+phpwarden test --testsuite=unit --format=json
+```
+
+By default, the Drupal profile finds `tests/src/Unit` under custom source roots.
+Test selection is independent of static-check Git scope and exclusions. Explicit
+paths replace discovered paths; `--testsuite` selects a native configured suite
+instead. PHPUnit configuration discovery checks the Composer root's `phpunit.xml`,
+then `phpunit.xml.dist`, then Drupal core's `phpunit.xml.dist`. `--phpunit-config`
+overrides discovery. PHPUnit configuration, bootstrap and extensions remain native.
+
+Configure defaults in `.phpwarden.yaml`:
+
+```yaml
+tests:
+  phpunit: auto
+  config: auto
+  paths: [web/modules/custom/my_module/tests/src/Unit]
+  timeout_seconds: 300
+```
+
+Paths are relative to the project root, including in monorepos. `tests.suite`
+replaces `tests.paths`; set only one. `auto` finds PHPUnit in the Composer root's
+configured vendor directory. `init` includes commented examples of these settings.
+
+Tests execute in a private writable copy; the original project, Git metadata and
+application containers are not mounted. Copies omit `.git`, `.ddev`, agent settings
+and `node_modules`; symlinks outside the project and special files are rejected.
+The worker has no network access. This first runner targets unit tests; database,
+browser and application-service integration is a later step. A test requiring PHP
+extensions absent from the selected worker reports an execution/test error.
+
+`--output` must name a new directory. Without it, artifacts live under the user
+cache in `phpwarden/tests/run-*`. Each run saves `report.json`, combined `junit.xml`,
+per-path JUnit files, and PHPUnit stdout/stderr. JSON retains every testcase;
+text shows the first ten failed tests and points to the complete artifacts.
+JUnit can record several errors for one testcase; the report retains every error.
+Empty selections, all-skipped suites, malformed/missing JUnit, stale project
+inputs and bootstrap/runtime failures cannot produce a successful result.
+Exit codes are 0 for passing tests, 1 for test failures/errors, 2 for invalid
+configuration/selection, 3 for incomplete execution, and 130 for interruption.
+
+Coverage, CRAP reports and Infection remain planned additions to this command.
+
 ## Analyzer concurrency
 
 Worker analyzers run sequentially by default. Set the maximum number running at once in the project's configuration:

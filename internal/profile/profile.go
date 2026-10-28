@@ -29,6 +29,8 @@ type PHPRequirement struct {
 }
 
 type Defaults struct {
+	UnitTestDirectory         string
+	PHPUnitConfig             string
 	DebugFunctions            []string
 	DebugJSFunctions          []string
 	DebugTwigFunctions        []string
@@ -54,6 +56,8 @@ func Lookup(id string) (Defaults, bool) {
 		return Defaults{}, false
 	}
 	return Defaults{
+		UnitTestDirectory:         "tests/src/Unit",
+		PHPUnitConfig:             "core/phpunit.xml.dist",
 		DebugFunctions:            []string{"var_dump", "print_r", "dpm", "dvm", "dsm", "ksm", "kint", "kpr", "dd", "ddm", "ddebug_backtrace", "xdebug_break", "die"},
 		DebugJSFunctions:          []string{"console.log", "console.debug", "console.trace", "console.dir"},
 		DebugTwigFunctions:        []string{"dump", "kint"},

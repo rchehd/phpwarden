@@ -13,6 +13,10 @@ scope:
   base: origin/main
 runner:
   result_cache: false
+tests:
+  phpunit: auto
+  config: auto
+  timeout_seconds: 300
 tools:
   composer-validate:
     enabled: true

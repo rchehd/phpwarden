@@ -40,6 +40,7 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
        phpwarden prepare [--project PATH] [--config PATH] [--format text|json]
        phpwarden check [PATH...] [options]
        phpwarden fix [PATH...] [options]
+       phpwarden test [PATH...] [--testsuite NAME] [--filter PATTERN] [--output DIR] [options]
        phpwarden worker check [PATH...] [options]
        phpwarden container <init|check|fix|config|scope|resolve|hook pre-commit> [options]
        phpwarden hook pre-commit [--project PATH]
@@ -55,7 +56,7 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
 Options:
   --project PATH       Project root
   --config PATH        Configuration file, relative to caller directory
-  --format FORMAT      text (by rule, default), compact (one path:line:col per finding; check only), or json
+  --format FORMAT      text (default), compact (one path:line:col per finding; check only), or json
   --color MODE         auto (default; terminals without NO_COLOR), always, or never
   --all                Show every finding in text reports (default: first 10 per rule group)
   --help               Show help
@@ -158,6 +159,9 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 }
 
 func runContext(ctx context.Context, arguments []string, cwd string, stdin io.Reader, stdout, stderr io.Writer, native bool) int {
+	if len(arguments) > 0 && arguments[0] == "test" {
+		return testCLI(ctx, arguments[1:], cwd, stdout, stderr)
+	}
 	if len(arguments) > 0 && arguments[0] == "--licenses" {
 		data := legal.Notices
 		if len(arguments) == 2 && arguments[1] == "--format=json" || len(arguments) == 3 && arguments[1] == "--format" && arguments[2] == "json" {

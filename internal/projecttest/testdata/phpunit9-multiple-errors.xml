@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="/workspace/web/modules/custom/phpwarden_probe/tests/src/Unit" tests="2" assertions="1" errors="2" warnings="0" failures="0" skipped="0" time="0.005049">
+    <testsuite name="Drupal\Tests\phpwarden_probe\Unit\ProbeTest" file="/workspace/web/modules/custom/phpwarden_probe/tests/src/Unit/ProbeTest.php" tests="2" assertions="1" errors="2" warnings="0" failures="0" skipped="0" time="0.005049">
+      <testcase name="testHotspot" class="Drupal\Tests\phpwarden_probe\Unit\ProbeTest" classname="Drupal.Tests.phpwarden_probe.Unit.ProbeTest" file="/workspace/web/modules/custom/phpwarden_probe/tests/src/Unit/ProbeTest.php" line="10" assertions="0" time="0.003768">
+        <error type="RuntimeException">Drupal\Tests\phpwarden_probe\Unit\ProbeTest::testHotspot
+RuntimeException: PHPWarden fixture exception
+
+/workspace/web/modules/custom/phpwarden_probe/tests/src/Unit/ProbeTest.php:11
+/workspace/vendor/phpunit/phpunit/src/Framework/TestResult.php:729
+/workspace/vendor/phpunit/phpunit/src/Framework/TestSuite.php:685
+/workspace/vendor/phpunit/phpunit/src/Framework/TestSuite.php:685
+/workspace/vendor/phpunit/phpunit/src/TextUI/TestRunner.php:651
+/workspace/vendor/phpunit/phpunit/src/TextUI/Command.php:146
+/workspace/vendor/phpunit/phpunit/src/TextUI/Command.php:99</error>
+        <error type="PHPUnit\Framework\RiskyTestError">Drupal\Tests\phpwarden_probe\Unit\ProbeTest::testHotspot
+This test did not perform any assertions
+
+/workspace/web/core/tests/Drupal/Tests/Listeners/DrupalListener.php:62
+/workspace/vendor/phpunit/phpunit/src/Framework/TestResult.php:453
+/workspace/vendor/phpunit/phpunit/src/Framework/TestResult.php:981
+/workspace/vendor/phpunit/phpunit/src/Framework/TestSuite.php:685
+/workspace/vendor/phpunit/phpunit/src/Framework/TestSuite.php:685
+/workspace/vendor/phpunit/phpunit/src/TextUI/TestRunner.php:651
+/workspace/vendor/phpunit/phpunit/src/TextUI/Command.php:146
+/workspace/vendor/phpunit/phpunit/src/TextUI/Command.php:99</error>
+      </testcase>
+      <testcase name="testWorkspaceIsWritable" class="Drupal\Tests\phpwarden_probe\Unit\ProbeTest" classname="Drupal.Tests.phpwarden_probe.Unit.ProbeTest" file="/workspace/web/modules/custom/phpwarden_probe/tests/src/Unit/ProbeTest.php" line="14" assertions="1" time="0.001282"/>
+    </testsuite>
+  </testsuite>
+</testsuites>

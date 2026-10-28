@@ -10,6 +10,17 @@
     "php"
   ],
   "properties": {
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "phpunit": {"type": "string", "minLength": 1, "default": "auto"},
+        "config": {"type": "string", "minLength": 1, "default": "auto"},
+        "paths": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true, "default": []},
+        "suite": {"type": "string", "default": ""},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 3600, "default": 300}
+      }
+    },
     "agents": {
       "type": "object",
       "additionalProperties": false,

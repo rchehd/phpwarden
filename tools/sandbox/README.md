@@ -294,11 +294,28 @@ the shared Drupal 10/11 scenarios with representative combinations:
   verify that `check` clearly reports the missing Docker dependency.
 - [x] Share preservation, failure and cleanup assertions across environments,
   and label evidence by Drupal version, installation method and environment.
-- [ ] Run the new GitHub Sandbox workflow after commit/push and inspect its artifacts.
+- [x] Run the GitHub Sandbox workflow and inspect success/failure artifacts:
+  [run 40716870828](https://github.com/rchehd/phpwarden/actions/runs/40716870828)
+  passed all nine jobs on commit `f5ad3d7`; the earlier failed run supplied regression evidence.
 
 Ordinary checks still require Docker. Native host-PHP SPX installation is not
 currently supported and is outside this coverage extension. Live agent-client
 sessions and additional database engines remain separate work.
+
+### Project PHPUnit runner
+
+Compose application sandboxes with standalone, Compose or all installation methods
+also test `phpwarden test` on a separate copy with locked `drupal/core-dev` dependencies.
+Drupal 10 uses PHPUnit 9 and Drupal 11 uses PHPUnit 11. The cases cover passing tests,
+name filtering, no matching tests, failed assertions, test exceptions, missing
+bootstrap and missing PHPUnit. A test writes a file inside its writable workspace;
+the source copy and the running Drupal application must remain unchanged.
+
+`tools/sandbox/drupal10-tests` and `drupal11-tests` contain the separate Composer
+locks, and `unit-fixture/ProbeTest.php` supplies the test cases. The original
+application fixtures keep their production-only dependency installation.
+JUnit, JSON and PHPUnit output are retained under the `project-tests` case's evidence.
+The new v28 scenarios have local verification; a GitHub Sandbox run is still pending.
 
 ## Update fixtures
 

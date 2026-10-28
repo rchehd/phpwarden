@@ -29,7 +29,16 @@ type Config struct {
 	Runner       Runner    `json:"runner"`
 	Agents       Agents    `json:"agents"`
 	Updates      Updates   `json:"updates"`
+	Tests        Tests     `json:"tests"`
 	Tools        Tools     `json:"tools"`
+}
+
+type Tests struct {
+	PHPUnit        string   `json:"phpunit"`
+	Config         string   `json:"config"`
+	Paths          []string `json:"paths"`
+	Suite          string   `json:"suite"`
+	TimeoutSeconds int      `json:"timeout_seconds"`
 }
 
 type Agents struct {
@@ -473,6 +482,7 @@ func Parse(data []byte) (Effective, error) {
 			Runner:       Runner{Concurrency: 1, TimeoutSeconds: 300, ImagePull: "missing"},
 			Agents:       Agents{Completion: Completion{Enabled: true, MaxAttempts: 2, TimeoutSeconds: 300}},
 			Updates:      Updates{TimeoutSeconds: 120, MaxAgeHours: 24, MaxStaleHours: 168},
+			Tests:        Tests{PHPUnit: "auto", Config: "auto", Paths: []string{}, TimeoutSeconds: 300},
 			Tools: Tools{PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
 				Includes: []string{}, BootstrapFiles: []string{}, ScanDirectories: []string{}, StubFiles: []string{}, Autoload: "auto",
 				Drupal: defaults.PHPStanDrupal, Deprecations: true, MemoryLimitMB: 512, ExtraExtensions: []string{}, StrictRules: StrictRules{All: true, Rules: map[string]bool{}}},
@@ -508,6 +518,7 @@ func Parse(data []byte) (Effective, error) {
 				}},
 		},
 		Provenance: map[string]string{
+			"tests.phpunit": "core_default", "tests.config": "core_default", "tests.paths": "core_default", "tests.suite": "core_default", "tests.timeout_seconds": "core_default",
 			"runner.image_pull": "core_default",
 			"framework.version": "core_default", "composer_root": "core_default", "scope.mode": "core_default",
 			"scope.exclude": "core_default", "scope.whole_files": "core_default",
@@ -712,6 +723,19 @@ func markProvenance(values map[string]any, prefix string, sources map[string]str
 }
 
 func validateValues(cfg Config) error {
+	if strings.ContainsAny(cfg.Tests.Suite, "\x00\r\n") {
+		return fmt.Errorf("tests.suite must be a single-line suite name")
+	}
+	for _, name := range append([]string{cfg.Tests.PHPUnit, cfg.Tests.Config}, cfg.Tests.Paths...) {
+		if name != "auto" {
+			if err := projectpath.Validate(name); err != nil {
+				return fmt.Errorf("tests: %w", err)
+			}
+		}
+	}
+	if len(cfg.Tests.Paths) > 0 && cfg.Tests.Suite != "" {
+		return fmt.Errorf("tests.paths and tests.suite are mutually exclusive")
+	}
 	if cfg.Updates.MaxStaleHours < cfg.Updates.MaxAgeHours {
 		return fmt.Errorf("updates.max_stale_hours must be at least updates.max_age_hours")
 	}

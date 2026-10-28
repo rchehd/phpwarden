@@ -25,6 +25,7 @@ from tools.sandbox.evidence import Evidence  # noqa: E402
 from tools.sandbox.host import HostRuntime  # noqa: E402
 from tools.sandbox.mcp import Client  # noqa: E402
 from tools.sandbox.packages import PackageInstallations  # noqa: E402
+from tools.sandbox.project_tests import project_tests  # noqa: E402
 
 WORKER = "phpwarden:static-php8.3-dev"
 
@@ -736,6 +737,13 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
             if self.runtime:
                 with self.case("preservation"):
                     self.runtime.preserved()
+            if self.summary["environment"] == "compose" and self.installation in (
+                "all",
+                "standalone",
+                "compose",
+            ):
+                with self.case("project-tests"):
+                    project_tests(self)
         except Exception:
             self.summary["passed"] = False
             raise

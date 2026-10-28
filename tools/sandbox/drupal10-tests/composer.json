@@ -1,0 +1,48 @@
+{
+  "name": "phpwarden/drupal10-sandbox",
+  "type": "project",
+  "repositories": [
+    {
+      "type": "composer",
+      "url": "https://packages.drupal.org/8"
+    }
+  ],
+  "require": {
+    "php": "^8.3",
+    "composer/installers": "2.3.0",
+    "drupal/core-recommended": "10.6.0",
+    "drupal/core-composer-scaffold": "10.6.0",
+    "drush/drush": "13.7.4"
+  },
+  "config": {
+    "platform": {
+      "php": "8.3.36"
+    },
+    "allow-plugins": {
+      "composer/installers": true,
+      "drupal/core-composer-scaffold": true,
+      "symfony/runtime": false,
+      "php-http/discovery": false,
+      "phpstan/extension-installer": false,
+      "dealerdirect/phpcodesniffer-composer-installer": false
+    },
+    "audit": {
+      "block-insecure": false
+    }
+  },
+  "extra": {
+    "drupal-scaffold": {
+      "locations": {
+        "web-root": "web/"
+      }
+    },
+    "installer-paths": {
+      "web/core": [
+        "type:drupal-core"
+      ]
+    }
+  },
+  "require-dev": {
+    "drupal/core-dev": "10.6.0"
+  }
+}
