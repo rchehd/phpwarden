@@ -26,6 +26,7 @@ from tools.sandbox.host import HostRuntime  # noqa: E402
 from tools.sandbox.mcp import Client  # noqa: E402
 from tools.sandbox.packages import PackageInstallations  # noqa: E402
 from tools.sandbox.project_tests import project_tests  # noqa: E402
+from tools.sandbox.workspace import APPLICATION, finish, startup_failure  # noqa: E402
 
 WORKER = "phpwarden:static-php8.3-dev"
 
@@ -46,8 +47,10 @@ class Sandbox(Commands):
         environment="compose",
         host_php="php",
         host_extensions=None,
+        keep_workspace=False,
     ):
         self.major, self.root = major, directory
+        self.keep_workspace = keep_workspace
         self.project, self.logs = directory / "project", directory / "logs"
         self.logs.mkdir(parents=True)
         self.project.mkdir()
@@ -744,7 +747,7 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
             ):
                 with self.case("project-tests"):
                     project_tests(self)
-        except Exception:
+        except BaseException:
             self.summary["passed"] = False
             raise
         finally:
@@ -756,6 +759,12 @@ echo json_encode(["status"=>$http_response_header[0],"body"=>$decoded,
             if self.alias:
                 steps.append(("alias", self.cleanup_alias))
             errors = self.cleanup_steps(steps)
+            if errors:
+                finish(self, APPLICATION, blocked=True)
+            else:
+                errors += self.cleanup_steps(
+                    [("workspace", lambda: finish(self, APPLICATION, check_mounts=True))]
+                )
             self.evidence.finalize()
             (self.root / "summary.json").write_text(json.dumps(self.summary, indent=2))
             if errors:
@@ -805,6 +814,9 @@ def main():
     parser.add_argument("--worker-image", default=WORKER)
     parser.add_argument("--archive", type=Path)
     parser.add_argument(
+        "--keep-workspace", action="store_true", help="Retain generated workspaces for debugging"
+    )
+    parser.add_argument(
         "--environment", choices=("compose", "ddev", "docker", "host"), default="compose"
     )
     parser.add_argument("--host-php", default="php", help="PHP 8.3 executable for the host sandbox")
@@ -826,23 +838,29 @@ def main():
     archive = (
         args.archive.resolve() if args.archive else directory / "dist/phpwarden-linux-amd64.tar.gz"
     )
-    if not args.archive and installation in ("standalone", "compose", "all"):
-        commit = subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
-        ).stdout.strip()
-        package("v0.0.0-dev." + commit[:7], commit, None, directory / "dist")
-    sandbox = Sandbox(
-        args.drupal,
-        directory,
-        args.worker_image,
-        archive,
-        args.repeats,
-        installation,
-        args.environment,
-        args.host_php,
-        args.host_extensions,
-    )
-    sandbox.execute()
+    sandbox = None
+    try:
+        if not args.archive and installation in ("standalone", "compose", "all"):
+            commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
+            ).stdout.strip()
+            package("v0.0.0-dev." + commit[:7], commit, None, directory / "dist")
+        sandbox = Sandbox(
+            args.drupal,
+            directory,
+            args.worker_image,
+            archive,
+            args.repeats,
+            installation,
+            args.environment,
+            args.host_php,
+            args.host_extensions,
+            args.keep_workspace,
+        )
+        sandbox.execute()
+    finally:
+        if sandbox is None:
+            startup_failure(directory, APPLICATION, args.keep_workspace)
     print(json.dumps(sandbox.summary, indent=2), flush=True)
 
 

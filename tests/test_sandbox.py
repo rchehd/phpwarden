@@ -289,6 +289,7 @@ class SandboxTest(unittest.TestCase):
                 patch("tools.sandbox.run.ROOT", repository),
                 patch("tools.sandbox.run.urllib.request.urlopen") as response,
                 patch("tools.sandbox.run.subprocess.run"),
+                patch("tools.sandbox.workspace.active_sources", return_value=[]),
             ):
                 response.return_value.__enter__.return_value.read.return_value = source
                 with self.assertRaisesRegex(RuntimeError, "post-validation failure"):

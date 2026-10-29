@@ -13,4 +13,8 @@ final class ProbeQueue extends QueueWorkerBase {
     \Drupal::database()->query('SELECT name FROM users WHERE name=' . (string) $data['name']);
   }
 
+  public function processSafeItem($data): void {
+    \Drupal::database()->query('SELECT name FROM users WHERE name=:name', [':name' => $data['name']]);
+  }
+
 }

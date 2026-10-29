@@ -14,6 +14,7 @@ from tools.sandbox.assertions import preserved, tree_snapshot  # noqa: E402
 from tools.sandbox.commands import Commands  # noqa: E402
 from tools.sandbox.evidence import Evidence  # noqa: E402
 from tools.sandbox.mcp import Client  # noqa: E402
+from tools.sandbox.workspace import DOCKERLESS, finish, startup_failure  # noqa: E402
 
 HELPERS = (
     "awk",
@@ -61,8 +62,9 @@ def restricted_path(directory):
 
 
 class DockerlessSandbox(Commands):
-    def __init__(self, directory, archive):
+    def __init__(self, directory, archive, keep_workspace=False):
         self.root, self.archive = directory, archive
+        self.keep_workspace = keep_workspace
         self.project, self.logs = directory / "project", directory / "logs"
         self.project.mkdir()
         self.logs.mkdir()
@@ -310,8 +312,15 @@ class DockerlessSandbox(Commands):
                 redaction_verified=True,
                 git_clean=True,
             )
+        except BaseException:
+            self.summary["passed"] = False
+            raise
         finally:
             errors = self.cleanup_steps([("readers", self.cleanup_readers)])
+            if errors:
+                finish(self, DOCKERLESS, blocked=True)
+            else:
+                errors += self.cleanup_steps([("workspace", lambda: finish(self, DOCKERLESS))])
             self.evidence.finalize()
             (self.root / "summary.json").write_text(json.dumps(self.summary, indent=2))
             if errors:
@@ -331,19 +340,27 @@ def main():
     )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--archive", type=Path)
+    parser.add_argument(
+        "--keep-workspace", action="store_true", help="Retain generated workspaces for debugging"
+    )
     args = parser.parse_args()
     directory = args.output.resolve()
     directory.mkdir(parents=True, exist_ok=False)
     archive = (
         args.archive.resolve() if args.archive else directory / "dist/phpwarden-linux-amd64.tar.gz"
     )
-    if not args.archive:
-        commit = subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
-        ).stdout.strip()
-        package("v0.0.0-dev." + commit[:7], commit, None, directory / "dist")
-    sandbox = DockerlessSandbox(directory, archive)
-    sandbox.execute()
+    sandbox = None
+    try:
+        if not args.archive:
+            commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
+            ).stdout.strip()
+            package("v0.0.0-dev." + commit[:7], commit, None, directory / "dist")
+        sandbox = DockerlessSandbox(directory, archive, args.keep_workspace)
+        sandbox.execute()
+    finally:
+        if sandbox is None:
+            startup_failure(directory, DOCKERLESS, args.keep_workspace)
     print(json.dumps(sandbox.summary, indent=2), flush=True)
 
 

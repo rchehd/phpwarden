@@ -9,14 +9,17 @@ from pathlib import Path
 from tools.sandbox.assertions import tree_snapshot
 from tools.sandbox.mutation_tests import mutation_tests
 from tools.sandbox.project_tests import prepare_unit_project
+from tools.sandbox.workspace import finish, startup_failure
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class MutationSandbox:
-    def __init__(self, args):
-        self.root = args.output.resolve()
-        self.root.mkdir(parents=True, exist_ok=False)
+    def __init__(self, args, directory=None):
+        self.root = directory if directory is not None else args.output.resolve()
+        self.keep_workspace = getattr(args, "keep_workspace", False)
+        if directory is None:
+            self.root.mkdir(parents=True, exist_ok=False)
         self.project = self.root / "project"
         self.project.mkdir()
         self.major = args.drupal
@@ -67,14 +70,36 @@ class MutationSandbox:
         return result.stdout
 
     def execute(self):
-        before = tree_snapshot(self.project)
         try:
+            before = tree_snapshot(self.project)
             prepare_unit_project(self)
             mutation_tests(self)
             assert before == tree_snapshot(self.project)
             self.summary["passed"] = True
+        except BaseException:
+            self.summary["passed"] = False
+            raise
         finally:
-            (self.root / "summary.json").write_text(json.dumps(self.summary, indent=2) + "\n")
+            errors = []
+            try:
+                self.run(
+                    ["docker", "rm", "--force", self.name + "-install"], expected=(0, 1), timeout=30
+                )
+                remaining = self.run(
+                    ["docker", "ps", "-aq", "--filter", "name=^/" + self.name + "-install$"]
+                )
+                if remaining.strip():
+                    raise RuntimeError("Mutation installer container survived cleanup")
+            except Exception as error:
+                self.summary["passed"] = False
+                errors.append({"step": "installer", "error_type": type(error).__name__})
+                self.summary["cleanup_errors"] = errors
+            try:
+                finish(self, ("project", "unit-project"), blocked=bool(errors), check_mounts=True)
+            finally:
+                (self.root / "summary.json").write_text(json.dumps(self.summary, indent=2) + "\n")
+            if errors:
+                raise RuntimeError("Mutation cleanup failed; see summary.json")
 
 
 def main():
@@ -84,8 +109,19 @@ def main():
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--composer-image", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    sandbox = MutationSandbox(parser.parse_args())
-    sandbox.execute()
+    parser.add_argument(
+        "--keep-workspace", action="store_true", help="Retain generated workspaces for debugging"
+    )
+    args = parser.parse_args()
+    directory = args.output.resolve()
+    directory.mkdir(parents=True, exist_ok=False)
+    sandbox = None
+    try:
+        sandbox = MutationSandbox(args, directory)
+        sandbox.execute()
+    finally:
+        if sandbox is None:
+            startup_failure(directory, ("project", "unit-project"), args.keep_workspace)
     print(json.dumps(sandbox.summary, indent=2), flush=True)
 
 

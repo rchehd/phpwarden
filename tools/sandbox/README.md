@@ -25,6 +25,14 @@ python3 tools/sandbox/run.py --drupal 10 --output /tmp/phpwarden-sandbox-d10
 python3 tools/sandbox/run.py --drupal 11 --output /tmp/phpwarden-sandbox-d11
 ```
 
+Runs remove their generated application copies, dependencies, caches and packaging
+directories after stopping their resources, including on failure or interruption.
+Reports, command logs and evidence remain under `--output`; `summary.json` records
+`workspace_cleanup`. This also applies to Docker-less and mutation sandboxes.
+Use `--keep-workspace` to retain generated files for debugging. Failed resource
+cleanup or an active container mount preserves the affected workspace and fails
+the run. Existing output directories are never reused or cleaned.
+
 Select DDEV with `--environment ddev`; the default is `compose`. Both support
 the same installation-method selection and installed Drupal fixtures:
 

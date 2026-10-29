@@ -5,10 +5,15 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from tools.sandbox.workspace import finish  # noqa: E402
+
 PLUGIN_REF = "073e7a4d5fc159fbf47decf16296edd7f8a545d1"
 MODULE = "phpwarden_taint_probe"
 CONTROLS = {
@@ -23,6 +28,7 @@ CONTROLS = {
     "form": ("src/Form/ProbeForm.php", "buildForm"),
     "hook": ("phpwarden_taint_probe.module", "phpwarden_taint_probe_preprocess_html"),
     "queue": ("src/Plugin/QueueWorker/ProbeQueue.php", "processItem"),
+    "queue-bound": ("src/Plugin/QueueWorker/ProbeQueue.php", "processSafeItem"),
 }
 
 
@@ -63,6 +69,8 @@ def command(args, project, container, script, *arguments):
         f"type=bind,src={project},dst=/project",
         "--mount",
         f"type=bind,src={args.bundle},dst=/tool-vendor,readonly",
+        "--mount",
+        f"type=bind,src={ROOT / 'tools/psalm-spike/models'},dst=/models,readonly",
         "--workdir",
         "/project/web",
         "--entrypoint",
@@ -81,8 +89,11 @@ def write_config(project, major, mode):
     )
     metadata = (
         "<containerXml>phpwarden-spike-container.xml</containerXml>"
-        if mode in ("static-metadata", "explicit-entrypoints")
+        if mode in ("static-metadata", "explicit-entrypoints", "profile-models")
         else ""
+    )
+    overlay = (
+        '<pluginClass class="PHPWarden\\PsalmSpike\\Plugin"/>' if mode == "profile-models" else ""
     )
     (project / "web/psalm.xml").write_text(
         '<psalm errorLevel="6" resolveFromConfigFile="true" cacheDirectory="/tmp/psalm-cache" '
@@ -93,7 +104,8 @@ def write_config(project, major, mode):
         f'<pluginClass class="Psalm\\SymfonyPsalmPlugin\\Plugin"><symfonyMajorVersion>{major}'
         f"</symfonyMajorVersion>{metadata}</pluginClass>"
         f'<pluginClass class="mortenson\\PsalmPluginDrupal\\Plugin">{metadata}'
-        f'<extensions><module name="{MODULE}"/></extensions></pluginClass></plugins></psalm>\n'
+        f'<extensions><module name="{MODULE}"/></extensions></pluginClass>{overlay}'
+        "</plugins></psalm>\n"
     )
 
 
@@ -110,6 +122,7 @@ def run(args, project, name, script, *arguments):
         if source.is_file():
             shutil.copyfile(source, snapshot / source.name)
     container = "phpwarden-psalm-spike-" + uuid.uuid4().hex[:12]
+    args.resource_started = True
     try:
         result = subprocess.run(
             command(args, project, container, script, *arguments),
@@ -166,7 +179,7 @@ def controls(project, issues):
     return result
 
 
-def analyze(args, project, name, *, taint=True):
+def analyze(args, project, name, *, taint=True, models=False):
     arguments = [
         "--root=/project",
         "--config=/project/web/psalm.xml",
@@ -180,7 +193,9 @@ def analyze(args, project, name, *, taint=True):
     ]
     if taint:
         arguments.append("--taint-analysis")
-    result = run(args, project, name, "/tool-vendor/bin/psalm", *arguments)
+    result = run(
+        args, project, name, "/models/psalm.php" if models else "/tool-vendor/bin/psalm", *arguments
+    )
     if result["json"] and taint:
         result["controls"] = controls(
             project, json.loads((args.output / f"{name}.stdout").read_text())
@@ -209,6 +224,9 @@ def main():
     parser.add_argument("--image", required=True)
     parser.add_argument("--php", default="php")
     parser.add_argument("--output", type=Path, required=True, help="New artifact directory")
+    parser.add_argument(
+        "--keep-workspace", action="store_true", help="Retain the private project for debugging"
+    )
     args = parser.parse_args()
     args.project = args.project.resolve(strict=True)
     args.bundle = args.bundle.resolve(strict=True)
@@ -226,6 +244,7 @@ def main():
     before = fingerprint(args.project)
     args.output.mkdir(parents=True, exist_ok=False)
     summary = {"drupal": core, "symfony": symfony, "plugin": PLUGIN_REF, "cases": {}}
+    args.resource_started = False
     project = args.output / "project"
     project.mkdir()
     try:
@@ -290,6 +309,7 @@ def main():
             "module-autoload",
             "static-metadata",
             "explicit-entrypoints",
+            "profile-models",
         ):
             if mode == "explicit-entrypoints":
                 entry_path.write_text(
@@ -301,25 +321,29 @@ def main():
                     "ProbeQueue"
                     "([], 'probe', []);\n" + "$queue->processItem(['name' => "
                     "\\Drupal\\phpwarden_taint_probe\\InputHelper::name()]);\n"
+                    + "$queue->processSafeItem(['name' => "
+                    "\\Drupal\\phpwarden_taint_probe\\InputHelper::name()]);\n"
                 )
             write_config(project, symfony.lstrip("v").split(".")[0], mode)
-            summary["cases"][mode] = analyze(args, project, mode)
-            if mode in ("static-metadata", "explicit-entrypoints"):
+            summary["cases"][mode] = analyze(args, project, mode, models=mode == "profile-models")
+            if mode in ("static-metadata", "explicit-entrypoints", "profile-models"):
                 summary["cases"][mode + "-readiness"] = analyze(
-                    args, project, mode + "-readiness", taint=False
+                    args, project, mode + "-readiness", taint=False, models=mode == "profile-models"
                 )
         autoload = project / "vendor/autoload.php"
         saved = autoload.read_bytes()
         try:
             autoload.unlink()
-            summary["cases"]["missing-autoload"] = analyze(args, project, "missing-autoload")
+            summary["cases"]["missing-autoload"] = analyze(
+                args, project, "missing-autoload", models=True
+            )
         finally:
             autoload.write_bytes(saved)
         helper = project / f"web/modules/custom/{MODULE}/src/InputHelper.php"
         saved = helper.read_bytes()
         try:
             helper.write_bytes(saved + b"\nfunction broken( {\n")
-            summary["cases"]["parse-error"] = analyze(args, project, "parse-error")
+            summary["cases"]["parse-error"] = analyze(args, project, "parse-error", models=True)
             summary["cases"]["parse-error-lint"] = run(
                 args,
                 project,
@@ -328,7 +352,7 @@ def main():
                 f"/project/web/modules/custom/{MODULE}/src/InputHelper.php",
             )
             summary["cases"]["parse-error-readiness"] = analyze(
-                args, project, "parse-error-readiness", taint=False
+                args, project, "parse-error-readiness", taint=False, models=True
             )
         finally:
             helper.write_bytes(saved)
@@ -340,6 +364,14 @@ def main():
             "module-autoload": {"trusted", "query", "form", "hook"},
             "static-metadata": {"trusted", "query", "form", "hook", "template"},
             "explicit-entrypoints": {
+                "trusted",
+                "query",
+                "form",
+                "hook",
+                "template",
+                "route-argument",
+            },
+            "profile-models": {
                 "trusted",
                 "query",
                 "form",
@@ -363,13 +395,25 @@ def main():
         summary["upstream_bootstrap_supported"] = summary["cases"]["upstream-bootstrap"][
             "taint_only_json"
         ]
-        readiness = summary["cases"]["explicit-entrypoints-readiness"]
+        readiness = summary["cases"]["profile-models-readiness"]
         summary["readiness_clean"] = readiness["json"] and readiness["exit"] == 0
         summary["integration_ready"] = False
     finally:
         summary["original_preserved"] = before == fingerprint(args.project)
         summary["candidate_prerequisites_met"] = prerequisites(summary)
-        (args.output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+        try:
+            finish(
+                SimpleNamespace(
+                    root=args.output, summary=summary, keep_workspace=args.keep_workspace
+                ),
+                ("project",),
+                check_mounts=args.resource_started,
+            )
+        except BaseException:
+            summary["candidate_prerequisites_met"] = False
+            raise
+        finally:
+            (args.output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     return 0 if summary["candidate_prerequisites_met"] else 1
 
 
