@@ -1,6 +1,7 @@
 <?php
 
-require '/tool-vendor/autoload.php';
+$bundle = $argv[3] ?? '/tool-vendor';
+require $bundle . '/autoload.php';
 require __DIR__ . '/Input.php';
 require __DIR__ . '/Services.php';
 require __DIR__ . '/Entrypoints.php';
@@ -11,12 +12,13 @@ use PHPWarden\Psalm\Drupal\Services;
 
 $output = $argv[2] ?? '';
 try {
-    if (count($argv) !== 3 || !is_dir($output) || iterator_count(new FilesystemIterator($output)) !== 0) {
+    if (!in_array(count($argv), [3, 4], true) || !is_dir($output) || iterator_count(new FilesystemIterator($output)) !== 0) {
         throw new RuntimeException('Usage: prepare.php REQUEST.json EMPTY_OUTPUT_DIRECTORY');
     }
     $request = json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);
     $input = new Input($request);
-    $input->read($request['composer_root'] . '/composer.json');
+    $composer = json_decode($input->read($request['composer_root'] . '/composer.json'), true, 512, JSON_THROW_ON_ERROR);
+    $vendor = $composer['config']['vendor-dir'] ?? 'vendor';
     $lock = json_decode($input->read($request['composer_root'] . '/composer.lock'), true, 512, JSON_THROW_ON_ERROR);
     $versions = array_column($lock['packages'], 'version', 'name');
     $symfony = explode('.', ltrim($versions['symfony/http-kernel'], 'v'))[0];
@@ -39,14 +41,14 @@ try {
         unset($list);
     }
     $metadata = new Services($input, $services);
-    $entries = new Entrypoints($input, $metadata, $files);
+    $entries = new Entrypoints($input, $metadata, $request['files'] ?? $files);
     foreach ($routes as $file) {
         $entries->routing($file);
     }
     if (!$entries->sources) {
         $input->diagnostic('no-source', '', 'No selected PHP source files');
     }
-    $autoload = "<?php\n\$loader = require " . var_export($input->path($request['composer_root'] . '/vendor/autoload.php'), true) . ";\n";
+    $autoload = "<?php\n\$loader = require " . var_export($input->path($request['composer_root'] . '/' . $vendor . '/autoload.php'), true) . ";\n";
     foreach ($extensions as $extension) {
         $directory = $extension['path'] . '/src';
         if (is_dir($input->root . '/' . $directory)) {
@@ -56,11 +58,11 @@ try {
     $autoload .= "return \$loader;\n";
     $document = new DOMDocument('1.0', 'UTF-8');
     $psalm = $document->appendChild($document->createElement('psalm'));
-    foreach (['errorLevel' => '6', 'resolveFromConfigFile' => 'true', 'cacheDirectory' => '/tmp/psalm-cache', 'autoloader' => $output . '/bootstrap.php'] as $name => $value) {
+    foreach (['errorLevel' => '6', 'resolveFromConfigFile' => 'true', 'cacheDirectory' => $request['cache_directory'] ?? '/tmp/psalm-cache', 'autoloader' => $output . '/bootstrap.php'] as $name => $value) {
         $psalm->setAttribute($name, $value);
     }
     $extensionsNode = $psalm->appendChild($document->createElement('fileExtensions'));
-    foreach (['php', 'module', 'theme', 'inc', 'install', 'profile'] as $extension) {
+    foreach (['php', 'module', 'theme', 'inc', 'install', 'profile', 'engine', 'test'] as $extension) {
         $extensionsNode->appendChild($document->createElement('extension'))->setAttribute('name', $extension);
     }
     $project = $psalm->appendChild($document->createElement('projectFiles'));
@@ -70,13 +72,13 @@ try {
     $project->appendChild($document->createElement('file'))->setAttribute('name', $output . '/entrypoints.php');
     $psalm->appendChild($document->createElement('stubs'))->appendChild($document->createElement('file'))->setAttribute('name', $output . '/instances.php');
     $plugins = $psalm->appendChild($document->createElement('plugins'));
-    foreach (['Psalm\\SymfonyPsalmPlugin\\Plugin', 'mortenson\\PsalmPluginDrupal\\Plugin', 'PHPWarden\\PsalmSpike\\Plugin'] as $class) {
+    foreach (['Psalm\\SymfonyPsalmPlugin\\Plugin', 'mortenson\\PsalmPluginDrupal\\Plugin', 'PHPWarden\\PsalmDrupal\\Plugin'] as $class) {
         $plugin = $plugins->appendChild($document->createElement('pluginClass'));
         $plugin->setAttribute('class', $class);
         if ($class === 'Psalm\\SymfonyPsalmPlugin\\Plugin') {
             $plugin->appendChild($document->createElement('symfonyMajorVersion', $symfony));
         }
-        if ($class !== 'PHPWarden\\PsalmSpike\\Plugin') {
+        if ($class !== 'PHPWarden\\PsalmDrupal\\Plugin') {
             $plugin->appendChild($document->createElement('containerXml', $output . '/services.xml'));
         }
     }
@@ -88,8 +90,8 @@ try {
     ksort($input->hashes);
     $manifest = ['version' => 1, 'preparation_complete' => !$input->diagnostics, 'analysis_complete' => false,
         'selection' => 'installed custom sources; enabled-site state is not inferred', 'extensions' => $extensions,
-        'sources' => $entries->sources, 'routes' => $entries->routes, 'services' => $metadata->types,
-        'unresolved_services' => $metadata->unresolved, 'diagnostics' => $input->diagnostics, 'inputs' => $input->hashes];
+        'sources' => $entries->sources, 'routes' => $entries->routes, 'services' => (object) $metadata->types,
+        'unresolved_services' => (object) $metadata->unresolved, 'diagnostics' => $input->diagnostics, 'inputs' => $input->hashes];
     file_put_contents($output . '/manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
     echo json_encode($manifest, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
     exit($input->diagnostics ? 3 : 0);

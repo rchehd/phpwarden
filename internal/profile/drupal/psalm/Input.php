@@ -108,13 +108,20 @@ final class Input
 
     public function files(string $directory): array
     {
+        if (isset($this->request['inventory'])) {
+            $prefix = $this->relative($this->path($directory));
+            return array_values(array_filter($this->request['inventory'], fn ($name) => $name === $prefix || str_starts_with($name, $prefix . '/')));
+        }
         $iterator = new RecursiveDirectoryIterator($this->path($directory), \FilesystemIterator::SKIP_DOTS);
         $filter = new RecursiveCallbackFilterIterator($iterator, function ($file): bool {
             $relative = $this->relative($file->getPathname());
-            if ($this->excluded($relative)) {
+            if (!$file->isDir() && $this->excluded($relative)) {
                 return false;
             }
             if ($file->isLink()) {
+                if ($this->excluded($relative)) {
+                    return false;
+                }
                 $this->diagnostic('symlink', $relative, 'Source symlinks require explicit resolution');
                 return false;
             }

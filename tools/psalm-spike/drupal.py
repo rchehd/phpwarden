@@ -70,7 +70,7 @@ def command(args, project, container, script, *arguments):
         "--mount",
         f"type=bind,src={args.bundle},dst=/tool-vendor,readonly",
         "--mount",
-        f"type=bind,src={ROOT / 'tools/psalm-spike/models'},dst=/models,readonly",
+        f"type=bind,src={ROOT / 'internal/profile/drupal/psalm'},dst=/models,readonly",
         "--workdir",
         "/project/web",
         "--entrypoint",
@@ -93,7 +93,7 @@ def write_config(project, major, mode):
         else ""
     )
     overlay = (
-        '<pluginClass class="PHPWarden\\PsalmSpike\\Plugin"/>' if mode == "profile-models" else ""
+        '<pluginClass class="PHPWarden\\PsalmDrupal\\Plugin"/>' if mode == "profile-models" else ""
     )
     (project / "web/psalm.xml").write_text(
         '<psalm errorLevel="6" resolveFromConfigFile="true" cacheDirectory="/tmp/psalm-cache" '

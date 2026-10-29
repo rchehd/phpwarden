@@ -1,15 +1,21 @@
 # Drupal preparation for Psalm
 
-This candidate bridges PHPWarden's existing Drupal discovery facts to the pinned
-upstream Psalm plugins. It is exercised by the development acceptance harness,
-not registered in `check`, distributed in workers or exposed in project settings.
+The internal worker pipeline bridges PHPWarden's Drupal discovery facts to the
+pinned upstream Psalm plugins. Profile PHP assets live under
+[`internal/profile/drupal/psalm`](../../../internal/profile/drupal/psalm) and are
+embedded in the binary. The development harness supplies an isolated analyzer
+bundle. Public `check` registration, project settings and image packaging remain
+separate work.
 
-`prepare.php REQUEST.json EMPTY_OUTPUT_DIRECTORY` runs with the isolated tool
-vendor mounted at `/tool-vendor`. The request contains `root` (absolute repository
+`prepare.php REQUEST.json EMPTY_OUTPUT_DIRECTORY [TOOL_VENDOR]` defaults to the
+isolated tool vendor at `/tool-vendor`. The request contains `root` (absolute repository
 root), `composer_root`, `web_root`, `source_roots`, `include` and `exclude` (paths
 relative to the repository). The acceptance harness obtains these from the real
 `phpwarden config show --format=json` response. Discovery, monorepo and Composer
 path-repository rules remain owned by the existing Go Drupal profile.
+The worker also supplies `inventory` and `files`, computed with the core's path
+selection rules. The returned PHP source list must match exactly; omitted files
+cannot produce a complete result. `cache_directory` names the private run cache.
 
 The helper reads selected `.info.yml` files to identify module/theme/profile
 names and namespace mappings. It reads the core and selected extensions' service
@@ -41,7 +47,7 @@ parse/input failure. The caller must not turn it into a clean analysis result.
 
 Run Psalm with the generated config and the Composer project as `--root`, including
 its repository-relative prefix in a monorepo. The current development launcher
-is `tools/psalm-spike/models/psalm.php`; its overlays retain upstream annotations
+is `internal/profile/drupal/psalm/psalm.php`; its overlays retain upstream annotations
 while fixing FormState structure and specializing SQL sinks. Use a separate
 process for preparation and analysis so dependency load order is not inherited.
 The upstream plugin searches the current directory for module stubs, so the
@@ -56,6 +62,28 @@ The generated bootstrap loads the installed Composer autoloader during Psalm;
 normal Composer autoload behavior still applies. Project and tool inputs are
 mounted read-only and analysis runs without network in the acceptance harness.
 
+## Internal worker pipeline
+
+`worker.AnalyzePsalm` runs the framework-neutral `internal/psalmanalysis` pipeline
+with Drupal-owned preparation and plugin pins. It verifies locked versus installed
+project packages and the Composer autoloader, then checks PHP and required
+extensions. This bundle is currently validated only on PHP 8.3.16+ in the 8.3
+series, and the actual runtime must match the project's requested runtime.
+
+Preparation must return complete metadata and a verified input inventory. The
+worker syntax-checks source/generated PHP without executing it, requires ordinary
+Psalm analysis to return no diagnostics, then runs taint analysis over the full
+prepared graph. This readiness policy is deliberately conservative: existing
+ordinary Psalm issues currently stop the taint phase. Native findings keep their
+full JSON and traces. Invalid exits, partial reports, missing sources, malformed
+trace locations, process failures, cancellation or changed project/prepared inputs
+cannot produce `complete: true`. Private files are removed on every return path.
+
+The returned object is internal validation evidence, not the public check report.
+Mapping findings into Security, filtering full flows for Git changes, native
+config/baseline overrides and distributed tool/image metadata still need their
+own integration gates.
+
 ## Acceptance
 
 Install the committed Drupal 10/11 sandbox locks and
@@ -69,6 +97,13 @@ python3 tools/psalm-spike/discovery.py \
   --image ddev/ddev-webserver:v1.25.5 --php /usr/bin/php8.3 \
   --output /tmp/phpwarden-psalm-discovery-d10
 ```
+
+For the complete internal worker path, build its development entrypoint with
+`GOMAXPROCS=1 go build -p=1 -o /scratch/psalm-worker ./tools/psalm-spike/worker`
+and add `--worker /scratch/psalm-worker` to the command above. The extended suite
+checks that missing autoloaders, unresolved classes and PHP syntax unsupported by
+the selected runtime stop before the taint phase. Containers run sequentially
+with a default `--cpus 0.2` quota; increase it explicitly only when resources permit.
 
 Repeat with the Drupal 11 fixture and a new output directory. The harness copies
 only core, vendor, Composer metadata and the scaffold autoloader, then adds its

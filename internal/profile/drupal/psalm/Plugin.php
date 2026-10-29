@@ -1,6 +1,6 @@
 <?php
 
-namespace PHPWarden\PsalmSpike;
+namespace PHPWarden\PsalmDrupal;
 
 use Psalm\Plugin\PluginEntryPointInterface;
 use Psalm\Plugin\RegistrationInterface;

@@ -22,7 +22,7 @@ final class Entrypoints
         $parser = (new ParserFactory())->createForNewestSupportedVersion();
         $finder = new NodeFinder();
         foreach ($files as $file) {
-            if (!preg_match('/\.(php|module|theme|inc|install|profile)$/', $file)) {
+            if (!preg_match('/\.(php|module|theme|inc|install|profile|engine|test)$/', $file)) {
                 continue;
             }
             if ($input->request['include'] && !$input->matches($file, $input->request['include'])) {

@@ -45,7 +45,9 @@ class Discovery:
             raise RuntimeError(f"{label}: exit {result.returncode}: {result.stderr[-1500:]}")
         return result
 
-    def container(self, script, arguments, output, label, expected=(0,), writable=False):
+    def container(
+        self, script, arguments, output, label, expected=(0,), writable=False, entrypoint=None
+    ):
         name = "phpwarden-psalm-discovery-" + uuid.uuid4().hex[:10]
         command = [
             "docker",
@@ -66,20 +68,25 @@ class Discovery:
             "no-new-privileges",
             "--memory",
             "2g",
+            "--cpus",
+            str(self.args.cpus),
             "--pids-limit",
             "256",
             "--tmpfs",
             "/tmp:rw,nosuid,size=1024m,mode=1777",
         ]
-        for source, target, readonly in (
+        mounts = [
             (self.project, "/project", True),
             (self.args.bundle, "/tool-vendor", True),
-            (ROOT / "tools/psalm/drupal", "/helper", True),
-            (ROOT / "tools/psalm-spike/models", "/models", True),
+            (ROOT / "internal/profile/drupal/psalm", "/helper", True),
+            (ROOT / "internal/profile/drupal/psalm", "/models", True),
             (ROOT / "tools/psalm-spike/selection.php", "/selection.php", True),
             (output, "/out", not writable),
             (self.root / "request.json", "/request.json", True),
-        ):
+        ]
+        if self.args.worker:
+            mounts.append((self.args.worker, "/psalm-worker", True))
+        for source, target, readonly in mounts:
             command += [
                 "--mount",
                 f"type=bind,src={source},dst={target}" + (",readonly" if readonly else ""),
@@ -88,7 +95,7 @@ class Discovery:
             "--workdir",
             "/out",
             "--entrypoint",
-            self.args.php,
+            entrypoint or self.args.php,
             self.args.image,
             script,
             *arguments,
@@ -97,6 +104,47 @@ class Discovery:
             return self.run(command, label, expected)
         finally:
             subprocess.run(["docker", "rm", "--force", name], capture_output=True, timeout=20)
+
+    def check_worker(self, label, output, *, complete, stage=None):
+        result = self.container(
+            "--project",
+            ["/project", "--bundle", "/tool-vendor", "--php", self.args.php],
+            output,
+            label + "-worker",
+            (0 if complete else 3,),
+            entrypoint="/psalm-worker",
+        )
+        report = json.loads(result.stdout)
+        assert report["complete"] == complete, report["diagnostics"]
+        if complete:
+            assert len(report["findings"]) == 7 and report["readiness"] == []
+            measured = controls(
+                self.project / self.composer_root,
+                report["findings"],
+                module=self.name,
+                labels=set(CONTROLS) - {"queue", "queue-bound"},
+                container_root="/project"
+                + ("/" + self.composer_root if self.composer_root != "." else ""),
+            )
+            assert {name for name, types in measured.items() if types} == {
+                "trusted",
+                "query",
+                "form",
+                "hook",
+                "template",
+                "route-argument",
+            }, measured
+            assert [item["stage"] for item in report["phases"]] == [
+                "runtime",
+                "preparation",
+                "syntax",
+                "readiness",
+                "taint",
+            ]
+        else:
+            assert not report["findings"] and report["diagnostics"][-1]["stage"] == stage, report
+            assert "taint" not in [item["stage"] for item in report["phases"]]
+        return report
 
     def prepare(self, label, *, expected=0, code=None, native=False):
         effective = json.loads(
@@ -186,6 +234,12 @@ class Discovery:
                 "route-argument",
             }, measured
             record.update(readiness_clean=True, taint_findings=len(issues), controls=measured)
+            if self.args.worker:
+                report = self.check_worker(label, output, complete=True)
+                record.update(worker_complete=True, worker_findings=len(report["findings"]))
+        if self.args.worker and expected != 0:
+            self.check_worker(label, output, complete=False, stage="preparation")
+            record["worker_rejected"] = True
         self.summary["cases"][label] = record
         print(label, json.dumps(record), flush=True)
         return manifest
@@ -362,6 +416,8 @@ class Discovery:
             manifest = self.prepare("automatic", native=True)
             assert len(manifest["routes"]) == 9
             self.negative_cases()
+            if self.args.worker:
+                self.worker_failures()
             self.monorepo()
             self.summary["passed"] = True
         finally:
@@ -370,6 +426,50 @@ class Discovery:
             finally:
                 (self.root / "summary.json").write_text(json.dumps(self.summary, indent=2) + "\n")
 
+    def worker_failures(self):
+        controller = self.module / "src/Controller/ProbeController.php"
+        saved = controller.read_text()
+        try:
+            controller.write_text(
+                saved.replace(
+                    "public function trusted(): array {",
+                    "public function trusted(): array {\n    (new \\MissingDependency())->call();",
+                )
+            )
+            self.prepare("readiness-error")
+            self.check_worker(
+                "readiness-error", self.root / "readiness-error", complete=False, stage="readiness"
+            )
+            self.summary["cases"]["readiness-error"]["worker_rejected"] = True
+        finally:
+            controller.write_text(saved)
+        hooked = self.module / "src/HookedProperty.php"
+        try:
+            hooked.write_text(
+                f"<?php namespace Drupal\\{self.name}; final class HookedProperty "
+                "{ public string $value { get => 'test'; } }\n"
+            )
+            self.prepare("syntax-runtime-error")
+            self.check_worker(
+                "syntax-runtime-error",
+                self.root / "syntax-runtime-error",
+                complete=False,
+                stage="syntax",
+            )
+            self.summary["cases"]["syntax-runtime-error"]["worker_rejected"] = True
+        finally:
+            hooked.unlink()
+        autoload = self.project / "vendor/autoload.php"
+        saved = autoload.read_bytes()
+        output = self.root / "missing-autoload"
+        output.mkdir()
+        try:
+            autoload.unlink()
+            self.check_worker("missing-autoload", output, complete=False, stage="dependencies")
+            self.summary["cases"]["missing-autoload"] = {"worker_rejected": True}
+        finally:
+            autoload.write_bytes(saved)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Verify database-free Drupal Psalm preparation")
@@ -377,10 +477,18 @@ def main():
         parser.add_argument("--" + name, required=True, type=Path)
     parser.add_argument("--image", required=True)
     parser.add_argument("--php", default="php")
+    parser.add_argument(
+        "--cpus", type=float, default=0.2, help="Maximum CPU cores per test container"
+    )
+    parser.add_argument("--worker", type=Path, help="Experimental worker validation binary")
     parser.add_argument("--keep-workspace", action="store_true")
     args = parser.parse_args()
+    if args.cpus <= 0:
+        parser.error("--cpus must be greater than zero")
     for name in ("project", "bundle", "binary"):
         setattr(args, name, getattr(args, name).resolve(strict=True))
+    if args.worker:
+        args.worker = args.worker.resolve(strict=True)
     Discovery(args).execute()
 
 
