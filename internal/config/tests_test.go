@@ -12,6 +12,9 @@ func TestProjectTestsSettingsAndValidation(t *testing.T) {
 		t.Fatalf("%+v %v", value.Config.Tests, err)
 	}
 	for _, extra := range []string{
+		"mutation: {timeout_seconds: 0}", "mutation: {threads: 0}", "mutation: {mutant_timeout_seconds: 601}",
+		"mutation: {min_msi: 101}", "mutation: {min_covered_msi: -1}", "mutation: {config: ../outside.json5}",
+		`mutation: {mutators: ["Plus,Minus"]}`, "mutation: {unknown: true}",
 		"tests: {timeout_seconds: 0}", "tests: {timeout_seconds: 3601}",
 		"tests: {paths: [../escape]}", "tests: {phpunit: /outside/phpunit}", "tests: {config: ../phpunit.xml}",
 		"tests: {paths: [tests], suite: unit}",

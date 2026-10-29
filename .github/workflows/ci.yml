@@ -89,6 +89,8 @@ jobs:
         run: CGO_ENABLED=0 go build -trimpath -o /tmp/phpwarden ./cmd/phpwarden
       - name: Lint PHP helper
         run: |
+          php -l internal/projecttest/mutation-config.php
+          php -l tools/mutation/prepare.php
           php -l internal/projecttest/coverage-config.php
           php -l internal/checker/packagecheck/helper.php
           php -l internal/checker/syntax/parallel.php

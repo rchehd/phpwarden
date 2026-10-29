@@ -239,6 +239,32 @@ class DockerWorkerTest(unittest.TestCase):
                     {"version": version, "enabled": enabled, "license": True},
                 )
 
+    def test_mutation_runtime_and_notices_are_readable_without_root(self):
+        supported = self.runtime in ("8.3", "8.4")
+        version = self.metadata["Config"]["Labels"]["io.phpwarden.infection-version"]
+        self.assertEqual(version, "0.35.8" if supported else "unsupported")
+        with tempfile.TemporaryDirectory(prefix="phpwarden-mutation-runtime-") as root:
+            completed = self.run_container(
+                Path(root),
+                [
+                    "-r",
+                    'echo (int)(is_readable("/usr/local/lib/phpwarden/mutation/infection.phar")'
+                    ' && is_readable("/usr/local/lib/phpwarden/mutation/LICENSE")'
+                    ' && is_dir("/usr/local/lib/phpwarden/mutation/notices"));',
+                ],
+                entrypoint="php",
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout, "1")
+            if supported:
+                completed = self.run_container(
+                    Path(root),
+                    ["/usr/local/lib/phpwarden/mutation/infection.phar", "--version"],
+                    entrypoint="php",
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertIn(version, completed.stdout)
+
     def test_syntax_findings_include_errors_outside_diff(self):
         def run(scenario, arguments):
             before = snapshot(scenario.root)

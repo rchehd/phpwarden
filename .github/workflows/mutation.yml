@@ -1,0 +1,57 @@
+name: Mutation tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+  mutation:
+    needs: checks
+    name: Drupal ${{ matrix.drupal }} · PHP ${{ matrix.php }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        drupal: ["10", "11"]
+        php: ["8.3", "8.4"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build matching worker
+        env:
+          PHP_RUNTIME: ${{ matrix.php }}
+        run: docker buildx bake "php${PHP_RUNTIME//./}"
+      - name: Build fixture dependency runtime
+        env:
+          PHP_RUNTIME: ${{ matrix.php }}
+        run: docker build -f tools/sandbox/Dockerfile --build-arg "WORKER_IMAGE=phpwarden:static-php${PHP_RUNTIME}-dev" -t phpwarden-mutation-composer .
+      - name: Build source CLI
+        run: go build -trimpath -o "$RUNNER_TEMP/phpwarden" ./cmd/phpwarden
+      - name: Run isolated mutation scenarios
+        env:
+          DRUPAL_MAJOR: ${{ matrix.drupal }}
+          PHP_RUNTIME: ${{ matrix.php }}
+        run: python3 -m tools.sandbox.mutation --drupal "$DRUPAL_MAJOR" --runtime "$PHP_RUNTIME" --binary "$RUNNER_TEMP/phpwarden" --composer-image phpwarden-mutation-composer --output "$RUNNER_TEMP/mutation"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mutation-drupal${{ matrix.drupal }}-php${{ matrix.php }}
+          path: |
+            ${{ runner.temp }}/mutation/summary.json
+            ${{ runner.temp }}/mutation/logs
+          include-hidden-files: true
+          retention-days: 7

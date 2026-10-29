@@ -42,6 +42,14 @@ RUN tar -xzf /tmp/pcov.tar.gz --strip-components=1 \
     && phpize && ./configure --enable-pcov && make -j2 \
     && mkdir /out && cp modules/pcov.so LICENSE /out/
 
+FROM ${PHP_IMAGE} AS mutation-tools
+
+ADD --checksum=sha256:b2049ae1bff43d9dc82831c2833005005eb62d5180cd518892af93fc8e23ddc5 https://github.com/infection/infection/releases/download/0.35.8/infection.phar /out/infection.phar
+ADD --checksum=sha256:31b3c48b15c2fa0208f6e673f52ebe61d49be949a60d9f6880eb385ae8c15591 https://codeload.github.com/infection/infection/tar.gz/refs/tags/0.35.8 /tmp/infection-source.tar.gz
+COPY tools/mutation/prepare.php /prepare.php
+RUN mkdir /source && tar -xzf /tmp/infection-source.tar.gz --strip-components=1 -C /source \
+    && cp /source/LICENSE /out/LICENSE && php /prepare.php && chmod 0644 /out/infection.phar
+
 FROM ${PHP_IMAGE} AS tools
 
 ARG PHP_RUNTIME
@@ -116,6 +124,7 @@ RUN python3 prepare.py --source-archive /tmp/eventhorizon.tar.gz --yaml-archive 
 FROM ${PHP_IMAGE} AS worker
 
 ARG REQUIRE_CHECKER_VERSION=4.16.1
+ARG INFECTION_VERSION=unsupported
 
 ARG PHP_VERSION
 ARG PHP_RUNTIME
@@ -129,6 +138,10 @@ RUN apk add --no-cache git ca-certificates libstdc++ python3 \
     && adduser -S -D -H -u 10001 -G phpwarden phpwarden \
     && git config --system --add safe.directory /workspace \
     && php -r 'if (!function_exists("token_get_all") || PHP_VERSION !== getenv("PHP_VERSION") || PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION !== getenv("PHP_RUNTIME")) { exit(1); }'
+
+COPY --from=mutation-tools /out /usr/local/lib/phpwarden/mutation
+COPY tools/mutation/sources.json /usr/local/lib/phpwarden/mutation/sources.json
+RUN if [ "$INFECTION_VERSION" != unsupported ]; then php /usr/local/lib/phpwarden/mutation/infection.phar --version; fi
 
 COPY --from=coverage-driver /out /usr/local/lib/phpwarden/pcov
 COPY tools/coverage/sources.json /usr/local/lib/phpwarden/pcov/sources.json
@@ -156,6 +169,7 @@ LABEL org.opencontainers.image.title="PHPWarden static worker" \
     org.opencontainers.image.version="${BUILD_VERSION}" \
     org.opencontainers.image.revision="${BUILD_COMMIT}" \
     org.opencontainers.image.source="https://github.com/rchehd/phpwarden" \
+    io.phpwarden.infection-version="${INFECTION_VERSION}" \
     io.phpwarden.pcov-version="1.0.12" \
     io.phpwarden.protocol="2" \
     io.phpwarden.toolset="${TOOLSET_ID}" \

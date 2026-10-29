@@ -1,7 +1,7 @@
 {
   "variable": {
     "PHPWARDEN_TOOLSET": {
-      "default": "static-dev-v29"
+      "default": "static-dev-v30"
     }
   }
 }

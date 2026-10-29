@@ -30,7 +30,18 @@ type Config struct {
 	Agents       Agents    `json:"agents"`
 	Updates      Updates   `json:"updates"`
 	Tests        Tests     `json:"tests"`
+	Mutation     Mutation  `json:"mutation"`
 	Tools        Tools     `json:"tools"`
+}
+
+type Mutation struct {
+	Config               string   `json:"config"`
+	TimeoutSeconds       int      `json:"timeout_seconds"`
+	Threads              *int     `json:"threads,omitempty"`
+	MutantTimeoutSeconds *int     `json:"mutant_timeout_seconds,omitempty"`
+	Mutators             []string `json:"mutators"`
+	MinMSI               *float64 `json:"min_msi,omitempty"`
+	MinCoveredMSI        *float64 `json:"min_covered_msi,omitempty"`
 }
 
 type Coverage struct {
@@ -491,6 +502,7 @@ func Parse(data []byte) (Effective, error) {
 			Runner:       Runner{Concurrency: 1, TimeoutSeconds: 300, ImagePull: "missing"},
 			Agents:       Agents{Completion: Completion{Enabled: true, MaxAttempts: 2, TimeoutSeconds: 300}},
 			Updates:      Updates{TimeoutSeconds: 120, MaxAgeHours: 24, MaxStaleHours: 168},
+			Mutation:     Mutation{Config: "auto", TimeoutSeconds: 1800, Mutators: []string{}},
 			Tests:        Tests{Coverage: Coverage{Include: []string{}, Exclude: []string{}}, PHPUnit: "auto", Config: "auto", Paths: []string{}, TimeoutSeconds: 300},
 			Tools: Tools{PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
 				Includes: []string{}, BootstrapFiles: []string{}, ScanDirectories: []string{}, StubFiles: []string{}, Autoload: "auto",
@@ -553,6 +565,9 @@ func Parse(data []byte) (Effective, error) {
 			"tools.drupal-config.forbidden_keys": "profile_default", "tools.drupal-config.module_roots": "core_default",
 		},
 		Pending: []string{},
+	}
+	for _, field := range []string{"config", "timeout_seconds", "threads", "mutant_timeout_seconds", "mutators", "min_msi", "min_covered_msi"} {
+		result.Provenance["mutation."+field] = "core_default"
 	}
 	for _, field := range []string{"enabled", "include", "exclude", "min_line_coverage", "max_crap"} {
 		result.Provenance["tests.coverage."+field] = "core_default"
@@ -736,6 +751,17 @@ func markProvenance(values map[string]any, prefix string, sources map[string]str
 }
 
 func validateValues(cfg Config) error {
+	if cfg.Mutation.Config != "auto" {
+		if err := projectpath.Validate(cfg.Mutation.Config); err != nil {
+			return fmt.Errorf("mutation.config: %w", err)
+		}
+	}
+	for _, name := range cfg.Mutation.Mutators {
+		if strings.ContainsAny(name, "\x00\r\n ,") {
+			return fmt.Errorf("mutation.mutators must contain individual mutator/profile names")
+		}
+	}
+
 	for _, name := range append(slices.Clone(cfg.Tests.Coverage.Include), cfg.Tests.Coverage.Exclude...) {
 		if err := projectpath.Validate(name); err != nil {
 			return fmt.Errorf("tests.coverage: %w", err)

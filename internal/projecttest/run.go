@@ -17,6 +17,7 @@ import (
 )
 
 type Report struct {
+	Mutation       *MutationReport `json:"mutation,omitempty"`
 	Coverage       *CoverageReport `json:"coverage,omitempty"`
 	Version        int             `json:"version"`
 	Command        string          `json:"command"`
@@ -43,6 +44,9 @@ func Invalid(message string, code int) Report {
 
 func Run(ctx context.Context, plan Plan, output string, execute Execute) (result Report) {
 	result = Report{Version: 1, Command: "test", Status: "error", ExitCode: 3, Plan: &plan, Cases: []Case{}, Diagnostics: []string{}}
+	if plan.Mutation != nil {
+		result.Command = "mutation"
+	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(plan.TimeoutSeconds)*time.Second)
 	defer cancel()
 	directory, err := artifacts(output)
@@ -96,6 +100,16 @@ func Run(ctx context.Context, plan Plan, output string, execute Execute) (result
 		return fail(fmt.Errorf("project PHPUnit could not start with the selected PHP runtime; inspect phpunit-version.stdout/stderr and install compatible locked dev dependencies"))
 	}
 	result.PHPUnitVersion = string(version[1])
+	if plan.Mutation != nil {
+		probe := execute(ctx, checkout, directory, []string{infectionExecutable, "--version"})
+		if err := saveLog(directory, "infection-version", probe); err != nil {
+			return fail(err)
+		}
+		if probe.ExitCode != 0 || probe.Err != nil || !strings.Contains(string(probe.Stdout), "Infection") || !strings.Contains(string(probe.Stdout), InfectionVersion) {
+			return fail(fmt.Errorf("pinned Infection runtime is unavailable; inspect infection-version.stdout/stderr"))
+		}
+	}
+
 	configuration := plan.Config
 	paths := plan.Paths
 	if plan.Coverage.Enabled {
@@ -199,6 +213,14 @@ func Run(ctx context.Context, plan Plan, output string, execute Execute) (result
 			result.Diagnostics = append(result.Diagnostics, "PHPUnit executed no tests; check paths, testsuite and filter.")
 		} else {
 			result.Diagnostics = append(result.Diagnostics, "All selected tests were skipped.")
+		}
+	}
+	if plan.Mutation != nil {
+		if result.Complete && result.ExitCode == 0 {
+			runMutation(ctx, plan, configuration, checkout, directory, execute, &result)
+		} else {
+			result.Complete = false
+			result.Diagnostics = append(result.Diagnostics, "Initial tests or coverage did not pass; no mutations were started.")
 		}
 	}
 	return result

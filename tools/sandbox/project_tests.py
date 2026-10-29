@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 from tools.sandbox.assertions import tree_snapshot
 
 
-def project_tests(sandbox):
+def prepare_unit_project(sandbox):
     sandbox.stage("checking PHPUnit on a private Drupal project with locked dev dependencies")
     root = sandbox.root / "unit-project"
     shutil.copytree(
@@ -61,6 +61,11 @@ def project_tests(sandbox):
         sandbox.repository / "tools/sandbox/unit-fixture/UncoveredProbe.php",
         root / "web/modules/custom/phpwarden_probe/src/UncoveredProbe.php",
     )
+    return root, test
+
+
+def project_tests(sandbox):
+    root, test = prepare_unit_project(sandbox)
     original = test.read_bytes()
     before = tree_snapshot(root)
     baseline = sandbox.git_status()

@@ -15,20 +15,26 @@ import (
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/projectpath"
+	"github.com/rchehd/phpwarden/internal/scope"
 )
 
 var ErrUnavailable = errors.New("test prerequisites unavailable")
 
 type Options struct {
-	Coverage bool
-	Config   string
-	Paths    []string
-	Suite    string
-	Filter   string
-	Output   string
+	MutationScopeOptions scope.Options
+	Mutation             bool
+	MutationConfig       string
+	MutationScope        scope.Selection
+	Coverage             bool
+	Config               string
+	Paths                []string
+	Suite                string
+	Filter               string
+	Output               string
 }
 
 type Plan struct {
+	Mutation                   *MutationPlan   `json:"mutation,omitempty"`
 	Coverage                   config.Coverage `json:"coverage"`
 	CoverageExtensions         []string        `json:"coverage_extensions,omitempty"`
 	CoverageExcludeDirectories []string        `json:"coverage_exclude_directories,omitempty"`
@@ -46,7 +52,7 @@ func Build(ctx context.Context, root string, effective config.Effective, options
 	cfg := effective.Config
 	plan := Plan{Coverage: cfg.Tests.Coverage, Root: root, ComposerRoot: cfg.ComposerRoot, Executable: cfg.Tests.PHPUnit, Config: cfg.Tests.Config,
 		Paths: slices.Clone(cfg.Tests.Paths), Suite: cfg.Tests.Suite, Filter: options.Filter, TimeoutSeconds: cfg.Tests.TimeoutSeconds}
-	if options.Coverage {
+	if options.Coverage || options.Mutation {
 		plan.Coverage.Enabled = true
 	}
 	if options.Config != "" {
@@ -202,6 +208,15 @@ func Build(ctx context.Context, root string, effective config.Effective, options
 				return plan, err
 			}
 		}
+	}
+	if options.Mutation {
+		mutation, err := buildMutation(ctx, root, effective, options.MutationScope, options.MutationConfig)
+		if err != nil {
+			return plan, err
+		}
+		plan.Mutation = mutation
+		plan.Coverage.MinLineCoverage, plan.Coverage.MaxCRAP = nil, nil
+		plan.TimeoutSeconds = effective.Config.Mutation.TimeoutSeconds
 	}
 	return plan, nil
 }

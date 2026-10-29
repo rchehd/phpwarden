@@ -584,7 +584,79 @@ not branch/path coverage.
 Artifacts include `coverage/html/index.html`, native `coverage/xml/`, `clover.xml`
 and `crap4j.xml` under `coverage/`, alongside JUnit and `report.json`. Text shows the
 ten highest method CRAP scores; JSON retains every method and full totals.
-Infection remains a planned, separate opt-in mode.
+Infection runs through the separate opt-in `mutation` command below.
+
+## Mutation testing
+
+`phpwarden mutation` uses the worker's pinned Infection 0.35.8 with the project's
+installed PHPUnit. It supports PHP 8.3/8.4, initially targeting custom unit tests;
+PHP 8.1/8.2 are rejected without substituting another PHP runtime. It runs only
+when explicitly requested, outside static `check`, pre-commit and agent completion
+hooks. Matching worker images are required (development toolset v30).
+
+```sh
+phpwarden mutation
+phpwarden mutation web/modules/custom/my_module/src
+phpwarden mutation --commits 2
+phpwarden mutation --base origin/main --whole-files
+phpwarden mutation --infection-config infection.json5 --format=json
+```
+
+Source scope defaults to **full**, using the resolved `scope.include` and
+`scope.exclude`. Explicit paths are relative to the caller. `--mode diff`,
+`--base`, `--commits` and `--whole-files` use the same Git selection as static
+checks. This first integration mutates `.php` source files and excludes profile
+test directories, initially targeting PHP class methods. Procedural free functions
+are not assessed by the pinned Infection traversal; a zero-mutation result remains
+incomplete. `tests.*`, `--testsuite` and `--filter` select tests independently.
+
+The command runs initial tests and fresh coverage, then starts Infection only if
+both pass. Coverage from another run is never reused. Everything runs in the same
+private project copy, without network or original project mounts. Diff runs build
+a private Git base from the selected source revisions; original Git metadata and
+host Git configuration are not passed to Infection.
+
+```yaml
+mutation:
+  config: auto
+  timeout_seconds: 1800
+  threads: 2
+  mutant_timeout_seconds: 10
+  mutators: ['@default']
+  min_msi: 80
+  min_covered_msi: 90
+```
+
+Defaults select automatic config discovery and a 1800-second overall timeout;
+the mutator override list remains empty.
+Without overrides, native threads/timeout/mutators are preserved; absent native
+settings use one thread, ten seconds per mutant and `@default`. Explicit
+`mutation.mutators` replaces native mutator selection; per-mutator ignores and
+advanced options belong in the native file. MSI thresholds are advisory unless
+configured; `.phpwarden.yaml` thresholds override native `minMsi`/`minCoveredMsi`.
+
+`auto` discovers `infection.json5`, `infection.json`, then their `.dist` variants
+at `composer_root`. Explicit native config paths start at the project root; native
+source paths remain relative to that config's directory. Source excludes, mutator
+profiles/ignores and bootstrap are retained. PHPWarden supplies PHPUnit selection,
+artifact paths and a private temporary directory. Other test frameworks, raw
+framework arguments, initial PHP flags and Infection static-analysis integrations
+are currently rejected with a setup diagnostic; use `tests.*` for test selection.
+
+Artifacts include `infection.json`, `infection.html`, fresh coverage/JUnit, native
+stdout/stderr and the combined `report.json`. JSON preserves every mutant with its
+source, changed code, diff and test output; text shows totals, MSI and up to ten
+escaped mutants. MSI is a mutation score, distinct from line coverage and CRAP.
+
+Exit 0 means a complete assessment with no failed threshold, even if advisory
+escaped or uncovered mutants remain. Exit 1 means initial tests or an MSI threshold
+failed. Missing/invalid reports, no assessed mutations, skipped mutants, execution
+errors and timeouts return incomplete exit 3. A covered-MSI gate with no covered
+mutations is incomplete. Source changes during execution invalidate the result.
+
+The manual **Mutation tests** Actions workflow runs separate Drupal 10/11 × PHP
+8.3/8.4 scenarios after Checks. It builds matching workers and locked unit fixtures
+without starting an application or database, and uploads only reports/logs.
 
 ## Analyzer concurrency
 

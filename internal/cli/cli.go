@@ -41,6 +41,7 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
        phpwarden check [PATH...] [options]
        phpwarden fix [PATH...] [options]
        phpwarden test [PATH...] [--testsuite NAME] [--filter PATTERN] [--output DIR] [options]
+       phpwarden mutation [PATH...] [--mode full|diff] [--commits N] [options]
        phpwarden worker check [PATH...] [options]
        phpwarden container <init|check|fix|config|scope|resolve|hook pre-commit> [options]
        phpwarden hook pre-commit [--project PATH]
@@ -159,8 +160,8 @@ func RunContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 }
 
 func runContext(ctx context.Context, arguments []string, cwd string, stdin io.Reader, stdout, stderr io.Writer, native bool) int {
-	if len(arguments) > 0 && arguments[0] == "test" {
-		return testCLI(ctx, arguments[1:], cwd, stdout, stderr)
+	if len(arguments) > 0 && (arguments[0] == "test" || arguments[0] == "mutation") {
+		return testCLI(ctx, arguments[1:], cwd, stdout, stderr, arguments[0] == "mutation")
 	}
 	if len(arguments) > 0 && arguments[0] == "--licenses" {
 		data := legal.Notices

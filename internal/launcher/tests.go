@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"reflect"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/progress"
 	"github.com/rchehd/phpwarden/internal/projecttest"
 	"github.com/rchehd/phpwarden/internal/runner"
+	"github.com/rchehd/phpwarden/internal/scope"
 	"github.com/rchehd/phpwarden/internal/toolset"
 )
 
@@ -58,9 +60,27 @@ func Test(ctx context.Context, location config.Location, effective config.Effect
 	if err := discovery.Unchanged(location, effective); err != nil {
 		return failed(err)
 	}
+	if options.Mutation {
+		current, err := scope.Build(ctx, options.MutationScopeOptions)
+		if err != nil || !reflect.DeepEqual(current, options.MutationScope) {
+			return failed(fmt.Errorf("mutation scope changed before execution; run mutation again"))
+		}
+	}
 	result := projecttest.Run(ctx, plan, options.Output, func(ctx context.Context, checkout, artifacts string, args []string) runner.Result {
 		return runTests(ctx, process, image, plan.ComposerRoot, checkout, artifacts, args)
 	})
+	if options.Mutation && ctx.Err() == nil {
+		current, err := scope.Build(ctx, options.MutationScopeOptions)
+		if err != nil || !reflect.DeepEqual(current, options.MutationScope) {
+			result.Complete, result.Status, result.ExitCode = false, "error", 3
+			result.Diagnostics = append(result.Diagnostics, "Mutation scope changed during execution; run mutation again.")
+			if result.Artifacts != "" {
+				if err := projecttest.Save(result); err != nil {
+					result.Diagnostics = append(result.Diagnostics, err.Error())
+				}
+			}
+		}
+	}
 	if err := discovery.Unchanged(location, effective); err != nil {
 		result.Complete, result.Status, result.ExitCode = false, "error", 3
 		result.Diagnostics = append(result.Diagnostics, err.Error())

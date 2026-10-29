@@ -10,6 +10,15 @@
     "php"
   ],
   "properties": {
+    "mutation": {"type": "object", "additionalProperties": false, "properties": {
+      "config": {"type": "string", "minLength": 1, "default": "auto"},
+      "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 7200, "default": 1800},
+      "threads": {"type": "integer", "minimum": 1, "maximum": 64},
+      "mutant_timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 600},
+      "mutators": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true, "default": []},
+      "min_msi": {"type": "number", "minimum": 0, "maximum": 100},
+      "min_covered_msi": {"type": "number", "minimum": 0, "maximum": 100}
+    }},
     "tests": {
       "type": "object",
       "additionalProperties": false,

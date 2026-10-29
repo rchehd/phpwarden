@@ -3,8 +3,10 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/rchehd/phpwarden/internal/scope"
 	"io"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	buildinfo "github.com/rchehd/phpwarden"
@@ -37,7 +39,34 @@ Coverage thresholds: tests.coverage.min_line_coverage / max_crap (optional).
 Exit: 0 passed; 1 failed tests or coverage thresholds; 2 input/setup selection; 3 incomplete run; 130 interrupted.
 `
 
-func testCLI(ctx context.Context, arguments []string, cwd string, stdout, stderr io.Writer) int {
+const mutationUsage = `Usage: phpwarden mutation [SOURCE_PATH...] [options]
+
+  --project DIR           Project root
+  --config FILE           PHPWarden config, relative to caller
+  --infection-config FILE Native Infection JSON/JSON5, relative to project root
+  --phpunit-config FILE   Native PHPUnit XML, relative to project root
+  --testsuite NAME        Select a native PHPUnit suite
+  --filter PATTERN        PHPUnit test-name filter
+  --mode full|diff        Source scope (default: full)
+  --base REF              Diff base
+  --commits N             Last N commits and local edits; implies diff
+  --whole-files           Mutate whole selected diff files
+  --output DIR            New artifact directory, relative to caller
+  --format text|json      Output format
+  --help                  Show help
+
+Uses the project's installed PHPUnit and the pinned Infection in the PHP worker.
+PHP 8.3/8.4 only. Initial tests and fresh coverage must pass before mutation testing.
+Test selection uses tests.*; SOURCE_PATHs select source to mutate, relative to caller.
+Runs in a private copy without network access or original project mounts.
+Configure mutation.config, threads, mutant_timeout_seconds, timeout_seconds,
+mutators, min_msi and min_covered_msi in .phpwarden.yaml. Thresholds are opt-in.
+Artifacts: test/coverage reports, infection.json, infection.html and raw logs.
+Exit: 0 assessed; 1 initial tests or MSI gate failed; 2 invalid input;
+3 incomplete (including no assessed mutations, runtime errors or timeouts); 130 interrupted.
+`
+
+func testCLI(ctx context.Context, arguments []string, cwd string, stdout, stderr io.Writer, mutating bool) int {
 	format := "text"
 	for i, arg := range arguments {
 		if arg == "--format=json" || arg == "--format" && i+1 < len(arguments) && arguments[i+1] == "json" {
@@ -45,6 +74,9 @@ func testCLI(ctx context.Context, arguments []string, cwd string, stdout, stderr
 		}
 	}
 	write := func(result projecttest.Report) int {
+		if mutating {
+			result.Command = "mutation"
+		}
 		if format == "json" {
 			if err := writeJSON(stdout, result); err != nil {
 				fmt.Fprintln(stderr, "Could not write test report.")
@@ -56,14 +88,20 @@ func testCLI(ctx context.Context, arguments []string, cwd string, stdout, stderr
 		return result.ExitCode
 	}
 	invalid := func(message string) int { return write(projecttest.Invalid(message, 2)) }
-	options := projecttest.Options{}
+	scopeArgs := options{}
+	options := projecttest.Options{Mutation: mutating}
+	sourcePaths := []string{}
 	locationOptions := config.LocationOptions{CWD: cwd}
 	seen := map[string]bool{}
 	positional := false
 	for i := 0; i < len(arguments); i++ {
 		arg := arguments[i]
 		if arg == "--help" || arg == "-h" {
-			fmt.Fprint(stdout, testUsage)
+			if mutating {
+				fmt.Fprint(stdout, mutationUsage)
+			} else {
+				fmt.Fprint(stdout, testUsage)
+			}
 			return 0
 		}
 		if arg == "--" && !positional {
@@ -71,7 +109,11 @@ func testCLI(ctx context.Context, arguments []string, cwd string, stdout, stderr
 			continue
 		}
 		if !strings.HasPrefix(arg, "-") || positional {
-			options.Paths = append(options.Paths, arg)
+			if mutating {
+				sourcePaths = append(sourcePaths, arg)
+			} else {
+				options.Paths = append(options.Paths, arg)
+			}
 			continue
 		}
 		name, value, inline := strings.Cut(arg, "=")
@@ -79,6 +121,16 @@ func testCLI(ctx context.Context, arguments []string, cwd string, stdout, stderr
 			return invalid("Duplicate test option: " + name)
 		}
 		seen[name] = true
+		if mutating && name == "--whole-files" {
+			if inline {
+				return invalid("--whole-files does not accept a value")
+			}
+			scopeArgs.wholeFiles = true
+			continue
+		}
+		if !mutating && (name == "--mode" || name == "--base" || name == "--commits" || name == "--infection-config") {
+			return invalid("Unknown test option: " + name)
+		}
 		if name == "--coverage" {
 			if inline {
 				return invalid("--coverage does not accept a value")
@@ -97,6 +149,21 @@ func testCLI(ctx context.Context, arguments []string, cwd string, stdout, stderr
 			return invalid("Test option requires a nonempty single-line value: " + name)
 		}
 		switch name {
+		case "--infection-config":
+			options.MutationConfig = value
+		case "--mode":
+			if value != "diff" && value != "full" {
+				return invalid("mutation mode must be full or diff")
+			}
+			scopeArgs.mode = value
+		case "--base":
+			scopeArgs.base = value
+		case "--commits":
+			count, err := strconv.Atoi(value)
+			if err != nil || count < 1 || count > 1000 {
+				return invalid("--commits must be between 1 and 1000")
+			}
+			scopeArgs.commits = count
 		case "--project":
 			locationOptions.Project = value
 		case "--config":
@@ -139,6 +206,23 @@ func testCLI(ctx context.Context, arguments []string, cwd string, stdout, stderr
 	if err != nil {
 		return invalid(err.Error())
 	}
+	if mutating {
+		scopeArgs.command = append([]string{"mutation"}, sourcePaths...)
+		cfg := effective.Config
+		cfg.Scope.Mode = "full"
+		if scopeArgs.commits > 0 || scopeArgs.base != "" || scopeArgs.wholeFiles {
+			cfg.Scope.Mode = "diff"
+		}
+		selectionOptions, err := scopeOptions(scopeArgs, cwd, location, cfg)
+		if err != nil {
+			return invalid(err.Error())
+		}
+		options.MutationScopeOptions = selectionOptions
+		options.MutationScope, err = scope.Build(ctx, selectionOptions)
+		if err != nil {
+			return invalid(err.Error())
+		}
+	}
 	ctx, display := startProgress(ctx, format, stdout, stderr)
 	defer display.Stop()
 	result := launcher.Test(ctx, location, effective, options, runner.Exec{})
@@ -147,7 +231,11 @@ func testCLI(ctx context.Context, arguments []string, cwd string, stdout, stderr
 }
 
 func writeTests(output io.Writer, result projecttest.Report) {
-	fmt.Fprintf(output, "PHPWarden · project tests · %s\n", result.Status)
+	label := "project tests"
+	if result.Command == "mutation" {
+		label = "mutation testing"
+	}
+	fmt.Fprintf(output, "PHPWarden · %s · %s\n", label, result.Status)
 	if result.PHPUnitVersion != "" {
 		fmt.Fprintf(output, "PHPUnit %s · %d tests · %d assertions · %d failures · %d errors · %d skipped\n", result.PHPUnitVersion, result.Counts.Tests, result.Counts.Assertions, result.Counts.Failures, result.Counts.Errors, result.Counts.Skipped)
 	}
@@ -160,6 +248,18 @@ func writeTests(output io.Writer, result projecttest.Report) {
 				break
 			}
 			fmt.Fprintf(output, "  CRAP %.2f · complexity %d · %.2f%% lines · %s::%s\n    %s:%d\n", method.CRAP, method.Complexity, method.LinePercent, method.Class, method.Name, method.File, method.Line)
+		}
+	}
+	if result.Mutation != nil {
+		m := result.Mutation
+		fmt.Fprintf(output, "\nMutations: %d · MSI %.2f%% · covered MSI %.2f%%\n", m.Stats.Total, m.Stats.MSI, m.Stats.CoveredMSI)
+		fmt.Fprintf(output, "  %d killed · %d escaped · %d not covered · %d errors · %d syntax errors · %d timeouts · %d skipped · %d ignored\n", m.Stats.Killed, m.Stats.Escaped, m.Stats.Uncovered, m.Stats.Errors, m.Stats.SyntaxErrors, m.Stats.Timeouts, m.Stats.Skipped, m.Stats.Ignored)
+		for i, row := range m.Escaped {
+			if i == 10 {
+				fmt.Fprintf(output, "  … %d more escaped mutants in report.json.\n", len(m.Escaped)-i)
+				break
+			}
+			fmt.Fprintf(output, "\n  ! %s · %s:%d\n%s\n", row.Mutator.Name, strings.TrimPrefix(row.Mutator.File, "/workspace/"), row.Mutator.Line, row.Diff)
 		}
 	}
 	shown, total := 0, 0

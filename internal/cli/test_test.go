@@ -32,3 +32,24 @@ func TestProjectTestHelpAndInvalidArguments(t *testing.T) {
 		}
 	}
 }
+
+func TestMutationHelpAndInvalidArguments(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := RunContext(context.Background(), []string{"mutation", "--help"}, t.TempDir(), strings.NewReader(""), &stdout, &stderr); code != 0 || !strings.Contains(stdout.String(), "--infection-config") {
+		t.Fatalf("%d %s", code, stdout.String())
+	}
+	for _, args := range [][]string{
+		{"mutation", "--format=json", "--mode=unknown"},
+		{"mutation", "--format=json", "--commits=0"},
+		{"mutation", "--format=json", "--whole-files=true"},
+		{"mutation", "--format=json", "--project=/missing"},
+	} {
+		stdout.Reset()
+		stderr.Reset()
+		code := RunContext(context.Background(), args, t.TempDir(), strings.NewReader(""), &stdout, &stderr)
+		var result projecttest.Report
+		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil || code != 2 || result.Command != "mutation" || result.Complete {
+			t.Fatalf("%v: %d %s", args, code, stdout.String())
+		}
+	}
+}

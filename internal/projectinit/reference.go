@@ -80,6 +80,10 @@ func configurationReference(cfg config.Config) ([]byte, error) {
 	if err := writeSection("  ", configurationFields(cfg.Updates), nil); err != nil {
 		return nil, err
 	}
+	output.WriteString("\n# mutation:\n\n")
+	if err := writeSection("  ", configurationFields(cfg.Mutation), nil); err != nil {
+		return nil, err
+	}
 	output.WriteString("\n# tests:\n\n")
 	testFields := []setting{}
 	for _, field := range configurationFields(cfg.Tests) {
@@ -152,6 +156,16 @@ func configurationFields(value any) []setting {
 			field = reflect.MakeSlice(field.Type(), 0, 0)
 		}
 		item := field.Interface()
+		if field.Kind() == reflect.Pointer && field.IsNil() {
+			switch name {
+			case "threads":
+				item = 1
+			case "mutant_timeout_seconds":
+				item = 10
+			case "min_msi", "min_covered_msi":
+				item = 80
+			}
+		}
 		if name == "min_line_coverage" && field.IsNil() {
 			item = 80
 		}

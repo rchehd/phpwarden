@@ -329,3 +329,9 @@ Composer updates. The official release pages document the pinned
 The `project-tests` case also checks PCOV line coverage and method CRAP on the
 locked PHPUnit 9/11 fixtures, union across two test files, HTML/XML artifacts,
 and opt-in thresholds without modifying the original project.
+
+The separate, manual `Mutation tests` workflow runs isolated unit mutation cases
+on Drupal 10/11 and PHP 8.3/8.4, without installing a site or starting its database.
+It uses `python3 -m tools.sandbox.mutation --help`. The harness checks strong/weak
+tests, MSI gates, uncovered code, native JSON5 profiles, source exclusions, diff
+versus whole files, initial failures, zero mutations and per-mutant timeouts.
