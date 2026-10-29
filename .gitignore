@@ -22,3 +22,4 @@ __pycache__/
 /tools/composer-require-checker/php*/vendor/
 /tools/composer-unused/vendor/
 /tools/parallel-lint/vendor/
+/tools/psalm-spike/upstream/vendor/

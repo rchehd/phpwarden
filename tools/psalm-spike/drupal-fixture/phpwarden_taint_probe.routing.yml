@@ -1,0 +1,54 @@
+phpwarden_taint_probe.trusted:
+  path: /phpwarden-taint/trusted
+  defaults:
+    _controller: '\Drupal\phpwarden_taint_probe\Controller\ProbeController::trusted'
+  requirements:
+    _access: 'TRUE'
+phpwarden_taint_probe.escaped:
+  path: /phpwarden-taint/escaped
+  defaults:
+    _controller: '\Drupal\phpwarden_taint_probe\Controller\ProbeController::escaped'
+  requirements:
+    _access: 'TRUE'
+phpwarden_taint_probe.plain:
+  path: /phpwarden-taint/plain
+  defaults:
+    _controller: '\Drupal\phpwarden_taint_probe\Controller\ProbeController::plain'
+  requirements:
+    _access: 'TRUE'
+phpwarden_taint_probe.template:
+  path: /phpwarden-taint/template
+  defaults:
+    _controller: '\Drupal\phpwarden_taint_probe\Controller\ProbeController::template'
+  requirements:
+    _access: 'TRUE'
+phpwarden_taint_probe.filtered:
+  path: /phpwarden-taint/filtered
+  defaults:
+    _controller: '\Drupal\phpwarden_taint_probe\Controller\ProbeController::filtered'
+  requirements:
+    _access: 'TRUE'
+phpwarden_taint_probe.parameter:
+  path: /phpwarden-taint/value/{name}
+  defaults:
+    _controller: '\Drupal\phpwarden_taint_probe\Controller\ProbeController::routeValue'
+  requirements:
+    _access: 'TRUE'
+phpwarden_taint_probe.query:
+  path: /phpwarden-taint/query
+  defaults:
+    _controller: '\Drupal\phpwarden_taint_probe\Controller\ProbeController::query'
+  requirements:
+    _access: 'TRUE'
+phpwarden_taint_probe.bound:
+  path: /phpwarden-taint/bound
+  defaults:
+    _controller: '\Drupal\phpwarden_taint_probe\Controller\ProbeController::bound'
+  requirements:
+    _access: 'TRUE'
+phpwarden_taint_probe.form:
+  path: /phpwarden-taint/form
+  defaults:
+    _form: '\Drupal\phpwarden_taint_probe\Form\ProbeForm'
+  requirements:
+    _access: 'TRUE'

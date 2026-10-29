@@ -46,6 +46,8 @@ python3 tools/psalm-spike/compare.py \
 
 ## Drupal integration decision
 
+The follow-up [real Drupal compatibility experiment](DRUPAL.md) tests the pinned upstream plugin on Drupal 10/11 without an installed site or database. It identifies additional bootstrap, service typing, entrypoint and completeness gaps. The small doubles above do not establish production readiness.
+
 Psalm is worth a separate opt-in security integration. Keep it advisory initially, with full-graph analysis and its own native configuration/baseline. Do not enable it by default on Drupal on the basis of these fixtures.
 
 Reuse and evaluate [mortenson/psalm-plugin-drupal](https://github.com/mortenson/psalm-plugin-drupal/tree/073e7a4d5fc159fbf47decf16296edd7f8a545d1), which already supplies Drupal source/sink/sanitizer stubs, render-array handling, module/theme discovery, service handling and an entrypoint generator. Its pinned revision requires Psalm `^6` and `psalm/plugin-symfony ^5.0`; its latest change mentions Drupal 11.1.6 tests. This does not establish compatibility with every supported Drupal/PHP combination. Check its broad file discovery, optional container XML handling and generated entrypoint coverage before bundling it. Route-derived entrypoints alone do not prove coverage of hooks, plugins, forms or queue workers.

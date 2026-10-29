@@ -1,0 +1,8 @@
+<?php
+
+use Drupal\Core\Render\Markup;
+use Drupal\phpwarden_taint_probe\InputHelper;
+
+function phpwarden_taint_probe_preprocess_html(array &$variables): void {
+  $variables['probe'] = Markup::create(InputHelper::name());
+}
