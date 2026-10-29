@@ -119,6 +119,9 @@ func configurationReference(cfg config.Config) ([]byte, error) {
 		if tool.name == "deptrac" {
 			output.WriteString("  # Skips without project rules; init --agents all installs the architecture skill.\n")
 		}
+		if tool.name == "psalm" {
+			output.WriteString("  # Opt-in taint analysis; requires a Psalm-capable PHP 8.3 worker.\n  # Include/exclude filter findings, while analysis retains the prepared graph.\n")
+		}
 		fmt.Fprintf(&output, "  %s:\n", tool.name)
 		fields := configurationFields(tool.value)
 		for j := range fields {

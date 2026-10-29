@@ -24,6 +24,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/checker/eventhorizon"
 	"github.com/rchehd/phpwarden/internal/checker/nodecheck"
 	"github.com/rchehd/phpwarden/internal/checker/packagecheck"
+	"github.com/rchehd/phpwarden/internal/checker/psalm"
 	"github.com/rchehd/phpwarden/internal/checker/rector"
 	"github.com/rchehd/phpwarden/internal/checker/semgrep"
 	"github.com/rchehd/phpwarden/internal/config"
@@ -70,6 +71,9 @@ func check(ctx context.Context, location config.Location, effective config.Effec
 			return failure("launcher_cancelled", ctx.Err())
 		}
 		return report.InputError("scope", err)
+	}
+	if psalm.InputRequired(effective.Config, selection, only) && !slices.Contains(selected.Capabilities, "psalm") {
+		return failure("checker_unavailable", fmt.Errorf("selected toolset %s does not include Psalm; install a Psalm-capable worker toolset (the current development images do not package it yet)", selected.ID))
 	}
 	audits := composeraudit.Delegated(config.ComposerDir(location.Root, effective.Config), auditSettings(effective.Config, only))
 	if len(selection.Files) == 0 && len(selection.ProjectFiles) == 0 && *audits.Check.Reason != "delegated" || !checker.AnyEnabled(effective.Config, only) {
@@ -389,6 +393,8 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 				required, failOn = request.Config.Tools.PHPMD.Required, request.Config.Tools.PHPMD.FailOn
 			} else if check.ID == "phpstan" {
 				required, failOn = request.Config.Tools.PHPStan.Required, request.Config.Tools.PHPStan.FailOn
+			} else if check.ID == "psalm" {
+				required, failOn = request.Config.Tools.Psalm.Required, request.Config.Tools.Psalm.FailOn
 			} else if check.ID == "twig-cs-fixer" {
 				required, failOn = request.Config.Tools.TwigCSFixer.Required, request.Config.Tools.TwigCSFixer.FailOn
 			} else if check.ID == "composer-validate" {
@@ -416,6 +422,12 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 		}
 		if !slices.Contains(checker.Requested(request.Only), finding.Checker) {
 			return result, fmt.Errorf("worker finding is outside the requested scope")
+		}
+		if finding.Checker == "psalm" {
+			if !psalm.InputRequired(request.Config, request.Selection, request.Only) || !psalm.ValidFinding(finding, request.Selection, request.Config) {
+				return result, fmt.Errorf("Psalm flow is invalid or outside the requested scope")
+			}
+			continue
 		}
 		if finding.Checker == "composer-require-checker" || finding.Checker == "composer-unused" {
 			prefix := fmt.Sprintf("Composer package %q: ", path.Join(packagecheck.Root(request.Config, finding.Checker), "composer.json"))

@@ -714,15 +714,16 @@ Use `phpwarden check --no-cache` to force live analysis. `--fix` always prepares
 
 ## Checkers
 
-All checkers except `composer-require-checker` and `composer-unused` are enabled by default in the Drupal profile. `composer-audit` is the only one that uses the network, and it is optional by default.
+All checkers except `composer-require-checker`, `composer-unused` and `psalm` are enabled by default in the Drupal profile. `composer-audit` is the only one that uses the network, and it is optional by default.
 
-These two checks require an explicit choice for the project:
+These checks require an explicit choice for the project:
 
 | Checker | Why it starts disabled |
 |---|---|
 | `composer-require-checker`, `composer-unused` | Inspect a whole standalone Composer package in full mode; Drupal installer layouts are unsupported |
+| `psalm` | Experimental taint analysis; requires a compatible worker bundle, currently validated on PHP 8.3 |
 
-Enable one with `tools.<id>.enabled: true`, or select it for a single run using `--only`. `disabled` means configuration turned a checker off; `no files` means it has no applicable files in the selected scope; `no config` means a required native rules file was not found. Enabling a checker does not widen the selected scope or bypass its prerequisites.
+Enable one with `tools.<id>.enabled: true`, or select it for a single run using `--only`. `disabled` means configuration turned a checker off; `no files` means it has no applicable files in the selected scope; `no config` means a required native rules file was not found. Checkers use that scope and their documented reporting policy; prerequisites still apply.
 
 | ID | Checks |
 |---|---|
@@ -742,6 +743,7 @@ Enable one with `tools.<id>.enabled: true`, or select it for a single run using 
 | `phpcs` | PHP_CodeSniffer with Drupal Coder (`Drupal`, `DrupalPractice`); PHPCompatibility on request |
 | `phpmd` | PHPMD: unused code and code size, reported as warnings |
 | `phpstan` | PHPStan with phpstan-drupal and deprecation rules |
+| `psalm` | Opt-in taint flows across custom PHP files; advisory, requires a Psalm-capable worker |
 | `composer-require-checker` | Undeclared symbols in standalone Composer packages; opt-in, full only |
 | `composer-unused` | Dependency removal candidates; opt-in, advisory, full only |
 | `deptrac` | Project-defined architecture layers and dependency rules; skips without config |
@@ -867,6 +869,35 @@ Project rules are added through a root/Composer-root `.semgrep.yml` or `.semgrep
 Defaults are `required: true`, `fail_on: error`, `timeout_seconds: 300`, `rule_timeout_seconds: 5`, and `memory_limit_mb: 1024`. Native ERROR/WARNING/INFO map to error/warning/info. Parse failures, skipped targets/rules, memory/time/fixpoint failures, or incomplete coverage make the checker incomplete; a successful process exit alone is insufficient. Inputs must be regular files without symlinks, at most 16 MiB each. Rules and baseline files are limited to 4 MiB each. Analysis runs on private copies and does not execute project PHP or write fixes. Rule text is used for messages; native source snippets, metavariable values, and traces are omitted from reports.
 
 Semgrep findings expose `fingerprint` in JSON. To accept existing findings, first collect fingerprints from an unsuppressed report into a local JSON file shaped as `{"version":1,"fingerprints":["<64 hex characters>"]}`, then set `tools.semgrep.baseline` to its project-relative path. Fingerprints use the rule ID, original path, matched bytes, and duplicate occurrence, so unrelated line shifts preserve suppression. A baseline suppresses findings only; it cannot suppress analyzer failures. Native and Docker fixtures cover the pinned core and bundled rules.
+
+### Psalm (integration in progress)
+
+`tools.psalm` accepts `enabled`, `required`, `fail_on`, `timeout_seconds`,
+`include`, `exclude` and `memory_limit_mb`. Defaults are disabled, required,
+advisory (`fail_on: never`), 300 seconds and 1536 MiB. The supported candidate
+runtime is PHP 8.3.16+ in the 8.3 series; another runtime is not selected implicitly.
+`init` exposes these settings and an optional checker selection; `--only psalm`
+selects it for one check.
+
+The current development images do not package Psalm yet. The launcher rejects
+an applicable Psalm request when the selected toolset lacks that capability,
+before starting a container. Worker integration can use the separately installed
+pinned development bundle; image packaging, notices, native config/baseline
+overrides and the remaining runtime matrix are separate gates. Existing workers
+must be rebuilt together with this CLI because its checker/config contract changed.
+
+Analysis uses the whole prepared graph within the configured source scope.
+Per-checker `include`/`exclude` narrow reportable flows without pruning that graph.
+A flow can be anchored outside those paths when it passes through an included
+source or intermediate file. The current profile analyzes production custom code;
+files under `tests` are inapplicable.
+A changed source, intermediate or sink file selects the complete flow, even if
+the changed lines differ from native trace locations. Consumed service, route,
+extension or Composer metadata selects affected report scope conservatively.
+JSON retains full traces; text shows a shorter chain, with `--all` for every detail.
+Syntax/readiness failures remain execution diagnostics rather than clean security
+results. Further model limits and reproduction steps are documented in
+[`tools/psalm/drupal/README.md`](tools/psalm/drupal/README.md).
 
 ### Gitleaks
 

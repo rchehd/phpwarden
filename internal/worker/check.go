@@ -22,6 +22,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/checker/phpcs"
 	"github.com/rchehd/phpwarden/internal/checker/phpmd"
 	"github.com/rchehd/phpwarden/internal/checker/phpstan"
+	"github.com/rchehd/phpwarden/internal/checker/psalm"
 	"github.com/rchehd/phpwarden/internal/checker/rector"
 	"github.com/rchehd/phpwarden/internal/checker/semgrep"
 	"github.com/rchehd/phpwarden/internal/checker/syntax"
@@ -35,6 +36,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/profile/drupal"
 	"github.com/rchehd/phpwarden/internal/progress"
 	"github.com/rchehd/phpwarden/internal/protocol"
+	"github.com/rchehd/phpwarden/internal/psalmanalysis"
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/runner"
 	"github.com/rchehd/phpwarden/internal/runrequest"
@@ -132,6 +134,12 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 				dependencies = *project.Installed.Error
 			}
 			outcome = phpstan.Run(ctx, location.Root, cfg.ComposerRoot, phpstan.Select(selection, settings, cfg.Profile), settings, cfg.PHP.Target, dependencies, process)
+		} else if id == "psalm" {
+			current := cfg
+			current.Tools.Psalm.Enabled = checker.Enabled(id, cfg.Tools.Psalm.Enabled, only)
+			outcome = psalm.Run(selection, current, func() psalmanalysis.Result {
+				return analyzePsalm(ctx, location, current, project, PsalmOptions{Bundle: psalm.Bundle(), PHP: "php", MemoryMB: current.Tools.Psalm.MemoryLimitMB}, process)
+			})
 		} else if id == "eslint" || id == "stylelint" || id == "jscpd" {
 			settings := nodecheck.Settings(cfg, id)
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)

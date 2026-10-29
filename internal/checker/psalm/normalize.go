@@ -46,6 +46,10 @@ type issue struct {
 }
 
 func Normalize(native psalmanalysis.Result, selection scope.Selection, policy Policy) checker.Outcome {
+	return normalize(native, selection, native.SourceFiles, policy)
+}
+
+func normalize(native psalmanalysis.Result, selection scope.Selection, eligible []string, policy Policy) checker.Outcome {
 	result := checker.Outcome{Check: report.Check{ID: "psalm", Status: "passed", Required: policy.Required, FailOn: policy.FailOn}, Findings: []report.Finding{}, Diagnostics: []report.Diagnostic{}}
 	fail := func(message string) checker.Outcome {
 		result.Check.Status, result.Check.Reason = "error", new("invalid_report")
@@ -117,7 +121,7 @@ func Normalize(native psalmanalysis.Result, selection scope.Selection, policy Po
 		}
 		finding.Path, finding.Line, finding.Column = anchor.Path, anchor.Line, anchor.Column
 		finding.Fingerprint = new(fingerprint(finding))
-		if Relevant(finding, selection, native.ContextFiles) {
+		if Relevant(finding, selection, native.ContextFiles) && Relevant(finding, scope.Selection{Files: eligible}, nil) {
 			result.Findings = append(result.Findings, finding)
 		}
 	}

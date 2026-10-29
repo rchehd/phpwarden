@@ -30,6 +30,7 @@ var initCheckDescriptions = map[string]string{
 	"phpcs":                    "PHP coding standards",
 	"phpmd":                    "PHP maintainability",
 	"phpstan":                  "PHP static analysis; needs Composer dependencies",
+	"psalm":                    "Opt-in taint analysis; requires a Psalm-capable PHP 8.3 worker",
 	"rector":                   "Drupal modernization; needs Composer dependencies",
 	"semgrep":                  "Security patterns",
 	"stylelint":                "Stylesheet standards; needs a project Stylelint config",

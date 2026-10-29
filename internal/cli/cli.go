@@ -88,7 +88,7 @@ Scope options:
   --whole-files        Include all lines of selected diff files
   --no-cache           Run public check without reusing a result cache
   --fix                Fix selected files with PHPCS/Twig CS Fixer, then check them again
-  --only ID[,ID...]    Select composer-audit, composer-require-checker, composer-unused, composer-validate, dead-code, debug, deptrac, drupal-config, eslint, eventhorizon, gitleaks, jscpd, phpcs, phpmd, phpstan, rector, semgrep, stylelint, syntax, twig-cs-fixer, whitespace, yaml; enable selected checkers
+  --only ID[,ID...]    Select composer-audit, composer-require-checker, composer-unused, composer-validate, dead-code, debug, deptrac, drupal-config, eslint, eventhorizon, gitleaks, jscpd, phpcs, phpmd, phpstan, psalm, rector, semgrep, stylelint, syntax, twig-cs-fixer, whitespace, yaml; enable selected checkers
 
 Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
 Check uses Docker worker images (Linux amd64, PHP runtime 8.1–8.4, target from 8.1 up to the runtime).
@@ -609,6 +609,13 @@ func scopeOptions(args options, cwd string, location config.Location, cfg config
 	projectFiles := make([]string, len(defaults.ProjectFiles))
 	for i, name := range defaults.ProjectFiles {
 		projectFiles[i] = path.Join(cfg.ComposerRoot, name)
+	}
+	only, err := checker.ParseOnly(args.only)
+	if err != nil {
+		return scope.Options{}, err
+	}
+	if checker.Enabled("psalm", cfg.Tools.Psalm.Enabled, only) {
+		projectFiles = append(projectFiles, filepath.Base(location.Path))
 	}
 	base, wholeFiles := "", false
 	if mode == "diff" {

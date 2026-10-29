@@ -108,6 +108,7 @@ type Runner struct {
 }
 
 type Tools struct {
+	Psalm                  Psalm                  `json:"psalm"`
 	ComposerRequireChecker ComposerRequireChecker `json:"composer-require-checker"`
 	ComposerUnused         ComposerUnused         `json:"composer-unused"`
 	Deptrac                Deptrac                `json:"deptrac"`
@@ -130,6 +131,16 @@ type Tools struct {
 	Syntax                 Syntax                 `json:"syntax"`
 	YAML                   YAML                   `json:"yaml"`
 	Whitespace             Whitespace             `json:"whitespace"`
+}
+
+type Psalm struct {
+	Enabled        bool     `json:"enabled"`
+	Required       bool     `json:"required"`
+	FailOn         string   `json:"fail_on"`
+	TimeoutSeconds int      `json:"timeout_seconds"`
+	Include        []string `json:"include,omitempty"`
+	Exclude        []string `json:"exclude"`
+	MemoryLimitMB  int      `json:"memory_limit_mb"`
 }
 
 type NodeLint struct {
@@ -504,7 +515,7 @@ func Parse(data []byte) (Effective, error) {
 			Updates:      Updates{TimeoutSeconds: 120, MaxAgeHours: 24, MaxStaleHours: 168},
 			Mutation:     Mutation{Config: "auto", TimeoutSeconds: 1800, Mutators: []string{}},
 			Tests:        Tests{Coverage: Coverage{Include: []string{}, Exclude: []string{}}, PHPUnit: "auto", Config: "auto", Paths: []string{}, TimeoutSeconds: 300},
-			Tools: Tools{PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
+			Tools: Tools{Psalm: Psalm{Required: true, FailOn: "never", TimeoutSeconds: 300, Exclude: []string{}, MemoryLimitMB: 1536}, PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
 				Includes: []string{}, BootstrapFiles: []string{}, ScanDirectories: []string{}, StubFiles: []string{}, Autoload: "auto",
 				Drupal: defaults.PHPStanDrupal, Deprecations: true, MemoryLimitMB: 512, ExtraExtensions: []string{}, StrictRules: StrictRules{All: true, Rules: map[string]bool{}}},
 				Gitleaks:               Gitleaks{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true, Rules: []string{}, ExtraInputs: []string{}},
@@ -649,6 +660,9 @@ func Parse(data []byte) (Effective, error) {
 	}
 	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "no_dev", "abandoned", "offline", "max_age_hours", "max_stale_hours", "ignore"} {
 		result.Provenance["tools.composer-audit."+field] = "core_default"
+	}
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "memory_limit_mb"} {
+		result.Provenance["tools.psalm."+field] = "core_default"
 	}
 	encoded, err := json.Marshal(input)
 	if err != nil {
@@ -803,7 +817,7 @@ func validateValues(cfg Config) error {
 	for _, values := range [][]string{cfg.Scope.Include, cfg.Tools.Debug.Include, cfg.Tools.Syntax.Include, cfg.Tools.YAML.Include, cfg.Tools.Whitespace.Include,
 		cfg.Tools.DrupalConfig.Include, cfg.Tools.DrupalConfig.Directories, cfg.Tools.DrupalConfig.ModuleRoots,
 		cfg.Tools.PHPCS.Include, cfg.Tools.PHPCS.StandardPaths, cfg.Tools.PHPCS.ExtraInputs,
-		cfg.Tools.PHPStan.Include, cfg.Tools.PHPStan.Includes, cfg.Tools.PHPStan.BootstrapFiles, cfg.Tools.PHPStan.ScanDirectories, cfg.Tools.PHPStan.StubFiles,
+		cfg.Tools.Psalm.Include, cfg.Tools.PHPStan.Include, cfg.Tools.PHPStan.Includes, cfg.Tools.PHPStan.BootstrapFiles, cfg.Tools.PHPStan.ScanDirectories, cfg.Tools.PHPStan.StubFiles,
 		cfg.Tools.TwigCSFixer.Include, cfg.Tools.TwigCSFixer.ExtraInputs, cfg.Tools.ComposerValidate.Include, cfg.Tools.PHPMD.Include, cfg.Tools.PHPMD.ExtraInputs, cfg.Tools.DeadCode.Include,
 		cfg.Tools.ESLint.Include, cfg.Tools.ESLint.ExtraInputs, cfg.Tools.Stylelint.Include, cfg.Tools.Stylelint.ExtraInputs, cfg.Tools.JSCPD.Include,
 		cfg.Tools.Gitleaks.Include, cfg.Tools.Gitleaks.ExtraInputs, cfg.Tools.EventHorizon.Include, cfg.Tools.EventHorizon.ConfigSync, cfg.Tools.Semgrep.Include, cfg.Tools.Semgrep.Rulesets, cfg.Tools.Semgrep.ExtraInputs, cfg.Tools.Rector.Include, cfg.Tools.Rector.Sets, cfg.Tools.Rector.ExtraInputs, cfg.Tools.Deptrac.Include, cfg.Tools.Deptrac.ExtraInputs, cfg.Tools.ComposerRequireChecker.ExtraInputs, cfg.Tools.ComposerRequireChecker.ScanFiles, cfg.Tools.ComposerUnused.ExtraInputs, cfg.Tools.ComposerUnused.ExcludeDirectories} {
@@ -872,7 +886,7 @@ func validateValues(cfg Config) error {
 	}
 	for _, values := range [][]string{cfg.Scope.Exclude, cfg.Tools.Debug.Exclude, cfg.Tools.Syntax.Exclude, cfg.Tools.YAML.Exclude,
 		cfg.Tools.Whitespace.Exclude, cfg.Tools.Whitespace.TrailingWhitespaceExclude, cfg.Tools.Whitespace.ConflictMarkersExclude, cfg.Tools.DrupalConfig.Exclude, cfg.Tools.PHPCS.Exclude, cfg.Tools.PHPStan.Exclude, cfg.Tools.TwigCSFixer.Exclude, cfg.Tools.ComposerValidate.Exclude,
-		cfg.Tools.ESLint.Exclude, cfg.Tools.Stylelint.Exclude, cfg.Tools.JSCPD.Exclude, cfg.Tools.Gitleaks.Exclude, cfg.Tools.EventHorizon.Exclude, cfg.Tools.Semgrep.Exclude, cfg.Tools.Rector.Exclude, cfg.Tools.Deptrac.Exclude} {
+		cfg.Tools.Psalm.Exclude, cfg.Tools.ESLint.Exclude, cfg.Tools.Stylelint.Exclude, cfg.Tools.JSCPD.Exclude, cfg.Tools.Gitleaks.Exclude, cfg.Tools.EventHorizon.Exclude, cfg.Tools.Semgrep.Exclude, cfg.Tools.Rector.Exclude, cfg.Tools.Deptrac.Exclude} {
 		if err := validatePatterns(values); err != nil {
 			return err
 		}

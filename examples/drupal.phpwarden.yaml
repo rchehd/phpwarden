@@ -122,6 +122,19 @@ tools:
     dry_run: true
     memory_limit_mb: 1024
     exclude: []
+  # Opt-in taint analysis; requires a Psalm-capable PHP 8.3 worker.
+  # Include/exclude filter findings, while analysis retains the prepared graph.
+  psalm:
+    enabled: false
+    required: true
+    fail_on: never
+    # timeout_seconds: 300
+
+    # include: ["web/modules/custom"]
+    # exclude: ["**/generated/**"]
+
+    # memory_limit_mb: 1536
+
   semgrep:
     enabled: true
     required: true

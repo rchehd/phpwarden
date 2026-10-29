@@ -4,8 +4,9 @@ The internal worker pipeline bridges PHPWarden's Drupal discovery facts to the
 pinned upstream Psalm plugins. Profile PHP assets live under
 [`internal/profile/drupal/psalm`](../../../internal/profile/drupal/psalm) and are
 embedded in the binary. The development harness supplies an isolated analyzer
-bundle. Public `check` registration, project settings and image packaging remain
-separate work.
+bundle. Psalm is registered as an opt-in checker with strict project settings.
+The launcher requires a declared Psalm toolset capability; current images do not
+package the bundle, so public dispatch remains gated on that packaging step.
 
 `prepare.php REQUEST.json EMPTY_OUTPUT_DIRECTORY [TOOL_VENDOR]` defaults to the
 isolated tool vendor at `/tool-vendor`. The request contains `root` (absolute repository
@@ -81,9 +82,10 @@ cannot produce `complete: true`. Private files are removed on every return path.
 
 The default returned object is internal validation evidence. The development
 worker also accepts `--format json` or `--format text` for a full-scan check report,
-with `--all` expanding text traces. Psalm remains outside public `check` until
-project settings, native config/baseline overrides and tool/image packaging pass
-their integration gates.
+with `--all` expanding text traces. Public `check --only psalm` and `tools.psalm`
+are registered, but the launcher rejects a toolset without the Psalm capability
+before Docker starts. Native config/baseline overrides, packaging and the remaining
+runtime matrix retain their separate integration gates.
 
 `internal/checker/psalm.Normalize` converts verified results to Security findings.
 The optional report v1 `trace` field keeps every ordered native label, snippet and
@@ -112,6 +114,35 @@ omission count. It shortens class names, reuses the primary file's heading for
 same-file locations and omits tool/generated file locations. `--all` shows every
 step with full labels and locations. JSON always includes the complete trace.
 The existing compact format keeps its one-line finding presentation.
+
+## Project settings and public lifecycle
+
+`init` exposes Psalm in its checker selection and generated reference. It is
+disabled by default, with `required: true`, `fail_on: never`,
+`timeout_seconds: 300`, `memory_limit_mb: 1536` and empty report filters.
+`include`/`exclude` filter the project files that can make a flow reportable;
+they do not remove helper files from the prepared graph. Metadata expansion is
+also constrained by these filters. A flow may be anchored outside an include
+path when it passes through an included source/intermediate file.
+
+The registry honors `--only`, disabled/no-files states and unsupported runtimes
+before native work starts. Registered worker checks use the same guarded native
+pipeline as `worker.AnalyzePsalm`; raw configuration and discovery freshness are
+covered by the outer worker request lifecycle. The launcher's matching-worker
+gate uses development toolset revision 31 for this changed config/checker contract;
+it does not advertise Psalm in image capabilities before the bundle is packaged.
+
+Run requests fingerprint project metadata plus PHP/YAML content in the full
+configured source graph, independent of per-checker report filters. Changes to
+an unselected helper or service file invalidate an old request even when size and
+mtime are preserved. Enabled Psalm bypasses the result cache. Composer and project
+configuration changes enter project-file scope; custom YAML source metadata can
+select flows through the normal shared Git scope.
+
+No native XML configuration or baseline field is exposed yet; unsupported fields
+are rejected instead of being accepted without effect. Missing dependencies,
+ordinary readiness diagnostics, timeouts and unsupported models remain incomplete
+execution results even with advisory findings.
 
 ## Acceptance
 

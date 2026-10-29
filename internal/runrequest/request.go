@@ -22,10 +22,12 @@ import (
 	"github.com/rchehd/phpwarden/internal/checker/phpcs"
 	"github.com/rchehd/phpwarden/internal/checker/phpmd"
 	"github.com/rchehd/phpwarden/internal/checker/phpstan"
+	"github.com/rchehd/phpwarden/internal/checker/psalm"
 	"github.com/rchehd/phpwarden/internal/checker/rector"
 	"github.com/rchehd/phpwarden/internal/checker/semgrep"
 	"github.com/rchehd/phpwarden/internal/checker/twigcsfixer"
 	"github.com/rchehd/phpwarden/internal/config"
+	"github.com/rchehd/phpwarden/internal/discovery"
 	"github.com/rchehd/phpwarden/internal/phpconstraint"
 	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/projectpath"
@@ -114,6 +116,9 @@ func (request Request) Validate() error {
 	}
 	if phpstan.InputRequired(request.Config, request.Selection, request.Only) {
 		keys = append(keys, "phpstan")
+	}
+	if psalm.InputRequired(request.Config, request.Selection, request.Only) {
+		keys = append(keys, "psalm")
 	}
 	if phpstan.DeadCodeInputRequired(request.Config, request.Selection, request.Only) {
 		keys = append(keys, "dead-code")
@@ -223,6 +228,20 @@ func Snapshot(location config.Location, selection scope.Selection, only []string
 	}
 	if phpstan.InputRequired(effective.Config, selection, only) {
 		result["phpstan"] = phpstan.ContextHash(location.Root)
+	}
+	if psalm.InputRequired(effective.Config, selection, only) {
+		resolved, err := discovery.Apply(location, effective)
+		if err != nil {
+			return nil, err
+		}
+		if len(resolved.Config.Scope.Include) == 0 {
+			return nil, fmt.Errorf("Psalm source roots are unresolved")
+		}
+		digest, err := psalm.ContextHash(location.Root, resolved.Config)
+		if err != nil {
+			return nil, err
+		}
+		result["psalm"] = digest
 	}
 	if phpstan.DeadCodeInputRequired(effective.Config, selection, only) {
 		result["dead-code"] = phpstan.ContextHash(location.Root)
