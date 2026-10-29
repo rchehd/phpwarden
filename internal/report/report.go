@@ -2,6 +2,7 @@ package report
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -60,15 +61,27 @@ type Check struct {
 }
 
 type Finding struct {
-	Fingerprint *string `json:"fingerprint,omitempty"`
-	Checker     string  `json:"checker"`
-	Rule        string  `json:"rule"`
-	Kind        string  `json:"kind"`
-	Severity    string  `json:"severity"`
-	Message     string  `json:"message"`
-	Path        *string `json:"path"`
-	Line        *int    `json:"line"`
-	Column      *int    `json:"column"`
+	Fingerprint *string     `json:"fingerprint,omitempty"`
+	Checker     string      `json:"checker"`
+	Rule        string      `json:"rule"`
+	Kind        string      `json:"kind"`
+	Severity    string      `json:"severity"`
+	Message     string      `json:"message"`
+	Path        *string     `json:"path"`
+	Line        *int        `json:"line"`
+	Column      *int        `json:"column"`
+	Trace       []TraceStep `json:"trace,omitempty"`
+}
+
+type TraceStep struct {
+	Label     string  `json:"label"`
+	Origin    string  `json:"origin"`
+	Path      *string `json:"path"`
+	Line      *int    `json:"line"`
+	Column    *int    `json:"column"`
+	EndLine   *int    `json:"end_line,omitempty"`
+	EndColumn *int    `json:"end_column,omitempty"`
+	Snippet   string  `json:"snippet,omitempty"`
 }
 
 type Diagnostic struct {
@@ -142,18 +155,29 @@ func (result *Report) Finalize() {
 		if a.Rule != b.Rule {
 			return a.Rule < b.Rule
 		}
-		return a.Message < b.Message
+		if a.Message != b.Message {
+			return a.Message < b.Message
+		}
+		return traceIdentity(a.Trace) < traceIdentity(b.Trace)
 	})
 	unique := result.Findings[:0]
 	seen := make(map[string]bool)
 	for _, finding := range result.Findings {
 		key := fmt.Sprintf("%q/%d/%d/%q/%q/%q/%q/%q", value(finding.Path), number(finding.Line), number(finding.Column), finding.Checker, finding.Rule, finding.Kind, finding.Severity, finding.Message)
+		if len(finding.Trace) > 0 {
+			key += "/" + traceIdentity(finding.Trace)
+		}
 		if !seen[key] {
 			seen[key] = true
 			unique = append(unique, finding)
 		}
 	}
 	result.Findings = unique
+}
+
+func traceIdentity(trace []TraceStep) string {
+	data, _ := json.Marshal(trace)
+	return string(data)
 }
 
 func value(input *string) string {

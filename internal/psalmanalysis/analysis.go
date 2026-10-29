@@ -36,12 +36,19 @@ type Phase struct {
 }
 
 type Result struct {
-	Complete    bool              `json:"complete"`
-	PHP         string            `json:"php_version,omitempty"`
-	Findings    []json.RawMessage `json:"findings"`
-	Readiness   []json.RawMessage `json:"readiness"`
-	Diagnostics []Diagnostic      `json:"diagnostics"`
-	Phases      []Phase           `json:"phases"`
+	Roots        Roots             `json:"-"`
+	SourceFiles  []string          `json:"-"`
+	ContextFiles []string          `json:"-"`
+	Complete     bool              `json:"complete"`
+	PHP          string            `json:"php_version,omitempty"`
+	Findings     []json.RawMessage `json:"findings"`
+	Readiness    []json.RawMessage `json:"readiness"`
+	Diagnostics  []Diagnostic      `json:"diagnostics"`
+	Phases       []Phase           `json:"phases"`
+}
+
+type Roots struct {
+	Project, Bundle, Generated string
 }
 
 type Prepared struct {
@@ -115,6 +122,14 @@ func Run(ctx context.Context, request Request, process runner.Process) (result R
 	if err != nil {
 		return fail("inputs", "input_read", err.Error())
 	}
+	bundleRoot, err := filepath.EvalSymlinks(request.Bundle)
+	if err != nil {
+		return fail("inputs", "input_read", err.Error())
+	}
+	bundleRoot, err = filepath.Abs(bundleRoot)
+	if err != nil {
+		return fail("inputs", "input_read", err.Error())
+	}
 	tempRoot, err := filepath.EvalSymlinks(os.TempDir())
 	if err != nil || inside(root, tempRoot) {
 		return fail("inputs", "workspace_invalid", "Private workspace must be outside the project")
@@ -128,6 +143,7 @@ func Run(ctx context.Context, request Request, process runner.Process) (result R
 			result = fail("cleanup", "cleanup_failed", err.Error())
 		}
 	}()
+	result.Roots = Roots{Project: root, Bundle: bundleRoot, Generated: temporary}
 	fresh := func(inputs map[string]string) error {
 		current, err := Snapshot(request.Root)
 		if err != nil || current != before {
@@ -193,6 +209,15 @@ func Run(ctx context.Context, request Request, process runner.Process) (result R
 	if len(prepared.Inputs) == 0 || len(prepared.Files) == 0 || !inside(temporary, prepared.Config) || !inside(temporary, prepared.Launcher) {
 		return fail("preparation", "invalid_report", "Profile returned invalid analysis inputs")
 	}
+	result.SourceFiles = slices.Clone(prepared.Files)
+	for name := range prepared.Inputs {
+		name = filepath.ToSlash(filepath.Clean(name))
+		if !slices.Contains(prepared.Files, name) {
+			result.ContextFiles = append(result.ContextFiles, name)
+		}
+	}
+	slices.Sort(result.ContextFiles)
+	result.ContextFiles = slices.Compact(result.ContextFiles)
 	files := []string{}
 	for _, name := range prepared.Files {
 		if _, err := Read(root, name); err != nil {

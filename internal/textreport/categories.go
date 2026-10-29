@@ -12,7 +12,7 @@ import (
 var categoryOrder = []string{"Security", "Code standards", "Correctness", "Dependencies", "Maintainability", "Drupal quality", "Architecture", "Upgrades", "Environment", "Other checks"}
 
 var checkerCategories = map[string]string{
-	"composer-audit": "Security", "gitleaks": "Security", "semgrep": "Security",
+	"composer-audit": "Security", "gitleaks": "Security", "semgrep": "Security", "psalm": "Security",
 	"phpcs": "Code standards", "eslint": "Code standards", "stylelint": "Code standards", "twig-cs-fixer": "Code standards", "whitespace": "Code standards",
 	"phpstan": "Correctness", "syntax": "Correctness", "yaml": "Correctness", "debug": "Correctness",
 	"composer-validate": "Dependencies", "composer-require-checker": "Dependencies", "composer-unused": "Dependencies",

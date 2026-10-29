@@ -88,6 +88,26 @@
     {"if": {"properties": {"exit_code": {"enum": [2, 3, 130]}}}, "then": {"properties": {"verdict": {"const": "error"}, "complete": {"const": false}}}}
   ],
   "$defs": {
+    "trace_step": {
+      "type": "object", "additionalProperties": false,
+      "required": ["label", "origin", "path", "line", "column"],
+      "properties": {
+        "label": {"type": "string", "minLength": 1},
+        "origin": {"enum": ["project", "tool", "generated", "symbol"]},
+        "path": {"type": ["string", "null"], "minLength": 1},
+        "line": {"type": ["integer", "null"], "minimum": 1},
+        "column": {"type": ["integer", "null"], "minimum": 1},
+        "end_line": {"type": "integer", "minimum": 1},
+        "end_column": {"type": "integer", "minimum": 1},
+        "snippet": {"type": "string"}
+      },
+      "if": {"properties": {"origin": {"const": "symbol"}}},
+      "then": {
+        "properties": {"path": {"type": "null"}, "line": {"type": "null"}, "column": {"type": "null"}},
+        "not": {"anyOf": [{"required": ["end_line"]}, {"required": ["end_column"]}]}
+      },
+      "else": {"properties": {"path": {"type": "string"}, "line": {"type": "integer"}}}
+    },
     "check": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "status", "required", "fail_on", "reason"],
@@ -106,6 +126,7 @@
       "properties": {
         "checker": {"type": "string", "minLength": 1}, "rule": {"type": "string", "minLength": 1},
         "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "trace": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/trace_step"}},
         "kind": {"enum": ["code", "syntax", "global"]}, "severity": {"enum": ["error", "warning", "info"]},
         "message": {"type": "string", "minLength": 1},
         "path": {"type": ["string", "null"]}, "line": {"type": ["integer", "null"]},

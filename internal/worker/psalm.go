@@ -2,6 +2,8 @@ package worker
 
 import (
 	"context"
+	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/rchehd/phpwarden/internal/config"
@@ -42,6 +44,11 @@ func AnalyzePsalm(ctx context.Context, location config.Location, effective confi
 		},
 	}
 	result := psalmanalysis.Run(ctx, request, process)
+	if name, err := filepath.Rel(location.Root, location.Path); err == nil && location.Path != "" {
+		result.ContextFiles = append(result.ContextFiles, filepath.ToSlash(name))
+		slices.Sort(result.ContextFiles)
+		result.ContextFiles = slices.Compact(result.ContextFiles)
+	}
 	current, err = config.Load(location)
 	if err != nil || current.SourceHash != effective.SourceHash {
 		result.Complete, result.Findings = false, nil

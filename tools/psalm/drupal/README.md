@@ -79,10 +79,39 @@ full JSON and traces. Invalid exits, partial reports, missing sources, malformed
 trace locations, process failures, cancellation or changed project/prepared inputs
 cannot produce `complete: true`. Private files are removed on every return path.
 
-The returned object is internal validation evidence, not the public check report.
-Mapping findings into Security, filtering full flows for Git changes, native
-config/baseline overrides and distributed tool/image metadata still need their
-own integration gates.
+The default returned object is internal validation evidence. The development
+worker also accepts `--format json` or `--format text` for a full-scan check report,
+with `--all` expanding text traces. Psalm remains outside public `check` until
+project settings, native config/baseline overrides and tool/image packaging pass
+their integration gates.
+
+`internal/checker/psalm.Normalize` converts verified results to Security findings.
+The optional report v1 `trace` field keeps every ordered native label, snippet and
+available line/column range. Each step identifies a `project`, `tool`, `generated`
+or locationless `symbol` origin; paths are relative to that origin's root.
+The internal native evidence retains the original JSON, including byte offsets.
+Ordinary project sinks stay at their native location. A sink in generated code
+is anchored to the last analyzed project step, while its generated endpoint
+remains in the trace. A flow without an analyzed project anchor is incomplete.
+Invalid findings abort normalization even if they would be outside report scope.
+
+Analysis still uses the full prepared graph. Report selection includes a flow
+when any project file in its trace or its primary location is selected. This is
+whole-file selection even in diff mode: native steps can point at a method's
+signature rather than the changed statement. Changing consumed route, service,
+extension, Composer or project configuration metadata conservatively selects
+all flows. Callers must include those context files in the shared scope; unrelated
+metadata does not broaden the report. Empty or unrelated scope returns no flows.
+Fingerprints include the normalized flow, independent of temporary root names
+and source snippets. Distinct flows at the same sink survive deduplication.
+The development report uses `required: true`, `fail_on: never`; findings remain
+advisory and execution failures still make analysis incomplete.
+
+Default text shows at most six trace steps per displayed finding, with an explicit
+omission count. It shortens class names, reuses the primary file's heading for
+same-file locations and omits tool/generated file locations. `--all` shows every
+step with full labels and locations. JSON always includes the complete trace.
+The existing compact format keeps its one-line finding presentation.
 
 ## Acceptance
 

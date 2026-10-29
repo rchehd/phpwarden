@@ -411,6 +411,9 @@ func decodeReport(execution runner.Result, request runrequest.Request) (report.R
 		}
 	}
 	for _, finding := range result.Findings {
+		if err := report.ValidateTrace(finding.Trace); err != nil {
+			return result, err
+		}
 		if !slices.Contains(checker.Requested(request.Only), finding.Checker) {
 			return result, fmt.Errorf("worker finding is outside the requested scope")
 		}

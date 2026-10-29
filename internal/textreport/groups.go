@@ -56,6 +56,9 @@ var ruleTitles = map[string]string{
 	"property.notFound":                                      "Undefined properties",
 	"rector.upgrade":                                         "Upgrade suggestions",
 	"UnusedLocalVariable":                                    "Unused local variables",
+	"psalm.TaintedHtml":                                      "Untrusted HTML reaches output",
+	"psalm.TaintedTextWithQuotes":                            "Untrusted text reaches HTML attributes",
+	"psalm.TaintedSql":                                       "Untrusted input reaches a database query",
 }
 
 func (w *writer) grouped(result report.Report, indent string) {
@@ -80,7 +83,7 @@ func (w *writer) grouped(result report.Report, indent string) {
 		if value, ok := ruleTitles[group.rule]; ok {
 			title = value
 		}
-		if common != "" && !strings.Contains(common, "\n") && utf8.RuneCountInString(common) <= 70 {
+		if !strings.HasPrefix(group.rule, "psalm.") && common != "" && !strings.Contains(common, "\n") && utf8.RuneCountInString(common) <= 70 {
 			title = common
 		}
 		files := map[string]bool{}
@@ -113,6 +116,17 @@ func (w *writer) grouped(result report.Report, indent string) {
 			}
 			w.line("")
 			w.line("%s%s", indent+"  ", rows[start].file)
+			if slices.ContainsFunc(rows[start:end], func(row located) bool { return len(row.finding.Trace) > 0 }) {
+				for _, row := range rows[start:end] {
+					w.wrapped(indent+"    ", position(row), "")
+					if common == "" {
+						w.wrapped(indent+"    ", row.message, "")
+					}
+					w.trace(row.finding, indent+"      ")
+				}
+				start = end
+				continue
+			}
 			messages := map[string][]string{}
 			order := []string{}
 			for _, row := range rows[start:end] {
@@ -145,6 +159,44 @@ func (w *writer) grouped(result report.Report, indent string) {
 			}
 			w.wrapped(indent+"  ", note+"; use --all to show all", "")
 		}
+	}
+}
+
+func (w *writer) trace(finding report.Finding, indent string) {
+	steps := finding.Trace
+	for index, step := range steps {
+		if !w.options.All && len(steps) > 6 && index >= 3 && index < len(steps)-2 {
+			if index == 3 {
+				w.wrapped(indent, "… "+plural(len(steps)-5, "flow step")+" omitted; use --all to show all", "")
+			}
+			continue
+		}
+		label := display(step.Label)
+		if !w.options.All && strings.Contains(label, `\`) {
+			prefix := ""
+			if strings.HasPrefix(label, "call to ") {
+				prefix = "call to "
+			}
+			label = prefix + label[strings.LastIndex(label, `\`)+1:]
+		}
+		if step.Path != nil && (step.Origin == "project" || w.options.All) {
+			prefix := ""
+			if step.Origin != "project" {
+				prefix = step.Origin + ":"
+			}
+			location := prefix + display(*step.Path)
+			if !w.options.All && finding.Path != nil && *step.Path == *finding.Path {
+				location = "line"
+			}
+			if step.Line != nil {
+				location += fmt.Sprintf(":%d", *step.Line)
+			}
+			if step.Column != nil {
+				location += fmt.Sprintf(":%d", *step.Column)
+			}
+			label += " · " + location
+		}
+		w.wrapped(indent, "→ "+label, "")
 	}
 }
 

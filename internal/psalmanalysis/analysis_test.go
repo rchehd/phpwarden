@@ -106,6 +106,31 @@ func TestCompletePipelinePreservesNativeFlow(t *testing.T) {
 	if !strings.Contains(string(result.Findings[0]), "taint_trace") {
 		t.Fatal("native trace lost")
 	}
+	if result.Roots.Project != f.request.Root || result.Roots.Bundle != f.request.Bundle || result.Roots.Generated != f.private || !slices.Equal(result.SourceFiles, []string{"src.php"}) {
+		t.Fatalf("normalization context lost during cleanup: %+v", result)
+	}
+}
+
+func TestContextInventoryCanonicalizesConsumedMetadata(t *testing.T) {
+	f := newFixture(t)
+	prepare := f.request.Prepare
+	f.request.Prepare = func(ctx context.Context, temporary string, process runner.Process) (Prepared, error) {
+		prepared, err := prepare(ctx, temporary, process)
+		data, _ := os.ReadFile(filepath.Join(f.request.Root, "composer.json"))
+		prepared.Inputs["./composer.json"] = fmt.Sprintf("%x", sha256.Sum256(data))
+		data, _ = os.ReadFile(filepath.Join(f.request.Root, "src.php"))
+		delete(prepared.Inputs, "src.php")
+		prepared.Inputs["./src.php"] = fmt.Sprintf("%x", sha256.Sum256(data))
+		return prepared, err
+	}
+	result := f.run(t)
+	if !result.Complete || !slices.Equal(result.ContextFiles, []string{"composer.json"}) {
+		t.Fatalf("consumed metadata was not canonicalized: %+v", result)
+	}
+	data, _ := json.Marshal(result)
+	if strings.Contains(string(data), `"SourceFiles"`) || strings.Contains(string(data), `"Roots"`) || strings.Contains(string(data), `"ContextFiles"`) {
+		t.Fatal("normalization metadata changed the native evidence format")
+	}
 }
 
 func TestReadinessAndSyntaxFailuresNeverRunTaint(t *testing.T) {
