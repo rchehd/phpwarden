@@ -152,10 +152,13 @@ def run(args, project, name, script, *arguments):
     return outcome
 
 
-def controls(project, issues):
+def controls(project, issues, *, module=MODULE, labels=None, container_root="/project"):
     result = {}
     for label, (name, method) in CONTROLS.items():
-        relative = f"modules/custom/{MODULE}/{name}"
+        if labels is not None and label not in labels:
+            continue
+        relative = f"modules/custom/{module}/{name.replace(MODULE, module)}"
+        method = method.replace(MODULE, module)
         lines = (project / "web" / relative).read_text().splitlines()
         start = next(i for i, line in enumerate(lines, 1) if f"function {method}(" in line)
         end = next(
@@ -170,7 +173,11 @@ def controls(project, issues):
         for issue in issues:
             locations = [issue, *issue.get("taint_trace", [])]
             if any(
-                location.get("file_name") == relative
+                (
+                    location.get("file_path") == f"{container_root}/web/{relative}"
+                    if location.get("file_path")
+                    else location.get("file_name") == relative
+                )
                 and start <= location.get("line_from", 0) < end
                 for location in locations
             ):

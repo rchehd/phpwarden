@@ -3,6 +3,7 @@
   "description": "Pinned development-only Drupal taint compatibility experiment",
   "require": {
     "php": "~8.3.16",
+    "symfony/yaml": "7.4.21",
     "vimeo/psalm": "6.20.3",
     "mortenson/psalm-plugin-drupal": "dev-master#073e7a4d5fc159fbf47decf16296edd7f8a545d1"
   },

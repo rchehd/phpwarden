@@ -73,3 +73,15 @@ Original Composer/core fingerprints and copied probe source hashes remain unchan
 Reuse of the upstream rules is promising: the overlay restores seven unsafe behaviors while all five safe behaviors remain clean, and ordinary analysis has no setup diagnostics. The pinned package is not ready to be bundled unchanged into the normal check pipeline. Remaining work is a production database-free profile bootstrap, dependable service/entrypoint discovery and a readiness/completeness contract with failure fixtures. Fixture-specific route calls and renderer XML cannot serve as a general Drupal preset. Verify further PHP/runtime combinations and dependency/license distribution requirements separately.
 
 No production checker, defaults, toolset revision, worker image, project hook or agent installation was changed by this experiment.
+
+## Automatic preparation candidate
+
+The [profile preparation helper](../psalm/drupal/README.md) replaces fixture-specific
+namespace, renderer and route setup with existing Go discovery facts and static
+YAML/PHP parsing. Its separate `discovery.py` acceptance harness uses renamed
+fixtures, service aliases and constructor dependencies, then repeats native
+readiness/taint checks in a monorepo with a module outside webroot. Diagnostics
+cover unsupported inputs rather than treating missing metadata as clean output.
+The tool lock adds only Symfony YAML 7.4.21; all existing dependency pins remain
+unchanged. Production registration and full completeness/reporting policy remain
+separate work.
