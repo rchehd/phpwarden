@@ -4,8 +4,8 @@ PHPWarden runs static quality checks for PHP projects. Profiles provide the conv
 
 Drupal is currently the only available profile. Symfony and Laravel profiles are planned; WordPress is a possible future addition. The configuration and examples below use the Drupal profile.
 
-Development validation includes installed Drupal 10/11 sandboxes using Compose, DDEV, bare Docker and host PHP in the manual
-**Sandbox** workflow and before worker publication in **Build**. See [the
+Development validation includes installed Drupal 10/11 sandboxes using Compose, DDEV, bare Docker and host PHP in the
+**Sandbox** workflow on relevant pull requests, on manual runs and before worker publication in **Build**. See [the
 sandbox suite](tools/sandbox/README.md). Third-party notices are available with
 `phpwarden --licenses`; see [dependency material](tools/spx/LICENSES.md).
 
@@ -246,7 +246,26 @@ Without command arguments, the image defaults to `worker check`; include `worker
 
 ### CI builds and distribution
 
-The **Checks** workflow runs linters, Go/native tests and fixture checks automatically on branch pushes and pull requests. It can also be run manually without building Docker images or packaging downloads.
+The **Checks** workflow runs automatically on branch pushes and pull requests,
+selecting Go/native and Python/fixture jobs from changed files. Documentation-only
+PRs skip those jobs; the stable **Checks complete** job still reports success.
+Manual runs and reusable calls from Build or Mutation tests run the full suite.
+
+**Sandbox** and **Mutation tests** also run automatically on relevant pull requests.
+Sandbox selects installed Drupal application or Docker-less acceptance based on
+runtime, installation and harness changes. Mutation tests select test-runner,
+configuration, source-scope and mutation-harness changes. Worker images, toolset
+metadata, bundled dependencies and shared CI filtering trigger their consumers.
+An isolated Go test change selects Go checks; a Python unit-test change selects
+Python checks. Embedded Markdown/templates and text fixtures remain code/test inputs.
+
+The shared selector is `.github/actions/changes` with path rules in
+`tools/ci/changes.py`. It compares PR merge-base to head and the complete before/after
+range for pushes, including deleted and renamed paths. A new branch with no previous
+commit or unavailable comparison history selects all groups conservatively.
+Manual Sandbox selections remain available, and manual Mutation tests run the full
+Drupal 10/11 × PHP 8.3/8.4 matrix. PR acceptance builds temporary workers for tests;
+publication stays in Build. Superseded PR validation runs are cancelled.
 
 The separate **Build** workflow runs manually or on a pushed version tag such as `v0.1.0-rc.1`. It calls Checks for the same commit and builds only after those checks pass. Open the [Build workflow page](https://github.com/rchehd/phpwarden/actions/workflows/build.yml), choose **Run workflow**, select `main`, and choose a target:
 
@@ -654,8 +673,8 @@ failed. Missing/invalid reports, no assessed mutations, skipped mutants, executi
 errors and timeouts return incomplete exit 3. A covered-MSI gate with no covered
 mutations is incomplete. Source changes during execution invalidate the result.
 
-The manual **Mutation tests** Actions workflow runs separate Drupal 10/11 × PHP
-8.3/8.4 scenarios after Checks. It builds matching workers and locked unit fixtures
+The **Mutation tests** Actions workflow runs separate Drupal 10/11 × PHP
+8.3/8.4 scenarios after Checks on relevant PRs and on manual dispatch. It builds matching workers and locked unit fixtures
 without starting an application or database, and uploads only reports/logs.
 
 ## Analyzer concurrency

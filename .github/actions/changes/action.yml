@@ -1,0 +1,30 @@
+name: Select relevant checks
+description: Select CI jobs from the full Git diff; manual validations can force all jobs.
+inputs:
+  force-all:
+    description: Run all check groups regardless of changed files
+    default: "false"
+outputs:
+  go:
+    value: ${{ steps.select.outputs.go }}
+    description: Go and native checks
+  python:
+    value: ${{ steps.select.outputs.python }}
+    description: Python lint and fixture validation
+  dockerless:
+    value: ${{ steps.select.outputs.dockerless }}
+    description: Docker-less CLI acceptance
+  sandbox:
+    value: ${{ steps.select.outputs.sandbox }}
+    description: Drupal application acceptance
+  mutation:
+    value: ${{ steps.select.outputs.mutation }}
+    description: Drupal mutation acceptance
+runs:
+  using: composite
+  steps:
+    - id: select
+      shell: bash
+      env:
+        CI_FORCE_ALL: ${{ inputs.force-all }}
+      run: python3 tools/ci/changes.py

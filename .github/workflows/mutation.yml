@@ -1,20 +1,42 @@
 name: Mutation tests
 
 on:
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: mutation-${{ github.ref }}
-  cancel-in-progress: false
+  group: mutation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Select relevant checks
+    if: github.event.deleted != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      mutation: ${{ steps.changed.outputs.mutation }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/changes
+        id: changed
+        with:
+          force-all: ${{ github.event_name == 'workflow_dispatch' }}
+
   checks:
+    needs: changes
+    if: needs.changes.outputs.mutation == 'true'
     uses: ./.github/workflows/ci.yml
+    with:
+      force_all: true
   mutation:
-    needs: checks
+    needs: [changes, checks]
+    if: needs.changes.outputs.mutation == 'true'
     name: Drupal ${{ matrix.drupal }} · PHP ${{ matrix.php }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45

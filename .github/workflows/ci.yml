@@ -6,12 +6,40 @@ on:
   pull_request:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      force_all:
+        description: Run the complete validation suite for callers
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
 jobs:
+  changes:
+    name: Select relevant checks
+    if: github.event.deleted != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      go: ${{ steps.changed.outputs.go }}
+      python: ${{ steps.changed.outputs.python }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/changes
+        id: changed
+        with:
+          force-all: ${{ (github.event_name != 'pull_request' && github.event_name != 'push') || inputs.force_all }}
+
   go:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     name: Go · lint and tests
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -109,6 +137,8 @@ jobs:
         run: python -m unittest tests.acceptance.distribution_cli -v
 
   test-fixtures:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     name: Test fixtures · lint and validate
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -122,8 +152,27 @@ jobs:
       - name: Install development checker
         run: python -m pip install -r requirements-dev.txt
       - name: Lint Python infrastructure
-        run: python -m ruff check tests internal/checker/eventhorizon/helper.py tools/eventhorizon/prepare.py tools/semgrep/prepare.py tools/distribution.py tools/licenses.py tools/spx tools/sandbox
+        run: python -m ruff check tests internal/checker/eventhorizon/helper.py tools/eventhorizon/prepare.py tools/semgrep/prepare.py tools/distribution.py tools/licenses.py tools/spx tools/sandbox tools/ci
       - name: Check Python infrastructure formatting
-        run: python -m ruff format --check tests internal/checker/eventhorizon/helper.py tools/eventhorizon/prepare.py tools/semgrep/prepare.py tools/distribution.py tools/licenses.py tools/spx tools/sandbox
+        run: python -m ruff format --check tests internal/checker/eventhorizon/helper.py tools/eventhorizon/prepare.py tools/semgrep/prepare.py tools/distribution.py tools/licenses.py tools/spx tools/sandbox tools/ci
       - name: Validate Git scenarios and expectations
         run: python -m unittest discover -s tests -v
+
+  complete:
+    name: Checks complete
+    needs: [changes, go, test-fixtures]
+    if: always() && github.event.deleted != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Verify selected checks succeeded
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          GO_REQUIRED: ${{ needs.changes.outputs.go }}
+          GO_RESULT: ${{ needs.go.result }}
+          PYTHON_REQUIRED: ${{ needs.changes.outputs.python }}
+          PYTHON_RESULT: ${{ needs.test-fixtures.result }}
+        run: |
+          test "$CHANGES_RESULT" = success
+          if [ "$GO_REQUIRED" = true ]; then test "$GO_RESULT" = success; fi
+          if [ "$PYTHON_REQUIRED" = true ]; then test "$PYTHON_RESULT" = success; fi

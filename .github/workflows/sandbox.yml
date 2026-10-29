@@ -1,6 +1,7 @@
 name: Sandbox
 
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       drupal:
@@ -22,10 +23,32 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: sandbox-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  changes:
+    name: Select relevant checks
+    if: github.event.deleted != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      dockerless: ${{ steps.changed.outputs.dockerless }}
+      sandbox: ${{ steps.changed.outputs.sandbox }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/changes
+        id: changed
+        with:
+          force-all: ${{ github.event_name == 'workflow_dispatch' }}
+
   dockerless:
     name: Docker-less · CLI installation and recorded profiles
-    if: inputs.environment == 'all' || inputs.environment == 'dockerless'
+    needs: changes
+    if: needs.changes.outputs.dockerless == 'true' && (github.event_name == 'pull_request' || inputs.environment == 'all' || inputs.environment == 'dockerless')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -56,7 +79,8 @@ jobs:
 
   drupal:
     name: Drupal ${{ matrix.drupal }} · ${{ matrix.environment }} · acceptance
-    if: inputs.environment != 'dockerless'
+    needs: changes
+    if: needs.changes.outputs.sandbox == 'true' && (github.event_name == 'pull_request' || inputs.environment != 'dockerless')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -67,8 +91,8 @@ jobs:
     steps:
       - name: Validate sandbox selection
         env:
-          DRUPAL_SELECTION: ${{ inputs.drupal }}
-          ENVIRONMENT_SELECTION: ${{ inputs.environment }}
+          DRUPAL_SELECTION: ${{ inputs.drupal || 'all' }}
+          ENVIRONMENT_SELECTION: ${{ inputs.environment || 'all' }}
         run: |
           case "$DRUPAL_SELECTION" in
             all|10|11) ;;
@@ -108,7 +132,7 @@ jobs:
       - name: Install and exercise Drupal sandbox
         env:
           DRUPAL_MAJOR: ${{ matrix.drupal }}
-          INSTALLATION: ${{ inputs.installation }}
+          INSTALLATION: ${{ inputs.installation || 'all' }}
           SANDBOX_ENVIRONMENT: ${{ matrix.environment }}
         run: python3 tools/sandbox/run.py --drupal "$DRUPAL_MAJOR" --environment "$SANDBOX_ENVIRONMENT" --installation "$INSTALLATION" --output "$RUNNER_TEMP/phpwarden-sandbox-drupal$DRUPAL_MAJOR-$SANDBOX_ENVIRONMENT"
       - name: Summarize installation and runtime scenarios
@@ -121,7 +145,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}-${{ inputs.installation }}-${{ github.sha }}
+          name: phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}-${{ inputs.installation || 'all' }}-${{ github.sha }}
           path: |
             ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}/summary.json
             ${{ runner.temp }}/phpwarden-sandbox-drupal${{ matrix.drupal }}-${{ matrix.environment }}/captures.json
