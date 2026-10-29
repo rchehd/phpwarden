@@ -56,6 +56,11 @@ func TestInitMonorepoAgentSkillsUseGitRoot(t *testing.T) {
 		if err != nil || link != skillPath || result.AgentSkills.Path != skillPath {
 			t.Fatalf("monorepo alias points at the wrong root: %+v %s %v", result, link, err)
 		}
+		ref := filepath.Join(root, ".claude/skills/phpwarden-tests/references/reports.md")
+		resolved, err := filepath.EvalSymlinks(ref)
+		if err != nil || resolved != filepath.Join(root, ".agents/skills/phpwarden-tests/references/reports.md") {
+			t.Fatalf("test quality reference uses wrong project root: %s %v", resolved, err)
+		}
 		if _, err := os.Lstat(filepath.Join(root, "platform/.agents")); !os.IsNotExist(err) {
 			t.Fatal("skills installed under Composer root")
 		}
@@ -66,11 +71,14 @@ func TestInitMonorepoAgentSkillsUseGitRoot(t *testing.T) {
 }
 
 func TestInitAgentConflictAndCancellationWriteNoConfiguration(t *testing.T) {
-	for _, cancel := range []bool{false, true} {
+	for _, conflict := range []string{"alias", "reference", "cancel"} {
 		root := drupalProject(t, ">=8.1", nil)
 		options := Options{CWD: root, Runtime: "8.4", Agents: []string{"claude"}}
+		cancel := conflict == "cancel"
 		if cancel {
 			options.SelectAgents = func() ([]string, error) { return nil, context.Canceled }
+		} else if conflict == "reference" {
+			writeFile(t, root, ".agents/skills/phpwarden-tests/references/reports.md", "User's reference")
 		} else {
 			writeFile(t, root, ".claude/skills/phpwarden-architecture/SKILL.md", "User's skill")
 		}
@@ -78,7 +86,7 @@ func TestInitAgentConflictAndCancellationWriteNoConfiguration(t *testing.T) {
 		if err == nil || cancel && !errors.Is(err, context.Canceled) {
 			t.Fatalf("invalid integration succeeded: %v", err)
 		}
-		for _, name := range []string{".phpwarden.yaml", ".agents"} {
+		for _, name := range []string{".phpwarden.yaml", ".agents/skills/phpwarden-architecture"} {
 			if _, err := os.Lstat(filepath.Join(root, name)); !os.IsNotExist(err) {
 				t.Fatalf("rejected init wrote %s", name)
 			}

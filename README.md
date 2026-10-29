@@ -355,7 +355,7 @@ Choose specific clients with `--agents codex,cursor` or `--agents claude`; `--ag
 
 The installer writes standard Agent Skills packages to `.agents/skills/`. [Codex](https://learn.chatgpt.com/docs/build-skills) and [Cursor](https://cursor.com/docs/skills) discover that directory directly. For [Claude Code](https://code.claude.com/docs/en/skills#choose-where-skills-load), it adds relative directory symlinks under `.claude/skills/` pointing to the same packages. Commit the packages and Claude links to share them with the project. Clients that discover the shared directory can see the skills regardless of which client originally requested installation.
 
-Invoke `$phpwarden-architecture` in Codex or `/phpwarden-architecture` in Cursor and Claude Code. The same invocation convention applies to all five skills:
+Invoke `$phpwarden-architecture` in Codex or `/phpwarden-architecture` in Cursor and Claude Code. The same invocation convention applies to all bundled skills:
 
 | Skill | Purpose |
 | --- | --- |
@@ -364,6 +364,9 @@ Invoke `$phpwarden-architecture` in Codex or `/phpwarden-architecture` in Cursor
 | `phpwarden-doctor` | Explain environment failures using the native `doctor` report and propose concrete setup repairs. |
 | `phpwarden-upgrade` | Plan package/PHP upgrades from `updates`, identify dependency blockers, and use upstream Rector sets in dry-run mode. |
 | `phpwarden-performance` | Review recorded SPX hotspots, callers and bounded graphs through MCP, preserving capture scope and measurement limits. |
+| `phpwarden-tests` | Review escaped mutants and CRAP hotspots, propose behavioral assertions, and improve and recheck tests when requested. |
+
+For example, ask `$phpwarden-tests review /path/to/mutation/report.json and /path/to/coverage/report.json` in Codex. To apply changes, ask it to improve the relevant tests and rerun them. The skill checks report freshness and completeness, distinguishes test gaps from suspected equivalent mutations, and preserves the configured thresholds. It runs mutation analysis separately from ordinary static checks and completion hooks.
 
 Repeated installation reuses identical files and links. Different existing files, conflicting links and symlinked parent directories stop installation without overwriting them. Review customized skill files before updating them. A write failure can leave completed installation files; init reports the failure and a retry can finish it. Skill installation preserves project configuration, harness settings and hooks.
 

@@ -62,6 +62,16 @@ func TestSharedSkillAndClaudeLinkAreIdempotent(t *testing.T) {
 						}
 					}
 				}
+				for _, base := range []string{".agents/skills", ".claude/skills"} {
+					if base == ".claude/skills" && !slices.Contains(clients, "claude") {
+						continue
+					}
+					data, err := os.ReadFile(filepath.Join(root, base, "phpwarden-tests/references/reports.md"))
+					want, _ := content.ReadFile("skills/phpwarden-tests/references/reports.md")
+					if err != nil || !bytes.Equal(data, want) {
+						t.Fatalf("test quality reference missing or corrupt through %s: %v", base, err)
+					}
+				}
 				if slices.Contains(clients, "claude") {
 					resolved, err := filepath.EvalSymlinks(result.ClaudePath)
 					if err != nil || resolved != result.Path || result.ClaudeCreated != (attempt == 0) {
@@ -98,7 +108,10 @@ func TestForeignSkillsAndSymlinkParentsArePreserved(t *testing.T) {
 			}
 		})
 	}
-	for _, name := range []string{".agents/skills/" + Name + "/SKILL.md", ".agents/skills/" + Name + "/references/deptrac.md", ".claude/skills/" + Name} {
+	for _, name := range []string{
+		".agents/skills/" + Name + "/SKILL.md", ".agents/skills/" + Name + "/references/deptrac.md", ".claude/skills/" + Name,
+		".agents/skills/phpwarden-tests/SKILL.md", ".agents/skills/phpwarden-tests/references/reports.md", ".claude/skills/phpwarden-tests",
+	} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
 			filename := filepath.Join(root, name)
@@ -116,6 +129,40 @@ func TestForeignSkillsAndSymlinkParentsArePreserved(t *testing.T) {
 				t.Fatal("foreign content overwritten")
 			}
 		})
+	}
+}
+
+func TestInstallAddsMissingSkillToExistingBundle(t *testing.T) {
+	root := t.TempDir()
+	plan, err := Prepare(root, clients)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := plan.Install(); err != nil {
+		t.Fatal(err)
+	}
+	oldPath := filepath.Join(root, ".agents/skills", Name, "SKILL.md")
+	before, _ := os.ReadFile(oldPath)
+	if err := os.RemoveAll(filepath.Join(root, ".agents/skills/phpwarden-tests")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(root, ".claude/skills/phpwarden-tests")); err != nil {
+		t.Fatal(err)
+	}
+	plan, err = Prepare(root, clients)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := plan.Install()
+	if err != nil || !result.Created || !result.ClaudeCreated {
+		t.Fatalf("bundle extension: %+v %v", result, err)
+	}
+	after, err := os.ReadFile(oldPath)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("existing skill changed")
+	}
+	if _, err := os.ReadFile(filepath.Join(root, ".claude/skills/phpwarden-tests/references/reports.md")); err != nil {
+		t.Fatal(err)
 	}
 }
 
