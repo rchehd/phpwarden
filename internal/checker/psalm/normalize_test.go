@@ -223,6 +223,23 @@ func TestFailuresRemainDiagnosticsUnderAdvisoryPolicy(t *testing.T) {
 	}
 }
 
+func TestReadinessDetailsAreDiagnosticsEvenOutsideReportScope(t *testing.T) {
+	native := captured(t, "drupal11-automatic")
+	native.Complete = false
+	native.Diagnostics = []psalmanalysis.Diagnostic{{Stage: "readiness", Code: "readiness_incomplete", Message: "Ordinary analysis must complete"}}
+	row := json.RawMessage(`{"type":"UndefinedClass","message":"Class MissingType does not exist","file_path":"/project/src/Controller.php","line_from":12}`)
+	for range 12 {
+		native.Readiness = append(native.Readiness, row)
+	}
+	outcome := Normalize(native, selected("unrelated.php"), Policy{Required: true, FailOn: "never"})
+	if len(outcome.Findings) != 0 || len(outcome.Diagnostics) != 12 || !strings.Contains(outcome.Diagnostics[1].Message, "src/Controller.php:12: UndefinedClass") || !strings.Contains(outcome.Diagnostics[11].Message, "2 additional") {
+		t.Fatalf("readiness detail was lost or filtered: %+v", outcome)
+	}
+	if result := envelope(outcome.Findings, outcome.Check); result.Complete || result.ExitCode != 3 {
+		t.Fatal("readiness failure became advisory success")
+	}
+}
+
 func TestFingerprintsAndDistinctFlowsSurviveReportFinalization(t *testing.T) {
 	native := captured(t, "drupal11-automatic")
 	native.Findings = native.Findings[:1]

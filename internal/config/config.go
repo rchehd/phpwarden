@@ -141,6 +141,9 @@ type Psalm struct {
 	Include        []string `json:"include,omitempty"`
 	Exclude        []string `json:"exclude"`
 	MemoryLimitMB  int      `json:"memory_limit_mb"`
+	Config         string   `json:"config"`
+	DiscoverConfig bool     `json:"discover_config"`
+	Baseline       string   `json:"baseline"`
 }
 
 type NodeLint struct {
@@ -515,7 +518,7 @@ func Parse(data []byte) (Effective, error) {
 			Updates:      Updates{TimeoutSeconds: 120, MaxAgeHours: 24, MaxStaleHours: 168},
 			Mutation:     Mutation{Config: "auto", TimeoutSeconds: 1800, Mutators: []string{}},
 			Tests:        Tests{Coverage: Coverage{Include: []string{}, Exclude: []string{}}, PHPUnit: "auto", Config: "auto", Paths: []string{}, TimeoutSeconds: 300},
-			Tools: Tools{Psalm: Psalm{Required: true, FailOn: "never", TimeoutSeconds: 300, Exclude: []string{}, MemoryLimitMB: 1536}, PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
+			Tools: Tools{Psalm: Psalm{Required: true, FailOn: "never", TimeoutSeconds: 300, Exclude: []string{}, MemoryLimitMB: 1536, DiscoverConfig: true}, PHPStan: PHPStan{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true,
 				Includes: []string{}, BootstrapFiles: []string{}, ScanDirectories: []string{}, StubFiles: []string{}, Autoload: "auto",
 				Drupal: defaults.PHPStanDrupal, Deprecations: true, MemoryLimitMB: 512, ExtraExtensions: []string{}, StrictRules: StrictRules{All: true, Rules: map[string]bool{}}},
 				Gitleaks:               Gitleaks{Enabled: true, Required: true, FailOn: "error", TimeoutSeconds: 120, Exclude: []string{}, DiscoverConfig: true, Rules: []string{}, ExtraInputs: []string{}},
@@ -606,7 +609,7 @@ func Parse(data []byte) (Effective, error) {
 	}
 	result.Provenance["tools.phpmd.enabled"], result.Provenance["tools.phpmd.rulesets"], result.Provenance["tools.phpmd.exclude_rules"] = "profile_default", "profile_default", "profile_default"
 	result.Provenance["tools.twig-cs-fixer.enabled"] = "profile_default"
-	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "memory_limit_mb"} {
+	for _, field := range []string{"enabled", "required", "fail_on", "timeout_seconds", "exclude", "memory_limit_mb", "config", "discover_config", "baseline"} {
 		result.Provenance["tools.dead-code."+field] = "core_default"
 	}
 	result.Provenance["tools.dead-code.enabled"] = "profile_default"
@@ -830,7 +833,12 @@ func validateValues(cfg Config) error {
 	if err := projectpath.Validate(cfg.ComposerRoot); err != nil {
 		return fmt.Errorf("composer_root: %w", err)
 	}
-	for _, name := range []string{cfg.Tools.PHPStan.Config, cfg.Tools.PHPStan.Baseline, cfg.Tools.PHPStan.Autoload, cfg.Tools.TwigCSFixer.Autoload, cfg.Tools.TwigCSFixer.Config, cfg.Tools.PHPMD.Config, cfg.Tools.ESLint.Config, cfg.Tools.Stylelint.Config, cfg.Tools.JSCPD.Config,
+	for _, name := range []string{cfg.Tools.Psalm.Config, cfg.Tools.Psalm.Baseline} {
+		if name != "" && (name == "auto" || strings.ContainsAny(name, ":*?[]{}")) {
+			return fmt.Errorf("Psalm config and baseline must name explicit local files")
+		}
+	}
+	for _, name := range []string{cfg.Tools.Psalm.Config, cfg.Tools.Psalm.Baseline, cfg.Tools.PHPStan.Config, cfg.Tools.PHPStan.Baseline, cfg.Tools.PHPStan.Autoload, cfg.Tools.TwigCSFixer.Autoload, cfg.Tools.TwigCSFixer.Config, cfg.Tools.PHPMD.Config, cfg.Tools.ESLint.Config, cfg.Tools.Stylelint.Config, cfg.Tools.JSCPD.Config,
 		cfg.Tools.Gitleaks.Config, cfg.Tools.Gitleaks.Baseline, cfg.Tools.Gitleaks.IgnoreFile, cfg.Tools.Semgrep.Config, cfg.Tools.Semgrep.Baseline, cfg.Tools.Rector.Config, cfg.Tools.Deptrac.Config, cfg.Tools.ComposerRequireChecker.Config, cfg.Tools.ComposerRequireChecker.ComposerRoot, cfg.Tools.ComposerUnused.Config, cfg.Tools.ComposerUnused.ComposerRoot} {
 		if name != "" && name != "auto" {
 			if err := projectpath.Validate(name); err != nil {

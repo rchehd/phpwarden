@@ -13,7 +13,7 @@ import (
 )
 
 func TestPsalmRequestFingerprintsUnselectedGraphContent(t *testing.T) {
-	for _, name := range []string{"src/Helper.php", "src/demo.services.yml", "composer.json", "composer.lock", "deps/composer/installed.json", "deps/autoload.php"} {
+	for _, name := range []string{"src/Helper.php", "src/demo.services.yml", "composer.json", "composer.lock", "deps/composer/installed.json", "deps/autoload.php", "quality/psalm.xml", "quality/baseline.xml", "quality/types.php"} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
 			if err := os.Mkdir(filepath.Join(root, "src"), 0o700); err != nil {
@@ -23,13 +23,16 @@ func TestPsalmRequestFingerprintsUnselectedGraphContent(t *testing.T) {
 profile: drupal
 php: {runtime: "8.3", target: {min: "8.3", max: "8.3"}}
 scope: {include: [src]}
-tools: {psalm: {enabled: true, include: [src/Sink.php]}}
+tools: {psalm: {enabled: true, include: [src/Sink.php], config: quality/psalm.xml}}
 `
 			files := map[string]string{config.Filename: settings, "src/Sink.php": "<?php\necho input();\n", "src/Helper.php": "<?php\nfunction input() { return 1; }\n", "src/demo.services.yml": "services: {demo: {class: ClassA}}\n"}
 			files["composer.json"] = `{"config":{"vendor-dir":"deps"},"extra":{"marker":"aaaa"}}`
 			files["composer.lock"] = `{"packages":[],"marker":"aaaa"}`
 			files["deps/composer/installed.json"] = `{"packages":[],"marker":"aaaa"}`
 			files["deps/autoload.php"] = "<?php // aaaa\n"
+			files["quality/psalm.xml"] = `<psalm errorLevel="6" errorBaseline="baseline.xml"><stubs><file name="types.php"/></stubs></psalm>`
+			files["quality/baseline.xml"] = `<files><file src="src/Sink.php"><TaintedHtml><code>aaaa</code></TaintedHtml></file></files>`
+			files["quality/types.php"] = "<?php class MetadataType {}\n"
 			for path, data := range files {
 				if err := os.MkdirAll(filepath.Dir(filepath.Join(root, path)), 0o700); err != nil {
 					t.Fatal(err)
@@ -53,6 +56,8 @@ tools: {psalm: {enabled: true, include: [src/Sink.php]}}
 			data := strings.ReplaceAll(files[name], "return 1", "return 2")
 			data = strings.ReplaceAll(data, "ClassA", "ClassB")
 			data = strings.ReplaceAll(data, "aaaa", "bbbb")
+			data = strings.ReplaceAll(data, `errorLevel="6"`, `errorLevel="5"`)
+			data = strings.ReplaceAll(data, "MetadataType", "MetadataXype")
 			if err := os.WriteFile(filename, []byte(data), 0o600); err != nil {
 				t.Fatal(err)
 			}

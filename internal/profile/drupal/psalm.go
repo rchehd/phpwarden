@@ -110,7 +110,29 @@ func PreparePsalm(ctx context.Context, root, bundle, temporary, php string, memo
 	arguments := append(psalmanalysis.PHPArgs(memory), filepath.Join(helpers, "prepare.php"), filename, output, bundle)
 	execution := process.Run(ctx, runner.Command{Name: php, Args: arguments, Directory: temporary, Env: psalmanalysis.Environment(temporary, bundle)})
 	if execution.ExitCode != 0 || execution.Err != nil || execution.Unavailable || execution.TimedOut || len(execution.Stderr) > 0 || ctx.Err() != nil {
-		return failure("profile metadata could not be prepared; see native preparation output")
+		var feedback struct {
+			Diagnostics []struct{ Code, File, Detail string } `json:"diagnostics"`
+		}
+		parts := []string{}
+		if json.Unmarshal(execution.Stdout, &feedback) == nil {
+			for i, diagnostic := range feedback.Diagnostics {
+				if i == 10 {
+					parts = append(parts, fmt.Sprintf("%d additional preparation diagnostics in native evidence", len(feedback.Diagnostics)-i))
+					break
+				}
+				if diagnostic.Code == "" || diagnostic.Detail == "" || diagnostic.File != "" && projectpath.Validate(diagnostic.File) != nil {
+					continue
+				}
+				parts = append(parts, strings.TrimSpace(diagnostic.File+": "+diagnostic.Code+": "+diagnostic.Detail))
+			}
+		}
+		if len(parts) == 0 && len(execution.Stderr) > 0 {
+			parts = append(parts, strings.TrimSpace(string(execution.Stderr[:min(len(execution.Stderr), 2048)])))
+		}
+		if len(parts) == 0 {
+			parts = append(parts, "profile metadata could not be prepared; see native preparation output")
+		}
+		return failure(strings.Join(parts, "; "))
 	}
 	manifestFile := filepath.Join(output, "manifest.json")
 	stored, err := os.ReadFile(manifestFile)

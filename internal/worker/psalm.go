@@ -11,6 +11,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/profile/drupal"
 	"github.com/rchehd/phpwarden/internal/psalmanalysis"
+	"github.com/rchehd/phpwarden/internal/psalmconfig"
 	"github.com/rchehd/phpwarden/internal/runner"
 )
 
@@ -51,11 +52,19 @@ func AnalyzePsalm(ctx context.Context, location config.Location, effective confi
 }
 
 func analyzePsalm(ctx context.Context, location config.Location, cfg config.Config, project *profile.Facts, options PsalmOptions, process runner.Process) psalmanalysis.Result {
+	native, err := psalmconfig.Load(location.Root, cfg.ComposerRoot, psalmconfig.Options{Config: cfg.Tools.Psalm.Config, Discover: cfg.Tools.Psalm.DiscoverConfig, Baseline: cfg.Tools.Psalm.Baseline})
+	if err != nil {
+		return psalmanalysis.Result{Diagnostics: []psalmanalysis.Diagnostic{{Stage: "configuration", Code: "config_invalid", Message: err.Error()}}}
+	}
 	request := psalmanalysis.Request{
 		Root: location.Root, ComposerRoot: cfg.ComposerRoot, Bundle: options.Bundle,
 		PHP: options.PHP, Runtime: cfg.PHP.Runtime, Pins: drupal.PsalmPins(), MemoryMB: options.MemoryMB, Timeout: time.Duration(cfg.Tools.Psalm.TimeoutSeconds) * time.Second,
 		Prepare: func(ctx context.Context, directory string, process runner.Process) (psalmanalysis.Prepared, error) {
-			return drupal.PreparePsalm(ctx, location.Root, options.Bundle, directory, options.PHP, options.MemoryMB, cfg, project, process)
+			prepared, err := drupal.PreparePsalm(ctx, location.Root, options.Bundle, directory, options.PHP, options.MemoryMB, cfg, project, process)
+			if err != nil {
+				return prepared, err
+			}
+			return native.Apply(ctx, location.Root, options.Bundle, directory, options.PHP, options.MemoryMB, prepared, process)
 		},
 	}
 	result := psalmanalysis.Run(ctx, request, process)

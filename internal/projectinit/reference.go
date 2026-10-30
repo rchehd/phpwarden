@@ -107,6 +107,7 @@ func configurationReference(cfg config.Config) ([]byte, error) {
 		"composer-require-checker": "composer-require-checker.json", "composer-unused": "composer-unused.php",
 		"deptrac": "deptrac.yaml", "eslint": "eslint.config.mjs", "gitleaks": ".gitleaks.toml", "jscpd": ".jscpd.json",
 		"phpcs": "phpcs.xml", "phpmd": "phpmd.xml", "phpstan": "phpstan.neon", "rector": "rector.php",
+		"psalm":   "psalm.xml",
 		"semgrep": ".semgrep.yaml", "stylelint": ".stylelintrc.json", "twig-cs-fixer": ".twig-cs-fixer.php",
 	}
 	for i, tool := range tools {
@@ -130,6 +131,9 @@ func configurationReference(cfg config.Config) ([]byte, error) {
 			}
 			if tool.name == "gitleaks" && fields[j].name == "baseline" {
 				fields[j].value = ".gitleaks-baseline.json"
+			}
+			if tool.name == "psalm" && fields[j].name == "baseline" {
+				fields[j].value = "psalm-taint-baseline.xml"
 			}
 			if tool.name == "gitleaks" && fields[j].name == "ignore_file" {
 				fields[j].value = ".gitleaksignore"

@@ -873,7 +873,8 @@ Semgrep findings expose `fingerprint` in JSON. To accept existing findings, firs
 ### Psalm (integration in progress)
 
 `tools.psalm` accepts `enabled`, `required`, `fail_on`, `timeout_seconds`,
-`include`, `exclude` and `memory_limit_mb`. Defaults are disabled, required,
+`include`, `exclude`, `memory_limit_mb`, `config`, `discover_config` and `baseline`.
+Defaults are disabled, required,
 advisory (`fail_on: never`), 300 seconds and 1536 MiB. The supported candidate
 runtime is PHP 8.3.16+ in the 8.3 series; another runtime is not selected implicitly.
 `init` exposes these settings and an optional checker selection; `--only psalm`
@@ -882,9 +883,24 @@ selects it for one check.
 The current development images do not package Psalm yet. The launcher rejects
 an applicable Psalm request when the selected toolset lacks that capability,
 before starting a container. Worker integration can use the separately installed
-pinned development bundle; image packaging, notices, native config/baseline
-overrides and the remaining runtime matrix are separate gates. Existing workers
+pinned development bundle; image packaging, notices and the remaining runtime
+matrix are separate gates. Existing workers
 must be rebuilt together with this CLI because its checker/config contract changed.
+
+Native XML discovery checks `psalm.xml`, `psalm.xml.dist`, then `psalm.dist.xml`,
+first at the repository root, then at `composer_root`. `config` chooses a file
+explicitly; `discover_config: false` disables discovery. Supported XML settings
+are `errorLevel` 1–6 (stricter readiness), `reportMixedIssues`, local `stubs` and
+`issueHandlers` for `Tainted*` issues. Graph, plugins, runtime, autoloader and cache
+remain profile-owned; unsupported native sections are rejected explicitly.
+
+`baseline` selects a native Psalm taint baseline XML and overrides native
+`errorBaseline`. Baseline `file src` paths are relative to `composer_root`;
+`@generated/entrypoints.php` names the generated renderer/route sink. Copies are
+rebased privately, leaving project files intact. Baselines and issue handlers apply
+to the taint pass; the separate readiness pass ignores them. Syntax errors,
+unresolved types or missing dependencies still make analysis incomplete. Supported
+XML examples and native acceptance commands are in the development documentation.
 
 Analysis uses the whole prepared graph within the configured source scope.
 Per-checker `include`/`exclude` narrow reportable flows without pruning that graph.

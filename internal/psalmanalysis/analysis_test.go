@@ -111,6 +111,50 @@ func TestCompletePipelinePreservesNativeFlow(t *testing.T) {
 	}
 }
 
+func TestReadinessUsesIndependentConfigAndIgnoresTaintBaseline(t *testing.T) {
+	f := newFixture(t)
+	prepare := f.request.Prepare
+	var readinessConfig, taintConfig string
+	stub := filepath.Join(f.request.Root, "types.php")
+	if err := os.WriteFile(stub, []byte("<?php class AddedType {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f.request.Prepare = func(ctx context.Context, temporary string, process runner.Process) (Prepared, error) {
+		prepared, err := prepare(ctx, temporary, process)
+		readinessConfig = filepath.Join(temporary, "readiness.xml")
+		taintConfig = prepared.Config
+		if err := os.WriteFile(readinessConfig, []byte(`<psalm/>`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		data, _ := os.ReadFile(stub)
+		prepared.Inputs["types.php"] = fmt.Sprintf("%x", sha256.Sum256(data))
+		prepared.ReadinessConfig, prepared.SyntaxFiles = readinessConfig, []string{"types.php"}
+		return prepared, err
+	}
+	process := f.process
+	f.process = func(ctx context.Context, command runner.Command) runner.Result {
+		if slices.Contains(command.Args, "--taint-analysis") {
+			if !slices.Contains(command.Args, "--config="+taintConfig) || slices.Contains(command.Args, "--ignore-baseline") {
+				t.Fatal("taint policy was not used for taint analysis")
+			}
+		} else if slices.Contains(command.Args, "--output-format=json") {
+			if !slices.Contains(command.Args, "--config="+readinessConfig) || !slices.Contains(command.Args, "--ignore-baseline") {
+				t.Fatal("readiness may inherit taint suppression policy")
+			}
+		}
+		if strings.HasSuffix(command.Args[len(command.Args)-1], "syntax.php") {
+			var files []string
+			if json.Unmarshal(command.Input, &files) != nil || !slices.Contains(files, stub) {
+				t.Fatal("native stub was omitted from syntax preflight")
+			}
+		}
+		return process.Run(ctx, command)
+	}
+	if result := f.run(t); !result.Complete {
+		t.Fatalf("independent policy pipeline failed: %+v", result)
+	}
+}
+
 func TestContextInventoryCanonicalizesConsumedMetadata(t *testing.T) {
 	f := newFixture(t)
 	prepare := f.request.Prepare

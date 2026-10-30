@@ -84,8 +84,8 @@ The default returned object is internal validation evidence. The development
 worker also accepts `--format json` or `--format text` for a full-scan check report,
 with `--all` expanding text traces. Public `check --only psalm` and `tools.psalm`
 are registered, but the launcher rejects a toolset without the Psalm capability
-before Docker starts. Native config/baseline overrides, packaging and the remaining
-runtime matrix retain their separate integration gates.
+before Docker starts. Native XML/baseline support is implemented; packaging and
+the remaining runtime matrix retain their separate integration gates.
 
 `internal/checker/psalm.Normalize` converts verified results to Security findings.
 The optional report v1 `trace` field keeps every ordered native label, snippet and
@@ -129,7 +129,7 @@ The registry honors `--only`, disabled/no-files states and unsupported runtimes
 before native work starts. Registered worker checks use the same guarded native
 pipeline as `worker.AnalyzePsalm`; raw configuration and discovery freshness are
 covered by the outer worker request lifecycle. The launcher's matching-worker
-gate uses development toolset revision 31 for this changed config/checker contract;
+gate uses development toolset revision 32 for this changed config/checker contract;
 it does not advertise Psalm in image capabilities before the bundle is packaged.
 
 Run requests fingerprint project metadata plus PHP/YAML content in the full
@@ -139,12 +139,86 @@ mtime are preserved. Enabled Psalm bypasses the result cache. Composer and proje
 configuration changes enter project-file scope; custom YAML source metadata can
 select flows through the normal shared Git scope.
 
-No native XML configuration or baseline field is exposed yet; unsupported fields
-are rejected instead of being accepted without effect. Missing dependencies,
+Native resources outside source roots also enter project-file scope and content
+fingerprints. Missing dependencies,
 ordinary readiness diagnostics, timeouts and unsupported models remain incomplete
 execution results even with advisory findings.
 
+## Native XML and taint baselines
+
+`config` is a project-relative native XML path. With `discover_config: true`
+(default), candidate priority is `psalm.xml`, `psalm.xml.dist`, `psalm.dist.xml`,
+repository root before Composer root. Explicit `config` takes precedence.
+Paths inside native XML are relative to that XML file; explicit
+`resolveFromConfigFile="false"` uses the Composer root instead. Remote resources,
+DTDs, XInclude, executable plugins/autoloaders and graph/cache/runtime overrides
+are rejected. XML schema-location attributes are metadata and are not fetched.
+
+This is an overlay for the mandatory profile config. Supported root attributes
+are `errorLevel` 1–6 and `reportMixedIssues`; levels 7/8 would weaken the profile's
+readiness policy and are rejected. `stubs` accepts local files, including
+`preloadClasses`; their contents are fingerprinted and syntax-checked. They are
+available to both passes, alongside the mandatory profile models. `issueHandlers`
+accepts built-in `Tainted*` rules with native error levels and file/directory or
+referenced-symbol selectors supported by the pinned schema. Other issue handlers
+are rejected, because the checker uses ordinary type diagnostics as prerequisites.
+
+```yaml
+tools:
+  psalm:
+    enabled: true
+    config: quality/psalm.xml
+    baseline: quality/psalm-taint-baseline.xml
+```
+
+```xml
+<psalm errorLevel="5" resolveFromConfigFile="true">
+  <stubs><file name="stubs/project-types.php"/></stubs>
+  <issueHandlers>
+    <TaintedHtml>
+      <errorLevel type="suppress"><file name="../src/Accepted.php"/></errorLevel>
+    </TaintedHtml>
+  </issueHandlers>
+</psalm>
+```
+
+The baseline is Psalm 6's native `<files><file src="…"><TaintedHtml><code>…`
+format, with actual native selected-text samples. It accepts `Tainted*` issues
+only. `baseline` overrides the XML's `errorBaseline`; otherwise that attribute is
+used. Missing/invalid explicit resources fail. Baseline `src` names are relative
+to `composer_root`, independent of the baseline file's folder. The stable
+`@generated/entrypoints.php` key targets native generated sinks. A private copy
+translates these keys to the generated config's file-name base. Both prepared
+configs stay beside the original profile config to preserve that base.
+
+The readiness config receives stubs and stricter type settings, with no report
+suppressions or baseline; the command also uses `--ignore-baseline`. The taint
+config adds handlers/baseline. Info-level accepted findings follow native
+`--show-info=false` behavior. Neither pass writes or updates a project baseline.
+Readiness diagnostics retain their type and relative location in the public report
+(first ten plus an explicit remainder count); full native evidence remains intact.
+
+These behaviors use pinned [Psalm 6.20.3 configuration](https://github.com/vimeo/psalm/blob/6.20.3/config.xsd),
+[baseline reader](https://github.com/vimeo/psalm/blob/6.20.3/src/Psalm/ErrorBaseline.php)
+and [baseline reporting semantics](https://github.com/vimeo/psalm/blob/6.20.3/src/Psalm/IssueBuffer.php).
+They deliberately support a smaller surface than standalone Psalm configuration.
+
 ## Acceptance
+
+The focused native-policy harness needs the existing local PHP image, official
+Psalm 6.20.3 PHAR (checksum in the spike README), and the pinned `config.xsd`.
+It uses small dependency-free Composer fixtures, runs containers sequentially at
+0.2 CPU, and verifies native baseline suppression/new findings, generated sinks,
+handlers, readiness blocking, stubs, safe controls and schema errors. It removes
+workspaces only after checking there are no active container mounts; reports stay.
+
+```sh
+go build -o /scratch/native-config ./tools/psalm-spike/nativeconfig
+python3 tools/psalm-spike/native_config.py \
+  --binary /scratch/native-config --phar /scratch/psalm.phar \
+  --schema /scratch/config.xsd --image ddev/ddev-webserver:v1.25.5 \
+  --php /usr/bin/php8.3 --output /tmp/phpwarden-psalm-native-policy
+```
 
 Install the committed Drupal 10/11 sandbox locks and
 [`tools/psalm-spike/upstream`](../../psalm-spike/upstream) tool lock into disposable

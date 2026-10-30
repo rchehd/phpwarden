@@ -134,6 +134,10 @@ tools:
     # exclude: ["**/generated/**"]
 
     # memory_limit_mb: 1536
+    # config: psalm.xml
+
+    # discover_config: true
+    # baseline: psalm-taint-baseline.xml
 
   semgrep:
     enabled: true

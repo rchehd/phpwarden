@@ -20,6 +20,9 @@ func TestPsalmOptInDefaultsAndStrictSettings(t *testing.T) {
     fail_on: warning
     timeout_seconds: 180
     memory_limit_mb: 2048
+    config: quality/psalm.xml
+    baseline: quality/psalm-taint.xml
+    discover_config: false
     include: [web/modules/custom/demo]
     exclude: ["**/generated/**"]
 `))
@@ -27,10 +30,10 @@ func TestPsalmOptInDefaultsAndStrictSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := effective.Config.Tools.Psalm
-	if !cfg.Enabled || cfg.Required || cfg.FailOn != "warning" || cfg.TimeoutSeconds != 180 || cfg.MemoryLimitMB != 2048 || len(cfg.Include) != 1 || len(cfg.Exclude) != 1 || effective.Provenance["tools.psalm.required"] != "project_config" {
+	if !cfg.Enabled || cfg.Required || cfg.FailOn != "warning" || cfg.TimeoutSeconds != 180 || cfg.MemoryLimitMB != 2048 || len(cfg.Include) != 1 || len(cfg.Exclude) != 1 || cfg.DiscoverConfig || cfg.Config != "quality/psalm.xml" || cfg.Baseline != "quality/psalm-taint.xml" || effective.Provenance["tools.psalm.required"] != "project_config" {
 		t.Fatalf("overrides lost: %+v", effective)
 	}
-	for _, setting := range []string{"enabled: yes", "unknown: true", "timeout_seconds: 0", "memory_limit_mb: 127", "fail_on: critical", "include: [../outside]", "exclude: [/outside]", "include: [src, src]", "config: psalm.xml", "baseline: psalm-baseline.xml"} {
+	for _, setting := range []string{"enabled: yes", "unknown: true", "timeout_seconds: 0", "memory_limit_mb: 127", "fail_on: critical", "include: [../outside]", "exclude: [/outside]", "include: [src, src]", "config: auto", "config: 'https://example.com/config.xml'", "baseline: /outside.xml"} {
 		if _, err := Parse([]byte(minimal + "tools: {psalm: {" + setting + "}}\n")); err == nil {
 			t.Errorf("accepted unsupported or unsafe setting: %s", setting)
 		}

@@ -13,6 +13,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/projectpath"
 	"github.com/rchehd/phpwarden/internal/psalmanalysis"
+	"github.com/rchehd/phpwarden/internal/psalmconfig"
 	"github.com/rchehd/phpwarden/internal/scope"
 )
 
@@ -22,6 +23,10 @@ func ContextHash(root string, cfg config.Config) (string, error) {
 		return "", err
 	}
 	files := map[string]bool{}
+	native, nativeError := psalmconfig.Load(root, cfg.ComposerRoot, psalmconfig.Options{Config: cfg.Tools.Psalm.Config, Discover: cfg.Tools.Psalm.DiscoverConfig, Baseline: cfg.Tools.Psalm.Baseline})
+	for name := range native.Inputs {
+		files[name] = true
+	}
 	vendor := "vendor"
 	composer := path.Join(cfg.ComposerRoot, "composer.json")
 	if data, err := psalmanalysis.Read(root, composer); err == nil {
@@ -82,6 +87,9 @@ func ContextHash(root string, cfg config.Config) (string, error) {
 	slices.Sort(names)
 	digest := sha256.New()
 	fmt.Fprintf(digest, "%s\x00", metadata)
+	if nativeError != nil {
+		fmt.Fprintf(digest, "native-invalid:%s\x00", nativeError.Error())
+	}
 	for _, name := range names {
 		data, err := psalmanalysis.Read(root, name)
 		if err != nil {

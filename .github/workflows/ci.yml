@@ -102,7 +102,7 @@ jobs:
           sh -n internal/perfruntime/build.sh
       - name: Check formatting
         run: |
-          files=$(gofmt -l *.go cmd internal schemas tools/psalm-spike/worker)
+          files=$(gofmt -l *.go cmd internal schemas tools/psalm-spike/worker tools/psalm-spike/nativeconfig)
           if [ -n "$files" ]; then
             printf '%s\n' "$files"
             exit 1
@@ -117,7 +117,7 @@ jobs:
         run: CGO_ENABLED=0 go build -trimpath -o /tmp/phpwarden ./cmd/phpwarden
       - name: Lint PHP helper
         run: |
-          for file in internal/profile/drupal/psalm/*.php internal/psalmanalysis/syntax.php; do
+          for file in internal/profile/drupal/psalm/*.php internal/psalmanalysis/syntax.php internal/psalmconfig/validate.php; do
             php -l "$file"
           done
           php -l internal/projecttest/mutation-config.php

@@ -52,10 +52,12 @@ type Roots struct {
 }
 
 type Prepared struct {
-	Config   string
-	Launcher string
-	Files    []string
-	Inputs   map[string]string
+	Config          string
+	ReadinessConfig string
+	SyntaxFiles     []string
+	Launcher        string
+	Files           []string
+	Inputs          map[string]string
 }
 
 type Request struct {
@@ -225,6 +227,21 @@ func Run(ctx context.Context, request Request, process runner.Process) (result R
 		}
 		files = append(files, filepath.Join(root, filepath.FromSlash(name)))
 	}
+	for _, name := range prepared.SyntaxFiles {
+		if _, ok := prepared.Inputs[name]; !ok {
+			return fail("preparation", "invalid_report", "Stub input is absent from consumed input hashes")
+		}
+		if _, err := Read(root, name); err != nil {
+			return fail("preparation", "invalid_report", err.Error())
+		}
+		files = append(files, filepath.Join(root, filepath.FromSlash(name)))
+	}
+	if prepared.ReadinessConfig == "" {
+		prepared.ReadinessConfig = prepared.Config
+	}
+	if !inside(temporary, prepared.ReadinessConfig) {
+		return fail("preparation", "invalid_report", "Invalid readiness configuration")
+	}
 	generated := map[string][]byte{}
 	err = filepath.WalkDir(temporary, func(filename string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -280,8 +297,8 @@ func Run(ctx context.Context, request Request, process runner.Process) (result R
 	if err := unchanged(); err != nil {
 		return fail("syntax", "stale", err.Error())
 	}
-	arguments := []string{prepared.Launcher, "--root=" + filepath.Join(root, filepath.FromSlash(request.ComposerRoot)), "--config=" + prepared.Config, "--no-cache", "--no-diff", "--no-progress", "--threads=1", "--scan-threads=1", fmt.Sprintf("--memory-limit=%dM", request.MemoryMB), "--output-format=json"}
-	readiness, ok := run("readiness", arguments, nil)
+	arguments := []string{prepared.Launcher, "--root=" + filepath.Join(root, filepath.FromSlash(request.ComposerRoot)), "--no-cache", "--no-diff", "--no-progress", "--threads=1", "--scan-threads=1", fmt.Sprintf("--memory-limit=%dM", request.MemoryMB), "--output-format=json", "--show-info=false"}
+	readiness, ok := run("readiness", append(slices.Clone(arguments), "--config="+prepared.ReadinessConfig, "--ignore-baseline"), nil)
 	if !ok {
 		return result
 	}
@@ -291,7 +308,7 @@ func Run(ctx context.Context, request Request, process runner.Process) (result R
 	if err := unchanged(); err != nil {
 		return fail("readiness", "stale", err.Error())
 	}
-	taint, ok := run("taint", append(arguments, "--taint-analysis"), nil)
+	taint, ok := run("taint", append(arguments, "--config="+prepared.Config, "--taint-analysis"), nil)
 	if !ok {
 		return result
 	}

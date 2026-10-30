@@ -23,6 +23,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/legal"
 	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/projectinit"
+	"github.com/rchehd/phpwarden/internal/psalmconfig"
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/runner"
 	"github.com/rchehd/phpwarden/internal/runrequest"
@@ -616,6 +617,12 @@ func scopeOptions(args options, cwd string, location config.Location, cfg config
 	}
 	if checker.Enabled("psalm", cfg.Tools.Psalm.Enabled, only) {
 		projectFiles = append(projectFiles, filepath.Base(location.Path))
+		native, _ := psalmconfig.Load(location.Root, cfg.ComposerRoot, psalmconfig.Options{Config: cfg.Tools.Psalm.Config, Discover: cfg.Tools.Psalm.DiscoverConfig, Baseline: cfg.Tools.Psalm.Baseline})
+		for name := range native.Inputs {
+			projectFiles = append(projectFiles, path.Clean(name))
+		}
+		slices.Sort(projectFiles)
+		projectFiles = slices.Compact(projectFiles)
 	}
 	base, wholeFiles := "", false
 	if mode == "diff" {

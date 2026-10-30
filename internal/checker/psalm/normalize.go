@@ -81,6 +81,29 @@ func normalize(native psalmanalysis.Result, selection scope.Selection, eligible 
 			}
 			result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: diagnostic.Code, Stage: diagnostic.Stage, Message: diagnostic.Message, Checker: new("psalm")})
 		}
+		for i, raw := range native.Readiness {
+			if i == 10 {
+				result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "psalm_readiness", Stage: "readiness", Checker: new("psalm"), Message: fmt.Sprintf("%d additional readiness diagnostics are retained in the native evidence", len(native.Readiness)-i)})
+				break
+			}
+			var row issue
+			if json.Unmarshal(raw, &row) != nil || row.Type == "" || row.Message == "" {
+				continue
+			}
+			point, err := normalizeLocation(row.location, native.Roots)
+			if err != nil {
+				continue
+			}
+			message := row.Type + ": " + row.Message
+			if point.Path != nil && point.Line != nil {
+				prefix := ""
+				if point.Origin != "project" {
+					prefix = point.Origin + ":"
+				}
+				message = fmt.Sprintf("%s%s:%d: %s", prefix, *point.Path, *point.Line, message)
+			}
+			result.Diagnostics = append(result.Diagnostics, report.Diagnostic{Code: "psalm_readiness", Stage: "readiness", Checker: new("psalm"), Message: message})
+		}
 		return result
 	}
 	if len(native.Diagnostics) > 0 || native.Findings == nil || result.PHPVersion == nil || len(native.SourceFiles) == 0 || !validRoots(native.Roots) {

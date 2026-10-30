@@ -724,6 +724,18 @@
               "minimum": 128,
               "maximum": 65536,
               "default": 1536
+            },
+            "config": {
+              "type": "string",
+              "default": ""
+            },
+            "discover_config": {
+              "type": "boolean",
+              "default": true
+            },
+            "baseline": {
+              "type": "string",
+              "default": ""
             }
           }
         },
