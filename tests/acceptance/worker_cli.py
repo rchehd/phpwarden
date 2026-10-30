@@ -419,18 +419,67 @@ class WorkerCLITest(unittest.TestCase):
             self.assertEqual(report["exit_code"], 2)
             self.assertEqual(report["verdict"], "error")
 
+    def test_agent_instructions_install_repeat_selective_remove_preserves_project(self):
+        with materialize(FIXTURES / "added-debug") as scenario:
+            self.configure(scenario)
+            original_config = (scenario.root / ".phpwarden.yaml").read_bytes()
+            original_rules = b"# User rules\r\nPreserve these instructions.\r\n"
+            original_claude = b"# Claude preferences\nKeep this text.\n"
+            (scenario.root / "AGENTS.md").write_bytes(original_rules)
+            (scenario.root / "CLAUDE.md").write_bytes(original_claude)
+
+            def run(*arguments):
+                process = subprocess.run(
+                    [str(self.binary), *arguments, "--format", "json"],
+                    cwd=scenario.root,
+                    env=scenario.env,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+                return json.loads(process.stdout)
+
+            for attempt in range(2):
+                report = run("init", "--agents", "all", "--instructions", "all", "-n")
+                rows = report["init"]["agent_instructions"]
+                self.assertEqual(len(rows), 2)
+                self.assertTrue(all(row["changed"] == (attempt == 0) for row in rows))
+                self.assertEqual((scenario.root / ".phpwarden.yaml").read_bytes(), original_config)
+
+            removed = run("instructions", "remove", "--client", "codex")
+            self.assertEqual(removed["instructions"][0]["clients"], ["cursor", "claude"])
+            (scenario.root / ".phpwarden.yaml").unlink()
+            run("instructions", "remove", "--client", "all", "--project", str(scenario.root))
+            self.assertEqual((scenario.root / "AGENTS.md").read_bytes(), original_rules)
+            self.assertEqual((scenario.root / "CLAUDE.md").read_bytes(), original_claude)
+            self.assertTrue((scenario.root / ".agents/skills/phpwarden/SKILL.md").is_file())
+            for name in (".codex/hooks.json", ".cursor/hooks.json", ".claude/settings.json"):
+                self.assertFalse((scenario.root / name).exists())
+
     def test_init_check_selection_and_unattended_defaults(self):
-        for arguments, ci, answers, prompt, code, selected, agents in (
-            ([], "", b"none\nnone\nnone\ndebug,rector\n\n", True, 0, {"debug", "rector"}, False),
-            ([], "", b"\n\n\n", True, 0, None, False),
-            ([], "", b"all\n\n\n", True, 0, None, True),
-            (["--no-interaction"], "", None, False, 0, None, False),
-            (["-n"], "", None, False, 0, None, False),
-            (["-n", "--agents", "all"], "", None, False, 0, None, True),
-            (["--format", "json"], "", None, False, 0, None, False),
-            ([], "true", None, False, 0, None, False),
-            (["--pre-commit"], "", b"all\nq\n", True, 130, None, False),
-            ([], "", b"\x04", True, 130, None, False),
+        for arguments, ci, answers, prompt, code, selected, agents, instructions in (
+            (
+                [],
+                "",
+                b"none\nnone\nnone\ndebug,rector\n\n",
+                True,
+                0,
+                {"debug", "rector"},
+                False,
+                False,
+            ),
+            ([], "", b"\n\n\n", True, 0, None, False, False),
+            ([], "", b"all\n\n\n", True, 0, None, True, False),
+            ([], "", b"all\nall\n\n", True, 0, None, True, True),
+            (["--no-interaction"], "", None, False, 0, None, False, False),
+            (["-n"], "", None, False, 0, None, False, False),
+            (["-n", "--agents", "all"], "", None, False, 0, None, True, False),
+            (["-n", "--instructions", "all"], "", None, False, 0, None, False, True),
+            (["--format", "json"], "", None, False, 0, None, False, False),
+            ([], "true", None, False, 0, None, False, False),
+            (["--pre-commit"], "", b"all\nq\n", True, 130, None, False, False),
+            ([], "", b"\x04", True, 130, None, False, False),
         ):
             with (
                 self.subTest(arguments=arguments, ci=ci, answers=answers),
@@ -479,6 +528,17 @@ class WorkerCLITest(unittest.TestCase):
                         process.wait(timeout=5)
                 text = output.decode()
                 self.assertEqual("Install project skills for agents?" in text, prompt, text)
+                self.assertNotIn("Install completion hooks?", text)
+                if code == 0:
+                    self.assertEqual("Add project instructions for agents?" in text, prompt, text)
+                    for name in ("AGENTS.md", "CLAUDE.md"):
+                        self.assertEqual((scenario.root / name).is_file(), instructions, text)
+                    for name in (
+                        ".codex/hooks.json",
+                        ".cursor/hooks.json",
+                        ".claude/settings.json",
+                    ):
+                        self.assertFalse((scenario.root / name).exists(), text)
                 if code == 0:
                     self.assertEqual("Choose checks for this project" in text, prompt, text)
                 config_path = scenario.root / ".phpwarden.yaml"

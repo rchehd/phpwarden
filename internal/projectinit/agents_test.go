@@ -43,9 +43,20 @@ func TestInitMonorepoAgentSkillsUseGitRoot(t *testing.T) {
 		if attempt > 0 {
 			cwd = root
 		}
-		result, err := Run(context.Background(), Options{CWD: cwd, Agents: []string{"codex", "cursor", "claude"}})
+		result, err := Run(context.Background(), Options{CWD: cwd, Agents: []string{"codex", "cursor", "claude"}, Instructions: []string{"codex", "cursor", "claude"}})
 		if err != nil || result.Created != (attempt == 0) || result.Location.Root != root || result.AgentSkills == nil || result.AgentSkills.Created != (attempt == 0) {
 			t.Fatalf("monorepo installation: %+v %v", result, err)
+		}
+		if len(result.AgentInstructions) != 2 {
+			t.Fatal("missing monorepo instruction state")
+		}
+		for _, row := range result.AgentInstructions {
+			if filepath.Dir(row.Path) != root || row.Changed != (attempt == 0) {
+				t.Fatalf("instructions installed at wrong root: %+v", row)
+			}
+		}
+		if _, err := os.Lstat(filepath.Join(root, "platform/AGENTS.md")); !os.IsNotExist(err) {
+			t.Fatal("instructions installed under Composer root")
 		}
 		effective, err := config.Load(result.Location)
 		if err != nil || effective.Config.ComposerRoot != "platform" {
@@ -108,6 +119,27 @@ func TestInitAgentConflictAndCancellationWriteNoConfiguration(t *testing.T) {
 		for _, name := range []string{".phpwarden.yaml", ".agents/skills/phpwarden-architecture"} {
 			if _, err := os.Lstat(filepath.Join(root, name)); !os.IsNotExist(err) {
 				t.Fatalf("rejected init wrote %s", name)
+			}
+		}
+	}
+}
+
+func TestInstructionPreflightAndSelectionCancellationPreserveProject(t *testing.T) {
+	for _, cancelled := range []bool{false, true} {
+		root := drupalProject(t, ">=8.1", nil)
+		options := Options{CWD: root, Runtime: "8.4", Agents: []string{"codex"}}
+		if cancelled {
+			options.SelectInstructions = func() ([]string, error) { return nil, context.Canceled }
+		} else {
+			options.Instructions = []string{"claude"}
+			writeFile(t, root, "CLAUDE.md", "<!-- /phpwarden:instructions -->")
+		}
+		if _, err := Run(context.Background(), options); err == nil {
+			t.Fatal("invalid/cancelled instructions succeeded")
+		}
+		for _, name := range []string{".phpwarden.yaml", ".agents", "AGENTS.md"} {
+			if _, err := os.Lstat(filepath.Join(root, name)); !os.IsNotExist(err) {
+				t.Fatal("preflight wrote project file", name)
 			}
 		}
 	}

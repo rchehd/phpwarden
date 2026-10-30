@@ -27,6 +27,10 @@ func initProject(ctx context.Context, args options, cwd string, stdin io.Reader,
 		return fail(stdout, stderr, args, "usage", err)
 	}
 	settings.Agents = selected
+	settings.Instructions, err = agentskills.ParseClients(args.instructions)
+	if err != nil {
+		return fail(stdout, stderr, args, "usage", err)
+	}
 	settings.Hooks, err = agentskills.ParseClients(args.hooks)
 	if err != nil {
 		return fail(stdout, stderr, args, "usage", err)
@@ -41,9 +45,9 @@ func initProject(ctx context.Context, args options, cwd string, stdin io.Reader,
 				return chooseInitAgents(ctx, reader, stderr)
 			}
 		}
-		if args.hooks == "" {
-			settings.SelectHooks = func() ([]string, error) {
-				return chooseInitIntegrations(ctx, reader, stderr, "Install completion hooks?")
+		if args.instructions == "" {
+			settings.SelectInstructions = func() ([]string, error) {
+				return chooseInitIntegrations(ctx, reader, stderr, "Add project instructions for agents?")
 			}
 		}
 	}
@@ -122,6 +126,13 @@ func initProject(ctx context.Context, args options, cwd string, stdin io.Reader,
 }
 
 func writeAgentInstallation(stdout io.Writer, result projectinit.Result) {
+	for _, instructions := range result.AgentInstructions {
+		verb := "Already configured"
+		if instructions.Changed {
+			verb = "Updated"
+		}
+		fmt.Fprintf(stdout, "%s agent instructions: %s\n", verb, instructions.Path)
+	}
 	if result.AgentSkills == nil {
 		return
 	}

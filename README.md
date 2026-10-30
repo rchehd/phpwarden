@@ -332,7 +332,7 @@ php:
 
 If the versions cannot be detected or conflict with `composer.lock`, init stops with exit code 2 and says what to pass, for example `phpwarden init --php-runtime 8.1`. Use `--php-runtime` and `--php-target` to set them yourself. Init never overwrites an existing `.phpwarden.yaml`.
 
-In a terminal, `init` offers agent skills and completion hooks separately, then shows every check with its profile default already selected. Toggle checks by number or ID (for example `2,5` or `rector`), then press Enter to save. `all`, `none`, and `defaults` change the check selection; `q`, Ctrl+C, or closing input cancels before installation. Existing configs are validated and preserved without prompting for checks; agent integrations can still be installed.
+In a terminal, `init` offers agent skills and project instructions separately, then shows every check with its profile default already selected. Completion hooks require explicit `--hooks`. Toggle checks by number or ID (for example `2,5` or `rector`), then press Enter to save. `all`, `none`, and `defaults` change the check selection; `q`, Ctrl+C, or closing input cancels before installation. Existing configs are validated and preserved without prompting for checks; agent integrations can still be installed.
 
 For unattended setup, accept the profile defaults with:
 
@@ -341,7 +341,7 @@ phpwarden init --no-interaction
 phpwarden init --no-interaction --pre-commit
 ```
 
-`-n` is the short form. CI (`CI` set), `--format json`, and redirected input/output also use defaults without prompting. The flag leaves `composer-require-checker` and `composer-unused` disabled. Agent skills require explicit `--agents`; completion hooks require explicit `--hooks`. Every bundled analyzer is already present in the worker image; init records which checks to run.
+`-n` is the short form. CI (`CI` set), `--format json`, and redirected input/output also use defaults without prompting. The flag leaves `composer-require-checker` and `composer-unused` disabled. Agent skills require explicit `--agents`, instructions require `--instructions`, and completion hooks require `--hooks`. Every bundled analyzer is already present in the worker image; init records which checks to run.
 
 ### Agent skills
 
@@ -392,6 +392,50 @@ starting those collectors. The default destination is `phpwarden-report.md` in
 the project root; existing files are preserved using an unused timestamped name.
 
 Repeated installation reuses identical files and links. Different existing files, conflicting links and symlinked parent directories stop installation without overwriting them. Review customized skill files before updating them. A write failure can leave completed installation files; init reports the failure and a retry can finish it. Skill installation preserves project configuration, harness settings and hooks.
+
+### Agent project instructions
+
+Install a short project rule alongside skills:
+
+```sh
+phpwarden init --agents all --instructions all -n
+```
+
+`--instructions codex,cursor` selects clients; `none` skips without removing
+existing instructions. Instructions and skills are independent selections, so
+`--instructions all` can also be used with an already installed plugin. The rule
+asks the agent to use the available `phpwarden` skill and report missing setup
+if unavailable. No automatic check or completion hook is registered.
+
+The installer adds one shared managed block to `AGENTS.md`. Claude also gets a
+managed `@AGENTS.md` import in `CLAUDE.md`, unless that exact import already
+exists. This supports older Claude versions and projects whose Claude settings
+prefer CLAUDE.md. It imports the project's existing AGENTS.md rules as well.
+Codex/Cursor share AGENTS.md, so any client reading that file can see the rule.
+Nested/user/managed instruction precedence still applies; reload the client and
+verify discovery. [Cursor instructions](https://cursor.com/docs/rules) and
+[Claude imports](https://code.claude.com/docs/en/memory#share-one-file-with-other-coding-tools)
+describe the client behavior.
+
+User text outside the managed markers is preserved, including line endings and
+permissions. Repeating setup merges the selected clients without duplicating the
+block. Modified managed text, ambiguous markers, symlinks and oversized/non-UTF-8
+files stop preflight. Put custom rules outside the managed block or in your
+project checklist. Installation rechecks files under a project lock and writes
+atomically; an I/O failure can leave earlier completed steps and names the error.
+
+Remove only the owned instructions through the host CLI:
+
+```sh
+phpwarden instructions remove --client all --project /path/to/project
+```
+
+Selective removal retains the shared rule for remaining clients. Removal preserves
+skills, hooks, project config, foreign imports and text; empty files created solely
+by this installer are removed. A modified managed block is left for manual
+reconciliation. Removal with explicit `--project` also works after config deletion.
+Instructions guide an agent; CI or explicitly installed hooks remain the separate
+choice for an enforced gate.
 
 ### Agent plugin development packages
 

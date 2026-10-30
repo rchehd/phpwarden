@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/rchehd/phpwarden/internal/agenthook"
+	"github.com/rchehd/phpwarden/internal/agentinstructions"
 	"github.com/rchehd/phpwarden/internal/agentskills"
 	"github.com/rchehd/phpwarden/internal/checker/deptrac"
 	"github.com/rchehd/phpwarden/internal/checker/gitleaks"
@@ -42,18 +43,20 @@ profile: drupal
 `
 
 type Options struct {
-	CWD          string
-	Project      string
-	ComposerRoot string
-	Runtime      string
-	Target       string
-	PreCommit    bool
-	Executable   string
-	SelectChecks func([]CheckChoice) ([]string, error)
-	Agents       []string
-	SelectAgents func() ([]string, error)
-	Hooks        []string
-	SelectHooks  func() ([]string, error)
+	CWD                string
+	Project            string
+	ComposerRoot       string
+	Runtime            string
+	Target             string
+	PreCommit          bool
+	Executable         string
+	SelectChecks       func([]CheckChoice) ([]string, error)
+	Agents             []string
+	SelectAgents       func() ([]string, error)
+	Instructions       []string
+	SelectInstructions func() ([]string, error)
+	Hooks              []string
+	SelectHooks        func() ([]string, error)
 }
 
 type Choice struct {
@@ -67,18 +70,19 @@ type NativeConfig struct {
 }
 
 type Result struct {
-	Created         bool                      `json:"created"`
-	Location        config.Location           `json:"location"`
-	ComposerRoot    string                    `json:"composer_root,omitempty"`
-	Runtime         *Choice                   `json:"runtime,omitempty"`
-	Target          *Choice                   `json:"target,omitempty"`
-	Image           string                    `json:"image,omitempty"`
-	Project         *profile.Facts            `json:"project,omitempty"`
-	Base            *string                   `json:"base,omitempty"`
-	NativeConfigs   []NativeConfig            `json:"native_configs,omitempty"`
-	PreCommit       *githook.Installation     `json:"pre_commit,omitempty"`
-	AgentSkills     *agentskills.Installation `json:"agent_skills,omitempty"`
-	CompletionHooks []agenthook.Installation  `json:"completion_hooks,omitempty"`
+	Created           bool                             `json:"created"`
+	Location          config.Location                  `json:"location"`
+	ComposerRoot      string                           `json:"composer_root,omitempty"`
+	Runtime           *Choice                          `json:"runtime,omitempty"`
+	Target            *Choice                          `json:"target,omitempty"`
+	Image             string                           `json:"image,omitempty"`
+	Project           *profile.Facts                   `json:"project,omitempty"`
+	Base              *string                          `json:"base,omitempty"`
+	NativeConfigs     []NativeConfig                   `json:"native_configs,omitempty"`
+	PreCommit         *githook.Installation            `json:"pre_commit,omitempty"`
+	AgentSkills       *agentskills.Installation        `json:"agent_skills,omitempty"`
+	CompletionHooks   []agenthook.Installation         `json:"completion_hooks,omitempty"`
+	AgentInstructions []agentinstructions.Installation `json:"agent_instructions,omitempty"`
 }
 
 // Run writes an annotated configuration, or validates the one already there.
@@ -95,6 +99,17 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		}
 	}
 	agents, err := agentskills.Prepare(root, selected)
+	if err != nil {
+		return Result{}, err
+	}
+	selectedInstructions := options.Instructions
+	if options.SelectInstructions != nil {
+		selectedInstructions, err = options.SelectInstructions()
+		if err != nil {
+			return Result{}, err
+		}
+	}
+	instructions, err := agentinstructions.Prepare(ctx, root, selectedInstructions)
 	if err != nil {
 		return Result{}, err
 	}
@@ -137,6 +152,10 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	result.CompletionHooks, err = completionHooks.Install(ctx)
 	if err != nil {
 		return result, fmt.Errorf("configuration is ready, but completion hook installation failed: %w", err)
+	}
+	result.AgentInstructions, err = instructions.Install(ctx)
+	if err != nil {
+		return result, fmt.Errorf("configuration is ready, but agent instructions installation failed: %w", err)
 	}
 	return result, err
 }

@@ -24,9 +24,14 @@ multiple positional paths. Paths cannot be combined with `--mode`, `--base`,
 `--commits` or `--whole-files`. Keep enabled applicable checks and project policy;
 some analyzers still need wider dependency context despite a narrow report scope.
 
-Install a small managed instruction block only through an explicit setup choice,
-using the client-supported project instruction file/rules. Verify discovery before
-choosing AGENTS.md or a native adapter, and preserve existing user instructions.
+Install a managed project instruction block with
+`phpwarden init --agents all --instructions all -n`, or choose instructions during
+interactive init. Skills and instructions are independent selections. AGENTS.md
+is shared; Claude receives an owned @AGENTS.md import in CLAUDE.md for compatibility.
+User text, existing imports and modified managed blocks are preserved. The host
+command `phpwarden instructions remove --client all --project PATH` removes only
+owned unchanged blocks, retaining other clients on selective removal. Native
+discovery/inheritance still needs verification in your installed client version.
 Instructions guide the agent and do not enforce a completion gate. Completion
 hooks remain explicit opt-in, with plugin hook packaging deferred. Existing
 installed hooks must not be silently removed or rewritten; CI and Git pre-commit
@@ -62,7 +67,7 @@ unavailable documentation cannot become a pass. Expose conflicts with project
 rules rather than silently replacing policy. Reports must distinguish native
 analyzer findings from agent observations and state coverage limits. This
 checklist workflow is included in new builds; live client invocation is still
-pending. Automatic installation of project instruction blocks remains planned.
+pending. Instruction setup is performed by the CLI, not by installing a ZIP alone.
 
 ## Build
 

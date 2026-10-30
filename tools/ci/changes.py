@@ -28,6 +28,7 @@ DOCKERLESS_CORE = (
     "internal/perfmcp/",
     "internal/perfruntime/",
     "internal/agentskills/",
+    "internal/agentinstructions/",
     "internal/agenthook/",
     "internal/githook/",
 )

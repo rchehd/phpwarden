@@ -72,6 +72,10 @@ func ddevVersion(root, directory string) (*Choice, error) {
 	return result, nil
 }
 
+func ProjectRoot(ctx context.Context, cwd, project string) (string, error) {
+	return projectRoot(ctx, Options{CWD: cwd, Project: project})
+}
+
 func projectRoot(ctx context.Context, options Options) (string, error) {
 	cwd, err := resolve(options.CWD)
 	if err != nil {

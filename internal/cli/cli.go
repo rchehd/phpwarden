@@ -47,6 +47,7 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
        phpwarden container <init|check|fix|config|scope|resolve|hook pre-commit> [options]
        phpwarden hook pre-commit [--project PATH]
        phpwarden hook stop --client codex|cursor|claude [--project PATH]
+       phpwarden instructions remove --client all|codex,cursor,claude [--project PATH]
        phpwarden doctor [options]
        phpwarden updates [--security] [--direct] [--no-dev] [--offline] [--runtime-version X.Y.Z] [options]
        phpwarden update [--check] [--to VERSION] [--format text|json]
@@ -67,8 +68,9 @@ Options:
   --licenses           Show CLI third-party notices; --format=json shows dependency inventory
 
 Init options:
-  --no-interaction, -n Use profile defaults; skills/hooks require explicit --agents/--hooks
+  --no-interaction, -n Use defaults; integrations require explicit --agents/--instructions/--hooks
   --agents CLIENTS     Install project skills: all, none, or codex,cursor,claude
+  --instructions CLIENTS Add project instructions: all, none, or codex,cursor,claude
   --hooks CLIENTS      Install completion hooks: all, none, or codex,cursor,claude
   --pre-commit         Install a Git pre-commit hook for staged files; preserve existing hooks
   --composer-root DIR  Directory with composer.json inside the project (default: detected)
@@ -93,7 +95,7 @@ Scope options:
 
 Drupal source roots are discovered from Composer/layout, or overridden by scope.include.
 Check uses Docker worker images (Linux amd64, PHP runtime 8.1–8.4, target from 8.1 up to the runtime).
-Init offers agent skills, completion hooks and check selection in terminals; CI, JSON and redirected streams use defaults.
+Init offers skills, project instructions and check selection in terminals; hooks require explicit --hooks.
 Agent skills use .agents/skills; Claude gets a relative directory link in .claude/skills.
 Init writes .phpwarden.yaml at the Git root and never overwrites an existing file.
 Worker check requires PHP in its execution environment. Published CLI builds download missing digest-pinned images unless runner.image_pull is never.
@@ -123,6 +125,7 @@ type options struct {
 	phpTarget      string
 	composerRoot   string
 	agents         string
+	instructions   string
 	hooks          string
 	security       bool
 	direct         bool
@@ -180,6 +183,9 @@ func runContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	}
 	if len(arguments) > 0 && arguments[0] == "container" {
 		return containerCLI(ctx, arguments[1:], cwd, stdin, stdout, stderr)
+	}
+	if len(arguments) > 0 && arguments[0] == "instructions" {
+		return instructionsCLI(ctx, arguments[1:], cwd, stdout, stderr)
 	}
 	if len(arguments) > 0 && arguments[0] == "update" {
 		return updateCLI(ctx, arguments[1:], stdout, stderr)
@@ -288,6 +294,9 @@ func runContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	}
 	if args.agents != "" && !isInit {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--agents requires init"))
+	}
+	if args.instructions != "" && !isInit {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("--instructions requires init"))
 	}
 	if args.hooks != "" && !isInit {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("--hooks requires init"))
@@ -480,7 +489,7 @@ func parse(arguments []string) (options, error) {
 			continue
 		}
 		name, value, inline := strings.Cut(argument, "=")
-		if !slices.Contains([]string{"--project", "--config", "--format", "--mode", "--base", "--only", "--color", "--php-runtime", "--php-target", "--commits", "--composer-root", "--agents", "--hooks", "--runtime-version"}, name) {
+		if !slices.Contains([]string{"--project", "--config", "--format", "--mode", "--base", "--only", "--color", "--php-runtime", "--php-target", "--commits", "--composer-root", "--agents", "--instructions", "--hooks", "--runtime-version"}, name) {
 			return result, fmt.Errorf("unknown option %q", name)
 		}
 		if seen[name] {
@@ -498,6 +507,8 @@ func parse(arguments []string) (options, error) {
 			return result, fmt.Errorf("%s requires a nonempty value", name)
 		}
 		switch name {
+		case "--instructions":
+			result.instructions = value
 		case "--hooks":
 			result.hooks = value
 		case "--runtime-version":

@@ -38,6 +38,7 @@ class CheckSelectionTest(unittest.TestCase):
         self.assertEqual(self.selected("tests/fixtures/sample/keep.txt"), {"go", "python"})
         self.assertEqual(self.selected("tests/fixtures/sample/guide.md"), {"go", "python"})
         self.assertIn("dockerless", self.selected("internal/agentskills/assets/review/SKILL.md"))
+        self.assertIn("dockerless", self.selected("internal/agentinstructions/instructions.go"))
 
     def test_worker_build_and_shared_scope_dependencies_select_all_consumers(self):
         for path in (
