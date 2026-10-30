@@ -1,0 +1,17 @@
+{
+  "author": {
+    "name": "rchehd"
+  },
+  "description": "Project quality review, architecture, upgrades, tests and Markdown reports with PHPWarden",
+  "homepage": "https://github.com/rchehd/phpwarden",
+  "keywords": [
+    "php",
+    "drupal",
+    "quality",
+    "security",
+    "reports"
+  ],
+  "name": "phpwarden",
+  "repository": "https://github.com/rchehd/phpwarden",
+  "skills": "./skills/"
+}

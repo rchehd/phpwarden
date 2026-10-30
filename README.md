@@ -441,10 +441,12 @@ choice for an enforced gate.
 
 The same eight skills can be packaged for Codex, Cursor and Claude Code through
 **Actions → Build → Run workflow → target: plugins**. The development artifact
-contains three ZIP archives with client manifests, shared skills/references and
-`SHA256SUMS`; it requires no CLI or worker image build. These initial packages
-contain skills only. Plugin hooks, performance MCP wiring, live client acceptance
-and marketplace publication remain pending. The existing `init --agents` route
+contains three client ZIPs, a self-contained catalog ZIP and `SHA256SUMS`;
+it requires no CLI or worker image build. Repository catalogs for all three
+clients point to one shared plugin tree. Version-tag releases attach the same
+plugin packages alongside the CLI. These packages contain skills only. Plugin
+hooks, performance MCP wiring, live client acceptance and public marketplace
+publication remain pending. The existing `init --agents` route
 continues to provide project installation. See [plugin packaging](plugins/README.md)
 for local builds, package contents and current installation limits.
 

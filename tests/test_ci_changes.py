@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import subprocess
@@ -26,6 +27,19 @@ class CheckSelectionTest(unittest.TestCase):
         self.assertEqual(self.selected("tests/test_sandbox.py"), {"python"})
         self.assertEqual(self.selected("requirements-dev.txt"), {"python"})
         self.assertEqual(self.selected("pyproject.toml"), {"python"})
+
+    def test_native_catalogs_validate_without_installation_scenarios(self):
+        for path in (
+            ".agents/plugins/marketplace.json",
+            ".claude-plugin/marketplace.json",
+            ".cursor-plugin/marketplace.json",
+            "internal/agentskills/.codex-plugin/plugin.json",
+            "internal/agentskills/.claude-plugin/plugin.json",
+            "internal/agentskills/.cursor-plugin/plugin.json",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.selected(path), {"go"})
+        self.assertEqual(self.selected(".agents/skills/local/SKILL.md"), set())
 
     def test_mutation_changes_do_not_start_unrelated_installation_scenarios(self):
         self.assertEqual(self.selected("tools/sandbox/mutation_tests.py"), {"python", "mutation"})
@@ -171,6 +185,46 @@ class GitComparisonTest(unittest.TestCase):
 
 
 class CheckGateTest(unittest.TestCase):
+    def test_release_assembly_verifies_both_inputs_and_combines_checksums(self):
+        workflow = (ROOT / ".github/workflows/build.yml").read_text()
+        script = textwrap.dedent(
+            workflow.split("- name: Assemble verified release assets", 1)[1]
+            .split("run: |", 1)[1]
+            .split("      - name:", 1)[0]
+        )
+        for corrupt in (None, "dist", "agent-plugins"):
+            with (
+                self.subTest(corrupt=corrupt),
+                tempfile.TemporaryDirectory(prefix="phpwarden-release-assets-") as directory,
+            ):
+                root = Path(directory)
+                for component, files in (
+                    ("dist", {"phpwarden-linux-amd64.tar.gz": b"cli"}),
+                    (
+                        "agent-plugins",
+                        {
+                            f"phpwarden-plugin-{client}.zip": client.encode()
+                            for client in ("codex", "cursor", "claude", "catalogs")
+                        },
+                    ),
+                ):
+                    target = root / component
+                    target.mkdir()
+                    sums = []
+                    for name, data in files.items():
+                        (target / name).write_bytes(data)
+                        sums.append(f"{hashlib.sha256(data).hexdigest()}  {name}\n")
+                    (target / "SHA256SUMS").write_text("".join(sums))
+                    if corrupt == component:
+                        (target / next(iter(files))).write_bytes(b"corrupt")
+                result = subprocess.run(["bash", "-e", "-c", script], cwd=root, capture_output=True)
+                self.assertEqual(result.returncode == 0, corrupt is None, result.stderr)
+                if corrupt is None:
+                    self.assertEqual(len((root / "dist/SHA256SUMS").read_text().splitlines()), 5)
+                    self.assertEqual(len(list((root / "dist").glob("*.zip"))), 4)
+                else:
+                    self.assertEqual(len(list((root / "dist").glob("*.zip"))), 0)
+
     def test_plugin_only_build_accepts_no_image_publication(self):
         workflow = (ROOT / ".github/workflows/build.yml").read_text()
         script = textwrap.dedent(

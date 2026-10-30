@@ -17,7 +17,7 @@ Verify the archive against its accompanying `SHA256SUMS`, then extract it into a
 new directory. The extracted directory is the plugin root: its hidden manifest
 and `skills/` must remain together. Use your client's supported local plugin
 loading/installation flow. Client discovery and live invocation remain to be
-verified; this package is not listed in a marketplace.
+verified; this package is not listed in a public marketplace.
 
 For Claude Code, a temporary session can load the extracted directory with
 `claude --plugin-dir /absolute/path/to/extracted-plugin`. Plugin skills are
@@ -60,7 +60,7 @@ Do not enable duplicate hooks or install another MCP entry for the same runtime.
 Updating, rolling back and removing the plugin must use the client's supported
 plugin management flow. Project config, installed CLI, project-installed skills,
 hooks and performance runtimes have separate lifecycles. Live install/update/
-uninstall acceptance and marketplace publication are pending. The project's own
+uninstall acceptance and public marketplace publication are pending. The project's own
 distribution license is not selected yet; no public licensing grant is implied
 by these internal development artifacts.
 

@@ -12,9 +12,24 @@ func TestPluginsCommand(t *testing.T) {
 	if err := run([]string{"plugins", "--version", "v0.0.0-dev.abcdef0", "--commit", strings.Repeat("a", 40), "--output", output}); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"phpwarden-plugin-codex.zip", "phpwarden-plugin-cursor.zip", "phpwarden-plugin-claude.zip", "SHA256SUMS"} {
+	for _, name := range []string{"phpwarden-plugin-codex.zip", "phpwarden-plugin-cursor.zip", "phpwarden-plugin-claude.zip", "phpwarden-plugin-catalogs.zip", "SHA256SUMS"} {
 		if info, err := os.Stat(filepath.Join(output, name)); err != nil || info.Size() == 0 {
 			t.Fatalf("missing plugin artifact %s: %v", name, err)
+		}
+	}
+}
+
+func TestCatalogsCommand(t *testing.T) {
+	output := filepath.Join(t.TempDir(), "catalogs")
+	if err := run([]string{"catalogs", "--output", output}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(output, ".agents/plugins/marketplace.json")); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"catalogs"}, {"catalogs", "--output", output, "extra"}, {"catalogs", "--unknown"}} {
+		if err := run(args); err == nil {
+			t.Fatal("accepted invalid catalog arguments", args)
 		}
 	}
 }

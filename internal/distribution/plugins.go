@@ -50,6 +50,15 @@ func PluginPackages(version, commit, output string) error {
 		}
 		packages["phpwarden-plugin-"+client+".zip"] = data
 	}
+	files, err := catalogBundleFiles(version, commit)
+	if err != nil {
+		return err
+	}
+	data, err := zipFiles(files)
+	if err != nil {
+		return err
+	}
+	packages["phpwarden-plugin-catalogs.zip"] = data
 	var sums []byte
 	for _, name := range archiveNames(packages) {
 		sums = fmt.Appendf(sums, "%x  %s\n", sha256.Sum256(packages[name]), name)
@@ -81,22 +90,11 @@ func pluginFiles(client, version, commit string) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	manifest := map[string]any{
-		"name": "phpwarden", "version": strings.TrimPrefix(version, "v"),
-		"description": "Project quality review, architecture, upgrades, tests and Markdown reports with PHPWarden",
-		"author":      map[string]string{"name": "rchehd"},
-		"homepage":    "https://github.com/rchehd/phpwarden",
-		"repository":  "https://github.com/rchehd/phpwarden",
-		"keywords":    []string{"php", "drupal", "quality", "security", "reports"},
-	}
-	if client == "codex" {
-		manifest["skills"] = "./skills/"
-	}
-	data, err := json.MarshalIndent(manifest, "", "  ")
+	data, err := pluginManifest(client, version)
 	if err != nil {
 		return nil, err
 	}
-	files["."+client+"-plugin/plugin.json"] = append(data, '\n')
+	files["."+client+"-plugin/plugin.json"] = data
 	identity := pluginIdentity{
 		SchemaVersion: 1, Client: client, Version: version, Commit: commit,
 		Stage: "skills-only", RecommendedCLI: version, Skills: agentskills.Names,
@@ -106,6 +104,32 @@ func pluginFiles(client, version, commit string) (map[string][]byte, error) {
 		return nil, err
 	}
 	files["phpwarden-plugin.json"] = append(data, '\n')
-	files["README.md"] = []byte(strings.NewReplacer("@@CLIENT@@", client, "@@VERSION@@", version, "@@COMMIT@@", commit).Replace(pluginReadme))
+	files["README.md"] = renderPluginReadme(client, version, commit)
 	return files, nil
+}
+
+func renderPluginReadme(client, version, commit string) []byte {
+	return []byte(strings.NewReplacer("@@CLIENT@@", client, "@@VERSION@@", version, "@@COMMIT@@", commit).Replace(pluginReadme))
+}
+
+func pluginManifest(client, version string) ([]byte, error) {
+	manifest := map[string]any{
+		"name":        "phpwarden",
+		"description": "Project quality review, architecture, upgrades, tests and Markdown reports with PHPWarden",
+		"author":      map[string]string{"name": "rchehd"},
+		"homepage":    "https://github.com/rchehd/phpwarden",
+		"repository":  "https://github.com/rchehd/phpwarden",
+		"keywords":    []string{"php", "drupal", "quality", "security", "reports"},
+	}
+	if version != "" {
+		manifest["version"] = strings.TrimPrefix(version, "v")
+	}
+	if client == "codex" {
+		manifest["skills"] = "./skills/"
+	}
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(data, '\n'), nil
 }

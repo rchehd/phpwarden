@@ -2,15 +2,59 @@
 
 New development builds contain eight shared skills for Codex, Cursor and
 Claude Code. They do not yet register completion hooks or performance MCP, bundle
-the CLI, enforce CLI compatibility or publish to a marketplace. Live client
-installation/discovery/update/uninstall acceptance remains pending.
+the CLI or enforce CLI compatibility. Native catalogs are available in this
+repository; public marketplace listings remain pending. Live client
+installation/discovery/update/uninstall acceptance belongs to the project owner.
 
 ## Agent workflow
 
 Keep client catalogs in the PHPWarden repository, with shared skill sources and
-versions tied to the CLI release. Catalog generation and installation recipes
-remain pending; a separate marketplace repository is unnecessary for this single
-product.
+versions tied to the CLI release. All three catalogs resolve the same plugin root
+at `internal/agentskills`; no generated skills are committed. A separate
+marketplace repository is unnecessary for this single product.
+
+## Development catalogs
+
+| Client | Repository catalog | Native manifest under `internal/agentskills` |
+| --- | --- | --- |
+| Codex | `.agents/plugins/marketplace.json` | `.codex-plugin/plugin.json` |
+| Claude Code | `.claude-plugin/marketplace.json` | `.claude-plugin/plugin.json` |
+| Cursor | `.cursor-plugin/marketplace.json` | `.cursor-plugin/plugin.json` |
+
+The marketplace is `phpwarden-dev`, with one plugin named `phpwarden`. Source
+paths resolve from the repository root, not from the catalog's directory. Add
+the repository or the extracted catalog bundle, preserving hidden files and the
+directory tree. A raw marketplace JSON URL cannot supply its relative files.
+
+For a local development checkout, Codex can register the marketplace with
+`codex plugin marketplace add /absolute/path/to/phpwarden`. Install from that
+marketplace through the Codex app's plugin flow. Claude Code can use
+`/plugin marketplace add /absolute/path/to/phpwarden`, followed by
+`/plugin install phpwarden@phpwarden-dev`. After these files are pushed, the
+GitHub source `rchehd/phpwarden` can replace the local path in those marketplace
+commands. This document records supported setup routes, not a completed live
+client acceptance test.
+
+For Cursor, use its supported direct/local installation flow with
+`internal/agentskills`, or the Cursor catalog in an eligible team marketplace.
+Private team marketplaces require a supported Teams/Enterprise plan; this
+catalog is not an automatic public listing. Confirm discovery in your installed
+client version before treating the integration as verified.
+
+Git development manifests omit `version`. In Claude Code this lets Git commit
+identity drive updates instead of pinning users to an unchanged manifest version.
+Codex/Cursor update and rollback behavior must be checked in the installed client;
+no automatic-update guarantee is made. Versioned ZIPs always declare the supplied
+CLI build version and exact source commit. Do not add a fixed development version
+to the Git manifests without also defining how each change bumps it.
+
+Regenerate the six catalog/manifest source files into a new directory with
+`go run ./cmd/phpwarden-dist catalogs --output /tmp/phpwarden-catalog-sources`,
+then review and copy them into the checkout. This generator emits metadata only;
+the checkout supplies the shared skills. CI rejects drift between the committed
+metadata and generator and resolves every catalog against the real shared tree.
+
+## Project workflow
 
 The `phpwarden` entry skill routes to seven specialist skills. It chooses the
 scope requested by the user: explicit files/directories, commits or a relevant
@@ -94,13 +138,17 @@ The output contains:
 | `phpwarden-plugin-codex.zip` | `.codex-plugin/plugin.json`, skills and supporting files |
 | `phpwarden-plugin-cursor.zip` | `.cursor-plugin/plugin.json`, skills and supporting files |
 | `phpwarden-plugin-claude.zip` | `.claude-plugin/plugin.json`, skills and supporting files |
-| `SHA256SUMS` | SHA-256 of all three archives |
+| `phpwarden-plugin-catalogs.zip` | Three catalogs and one complete shared plugin tree, with all native manifests |
+| `SHA256SUMS` | SHA-256 of all four archives |
 
-Extract each archive into its own new directory. The archive has no enclosing
+Extract each client archive into its own new directory. The archive has no enclosing
 directory: the extracted directory is the plugin root. Every archive contains a
 README and `phpwarden-plugin.json` recording the client, version, commit,
 recommended CLI version, skill inventory and currently unavailable integrations.
-The CLI version is a recommendation, not a verified compatibility range.
+The CLI version is a recommendation, not a verified compatibility range. The
+catalog archive instead has the repository layout shown above; its shared plugin
+identity is at `internal/agentskills/phpwarden-plugin.json`. Add the extracted
+archive root as the marketplace, not the inner plugin directory.
 
 `internal/agentskills/skills` is the only skill source. The Go embed used by
 `init --agents` supplies the same files to the packager, including references,
@@ -111,23 +159,26 @@ committed. Archive ordering, permissions and timestamps are reproducible.
 
 Use **Actions → Build → Run workflow → target: plugins**. Image publication must
 remain unchecked for this target. After Checks succeeds, the job uploads
-`phpwarden-agent-plugins-<commit>` with the three archives and checksums.
+`phpwarden-agent-plugins-<commit>` with the four archives and checksums.
 `all` and version-tag builds also package the plugins. Ordinary branch pushes
 and pull requests run the relevant Go tests; they do not start the Build workflow.
 
-These are development Actions artifacts. The current GitHub Release job still
-publishes the existing CLI/container distribution assets; attaching plugin assets,
-catalog registration and public publication remain later steps. No marketplace
-or global client configuration is changed by this job.
+Manual builds upload development Actions artifacts. On a version tag, the Release
+job also waits for plugin packaging, downloads the matching commit's archives,
+verifies both checksum sets, and publishes them with the CLI and one combined
+`SHA256SUMS`. This prepares release assets; catalog registration and public
+marketplace submission are separate owner actions. No marketplace or global
+client configuration is changed by this job.
 
 ## Try and verify
 
-Follow the README in the selected archive. Claude Code can load an extracted
+Live installation and agent calls are the project owner's task. Follow the README
+in the selected archive. Claude Code can load an extracted
 directory for one session with `claude --plugin-dir /absolute/path/to/plugin`;
 plugin skill commands are namespaced, such as `/phpwarden:phpwarden-report`.
 For Codex and Cursor use their supported local plugin installation flow, verifying
-discovered commands in the installed version. Exact client installation recipes
-will be recorded after live acceptance. Avoid installing the same skills both
+discovered commands in the installed version. Record actual installation and
+update results after live acceptance. Avoid installing the same skills both
 through the plugin and `init --agents` for one client.
 
 Until plugin acceptance is complete, the existing project integration is:
@@ -140,7 +191,9 @@ phpwarden init --agents codex,cursor,claude -n
 Plugin removal does not remove independently installed project integrations or
 project rules. Packaging tests check each archive's manifest, shared file bytes,
 frontmatter, sibling links, identity, checksums, deterministic content and refusal
-to overwrite existing output. They do not certify client discovery or hook trust.
+to overwrite existing output. Catalog tests extract the complete bundle, resolve
+relative sources and compare its resources/manifests with the client archives.
+They do not certify client discovery, update behavior or hook trust.
 
 ## Format decisions
 
@@ -157,6 +210,8 @@ References checked 2026-10-30:
   an extra `skills` field to avoid listing the default location twice.
 - [Claude local loading](https://code.claude.com/docs/en/plugins/create): local
   plugin testing and command namespacing.
+- [Claude distribution and versioning](https://code.claude.com/docs/en/plugins/publish):
+  Git development updates without a fixed version and separate public submission.
 
 No license is invented in manifests. The repository's own distribution license
 and public release decision remain open; worker dependency licenses are separate

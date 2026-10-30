@@ -42,6 +42,16 @@ def classify(paths, force=False):
             selected[group] = True
 
     for name in paths:
+        if name in (
+            ".agents/plugins/marketplace.json",
+            ".claude-plugin/marketplace.json",
+            ".cursor-plugin/marketplace.json",
+            "internal/agentskills/.codex-plugin/plugin.json",
+            "internal/agentskills/.claude-plugin/plugin.json",
+            "internal/agentskills/.cursor-plugin/plugin.json",
+        ):
+            select("go")
+            continue
         if name in ("requirements-dev.txt", "pyproject.toml", "ruff.toml", ".ruff.toml"):
             select("python")
             continue

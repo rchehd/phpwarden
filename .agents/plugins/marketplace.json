@@ -1,0 +1,21 @@
+{
+  "name": "phpwarden-dev",
+  "owner": {
+    "name": "rchehd"
+  },
+  "plugins": [
+    {
+      "category": "Developer Tools",
+      "description": "PHPWarden project quality skills",
+      "name": "phpwarden",
+      "policy": {
+        "authentication": "ON_INSTALL",
+        "installation": "AVAILABLE"
+      },
+      "source": {
+        "path": "./internal/agentskills",
+        "source": "local"
+      }
+    }
+  ]
+}

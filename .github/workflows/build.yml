@@ -241,7 +241,7 @@ jobs:
           if-no-files-found: error
 
   agent-plugins:
-    name: Agent plugins · package shared skills
+    name: Agent plugins · package skills and catalogs
     if: github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'plugins'
     needs: checks
     runs-on: ubuntu-24.04
@@ -262,7 +262,7 @@ jobs:
           go run ./cmd/phpwarden-dist plugins --version "$version" --commit "$GITHUB_SHA" --output agent-plugins
           cd agent-plugins
           sha256sum -c SHA256SUMS
-      - name: Upload development plugin archives
+      - name: Upload plugin archives and catalogs
         uses: actions/upload-artifact@v7
         with:
           name: phpwarden-agent-plugins-${{ github.sha }}
@@ -270,9 +270,9 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: Publish versioned CLI release
+    name: Publish versioned release assets
     if: github.event_name == 'push' && github.ref_type == 'tag'
-    needs: [docker, cli-build]
+    needs: [docker, cli-build, agent-plugins]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -282,6 +282,17 @@ jobs:
         with:
           name: phpwarden-linux-amd64-${{ github.sha }}
           path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: phpwarden-agent-plugins-${{ github.sha }}
+          path: agent-plugins
+      - name: Assemble verified release assets
+        run: |
+          (cd agent-plugins && sha256sum -c SHA256SUMS)
+          (cd dist && sha256sum -c SHA256SUMS)
+          cp agent-plugins/phpwarden-plugin-*.zip dist/
+          cat agent-plugins/SHA256SUMS >> dist/SHA256SUMS
+          (cd dist && sha256sum -c SHA256SUMS)
       - name: Publish archive, checksum and compatibility manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -292,5 +303,5 @@ jobs:
           sha256sum -c SHA256SUMS
           prerelease=()
           if [[ "$RELEASE_TAG" == *-* ]]; then prerelease=(--prerelease); fi
-          gh release create "$RELEASE_TAG" phpwarden-linux-amd64.tar.gz SHA256SUMS compatibility.json phpwarden-composer-linux-amd64.zip phpwarden-npm-linux-amd64.tgz phpwarden-compose-php*.tar.gz install.sh --verify-tag --title "$RELEASE_TAG" --generate-notes "${prerelease[@]}"
+          gh release create "$RELEASE_TAG" phpwarden-linux-amd64.tar.gz SHA256SUMS compatibility.json phpwarden-composer-linux-amd64.zip phpwarden-npm-linux-amd64.tgz phpwarden-compose-php*.tar.gz phpwarden-plugin-*.zip install.sh --verify-tag --title "$RELEASE_TAG" --generate-notes "${prerelease[@]}"
 

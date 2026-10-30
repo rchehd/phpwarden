@@ -20,11 +20,19 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("expected manifest, package or plugins")
+		return fmt.Errorf("expected manifest, package, plugins or catalogs")
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	output := flags.String("output", "", "output file or directory")
 	switch args[0] {
+	case "catalogs":
+		if err := flags.Parse(args[1:]); err != nil {
+			return err
+		}
+		if flags.NArg() != 0 || *output == "" {
+			return fmt.Errorf("catalogs requires --output")
+		}
+		return distribution.CatalogSources(*output)
 	case "plugins":
 		version := flags.String("version", "", "release or development version")
 		commit := flags.String("commit", "", "exact source Git commit")

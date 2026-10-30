@@ -1,0 +1,13 @@
+{
+  "name": "phpwarden-dev",
+  "owner": {
+    "name": "rchehd"
+  },
+  "plugins": [
+    {
+      "description": "PHPWarden project quality skills",
+      "name": "phpwarden",
+      "source": "./internal/agentskills"
+    }
+  ]
+}
