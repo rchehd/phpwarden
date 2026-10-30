@@ -106,7 +106,7 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          export PHPWARDEN_VERSION="v0.0.0-dev.${GITHUB_SHA::7}"
+          export PHPWARDEN_VERSION="v0.0.0-dev.g${GITHUB_SHA::7}"
           if [ "$REF_TYPE" = tag ]; then export PHPWARDEN_VERSION="$REF_NAME"; fi
           export PHPWARDEN_COMMIT="$GITHUB_SHA"
           docker buildx bake
@@ -167,7 +167,7 @@ jobs:
             done
           done
           mkdir -p published
-          version="v0.0.0-dev.${GITHUB_SHA::7}"
+          version="v0.0.0-dev.g${GITHUB_SHA::7}"
           if [ "$REF_TYPE" = tag ]; then version="$REF_NAME"; fi
           python3 tools/distribution.py manifest --version "$version" --repository "$repository" --output published/compatibility.json
       - name: Upload published worker compatibility manifest
@@ -204,7 +204,7 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          version="v0.0.0-dev.${GITHUB_SHA::7}"
+          version="v0.0.0-dev.g${GITHUB_SHA::7}"
           if [ "$REF_TYPE" = tag ]; then version="$REF_NAME"; fi
           manifest=()
           if [ -f published/compatibility.json ]; then manifest=(--manifest published/compatibility.json); fi
@@ -257,7 +257,7 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          version="v0.0.0-dev.${GITHUB_SHA::7}"
+          version="v0.0.0-dev.g${GITHUB_SHA::7}"
           if [ "$REF_TYPE" = tag ]; then version="$REF_NAME"; fi
           go run ./cmd/phpwarden-dist plugins --version "$version" --commit "$GITHUB_SHA" --output agent-plugins
           cd agent-plugins

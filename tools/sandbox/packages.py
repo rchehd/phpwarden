@@ -19,7 +19,7 @@ class PackageInstallations:
         commit = sandbox.run(["git", "rev-parse", "HEAD"], cwd=sandbox.repository).strip()
         for number in (1, 2):
             output = self.root / str(number)
-            version = f"v0.0.0-dev.{commit[:7]}.{number}"
+            version = f"v0.0.0-dev.g{commit[:7]}.{number}"
             package(version, commit, None, output)
             composer = output / "phpwarden-composer-linux-amd64.zip"
             npm = output / "phpwarden-npm-linux-amd64.tgz"

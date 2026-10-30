@@ -20,6 +20,9 @@ import (
 )
 
 func Package(ctx context.Context, binary, readme, manifest, output string) error {
+	if err := checkPackageOutput(binary, manifest, output); err != nil {
+		return err
+	}
 	binary, err := filepath.Abs(binary)
 	if err != nil {
 		return err
@@ -33,17 +36,6 @@ func Package(ctx context.Context, binary, readme, manifest, output string) error
 	}
 	if normalized, err := selfupdate.Version(info.Version); err != nil || normalized != info.Version {
 		return fmt.Errorf("package binary requires a canonical release or development version")
-	}
-	if manifest == "" {
-		for _, pattern := range []string{"compatibility.json", "phpwarden-compose-php*.tar.gz"} {
-			matches, err := filepath.Glob(filepath.Join(output, pattern))
-			if err != nil {
-				return err
-			}
-			if len(matches) != 0 {
-				return fmt.Errorf("development package output contains published compatibility files; use a fresh directory")
-			}
-		}
 	}
 	data, err := os.ReadFile(binary)
 	if err != nil {
@@ -133,7 +125,7 @@ func Package(ctx context.Context, binary, readme, manifest, output string) error
 	names := []string{name, "phpwarden-composer-linux-amd64.zip", "phpwarden-npm-linux-amd64.tgz"}
 	if files["compatibility.json"] != nil {
 		names = append(names, "compatibility.json")
-		compose, err := filepath.Glob(filepath.Join(output, "phpwarden-compose-php*.tar.gz"))
+		compose, err := matchingPackageFiles(output, "phpwarden-compose-php*.tar.gz")
 		if err != nil {
 			return err
 		}
@@ -150,4 +142,72 @@ func Package(ctx context.Context, binary, readme, manifest, output string) error
 		sums = fmt.Appendf(sums, "%x  %s\n", sha256.Sum256(data), name)
 	}
 	return os.WriteFile(filepath.Join(output, "SHA256SUMS"), sums, 0o644)
+}
+
+func checkPackageOutput(binary, manifest, output string) error {
+	if entry, err := os.Lstat(output); err == nil && !entry.IsDir() {
+		return fmt.Errorf("package output must be a directory, not a file or symlink")
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	manifestPath, binaryPath := "", ""
+	if manifest != "" {
+		var err error
+		manifestPath, err = filepath.Abs(manifest)
+		if err != nil {
+			return err
+		}
+	}
+	if binary != "" {
+		var err error
+		binaryPath, err = filepath.Abs(binary)
+		if err != nil {
+			return err
+		}
+	}
+	for _, pattern := range []string{
+		"phpwarden", "phpwarden-linux-amd64.tar.gz", "phpwarden-composer-linux-amd64.zip",
+		"phpwarden-npm-linux-amd64.tgz", "phpwarden-compose-php*.tar.gz", "compatibility.json", "SHA256SUMS", "install.sh",
+	} {
+		matches, err := matchingPackageFiles(output, pattern)
+		if err != nil {
+			return err
+		}
+		for _, name := range matches {
+			absolute, err := filepath.Abs(name)
+			if err != nil {
+				return err
+			}
+			entry, err := os.Lstat(name)
+			if err != nil {
+				return err
+			}
+			if entry.Mode().IsRegular() && (pattern == "compatibility.json" && absolute == manifestPath || pattern == "phpwarden" && absolute == binaryPath) {
+				continue
+			}
+			return fmt.Errorf("package output contains %s; use a fresh directory", filepath.Base(name))
+		}
+	}
+	return nil
+}
+
+func matchingPackageFiles(output, pattern string) ([]string, error) {
+	entries, err := os.ReadDir(output)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, entry := range entries {
+		matches, err := filepath.Match(pattern, entry.Name())
+		if err != nil {
+			return nil, err
+		}
+		if matches {
+			names = append(names, filepath.Join(output, entry.Name()))
+		}
+	}
+	return names, nil
 }

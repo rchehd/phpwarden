@@ -844,7 +844,7 @@ def main():
             commit = subprocess.run(
                 ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
             ).stdout.strip()
-            package("v0.0.0-dev." + commit[:7], commit, None, directory / "dist")
+            package("v0.0.0-dev.g" + commit[:7], commit, None, directory / "dist")
         sandbox = Sandbox(
             args.drupal,
             directory,

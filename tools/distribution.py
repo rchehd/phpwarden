@@ -61,10 +61,19 @@ def build_manifest(version, repository, output):
 
 
 def package(version, commit, manifest, output):
-    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", version):
+    if (
+        len(version) > 128
+        or not re.fullmatch(
+            r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+            r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?",
+            version,
+        )
+        or any(re.fullmatch(r"0[0-9]+", part) for part in version.partition("-")[2].split("."))
+    ):
         raise ValueError("Expected an exact release or development snapshot version")
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("Expected an exact Git commit")
+    check_package_output(output, manifest)
     output.mkdir(parents=True, exist_ok=True)
     binary = output / "phpwarden"
     distribution = "standalone" if manifest else "source"
@@ -108,6 +117,31 @@ def package(version, commit, manifest, output):
     shutil.copyfile("install.sh", installer)
     with (output / "SHA256SUMS").open("a") as checksums:
         checksums.write(f"{hashlib.sha256(installer.read_bytes()).hexdigest()}  install.sh\n")
+
+
+def check_package_output(output, manifest):
+    if output.is_symlink() or output.exists() and not output.is_dir():
+        raise ValueError("Package output must be a directory, not a file or symlink")
+    for pattern in (
+        "phpwarden",
+        "phpwarden-linux-amd64.tar.gz",
+        "phpwarden-composer-linux-amd64.zip",
+        "phpwarden-npm-linux-amd64.tgz",
+        "phpwarden-compose-php*.tar.gz",
+        "compatibility.json",
+        "SHA256SUMS",
+        "install.sh",
+    ):
+        for existing in output.glob(pattern):
+            if (
+                pattern == "compatibility.json"
+                and manifest is not None
+                and not existing.is_symlink()
+                and existing.is_file()
+                and os.path.abspath(existing) == os.path.abspath(manifest)
+            ):
+                continue
+            raise ValueError(f"Package output contains {existing.name}; use a fresh directory")
 
 
 def main():

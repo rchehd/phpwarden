@@ -71,10 +71,11 @@ func TestBuiltReleaseArchiveCanAtomicallyUpdateRealCLI(t *testing.T) {
 	newBinary, manifest, target := buildRelease(t, root, "v1.1.0")
 	readme := filepath.Join(root, "README.md")
 	os.WriteFile(readme, []byte("fixture README\n"), 0o644)
-	directory := filepath.Join(root, "archive")
+	directory := filepath.Join(root, "archive [v1.1.0]")
 	if err := Package(context.Background(), newBinary, readme, manifest, directory); err != nil {
 		t.Fatal(err)
 	}
+	verifyDeliveryIdentity(t, directory, newBinary, target)
 	archive, _ := os.ReadFile(filepath.Join(directory, "phpwarden-linux-amd64.tar.gz"))
 	sums, _ := os.ReadFile(filepath.Join(directory, "SHA256SUMS"))
 	base := "https://github.com/rchehd/phpwarden/releases/download/" + target.Version + "/"

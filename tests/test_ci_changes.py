@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -185,6 +186,24 @@ class GitComparisonTest(unittest.TestCase):
 
 
 class CheckGateTest(unittest.TestCase):
+    def test_development_versions_accept_numeric_commit_prefixes(self):
+        for filename, count in (("build.yml", 4), ("sandbox.yml", 1)):
+            workflow = (ROOT / ".github/workflows" / filename).read_text()
+            expressions = re.findall(
+                r'(?:export )?(?:PHPWARDEN_VERSION|version)="(v0\.0\.0-dev\.[^"]+)"',
+                workflow,
+            )
+            self.assertEqual(len(expressions), count)
+            for expression in expressions:
+                result = subprocess.run(
+                    ["bash", "-eu", "-c", 'printf "%s" "' + expression + '"'],
+                    env=os.environ | {"GITHUB_SHA": "0000001" + "a" * 33},
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                self.assertEqual(result.stdout, "v0.0.0-dev.g0000001")
+
     def test_release_assembly_verifies_both_inputs_and_combines_checksums(self):
         workflow = (ROOT / ".github/workflows/build.yml").read_text()
         script = textwrap.dedent(

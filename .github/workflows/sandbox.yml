@@ -126,7 +126,7 @@ jobs:
           echo "$RUNNER_TEMP/phpwarden-ddev/bin" >> "$GITHUB_PATH"
       - name: Build matching PHP 8.3 worker
         run: |
-          export PHPWARDEN_VERSION="v0.0.0-dev.${GITHUB_SHA::7}"
+          export PHPWARDEN_VERSION="v0.0.0-dev.g${GITHUB_SHA::7}"
           export PHPWARDEN_COMMIT="$GITHUB_SHA"
           docker buildx bake php83
       - name: Install and exercise Drupal sandbox

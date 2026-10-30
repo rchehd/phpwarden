@@ -24,7 +24,7 @@ class ComposeInstallation:
         context = sandbox.root / "compose-worker"
         context.mkdir()
         commit = sandbox.run(["git", "rev-parse", "HEAD"], cwd=sandbox.repository).strip()
-        version = "v0.0.0-dev." + commit[:7]
+        version = "v0.0.0-dev.g" + commit[:7]
         environment = sandbox.environment
         sandbox.environment = environment | {"CGO_ENABLED": "0", "GOOS": "linux", "GOARCH": "amd64"}
         try:
