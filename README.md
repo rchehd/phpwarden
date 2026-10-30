@@ -365,8 +365,18 @@ Invoke `$phpwarden-architecture` in Codex or `/phpwarden-architecture` in Cursor
 | `phpwarden-upgrade` | Plan package/PHP upgrades from `updates`, identify dependency blockers, and use upstream Rector sets in dry-run mode. |
 | `phpwarden-performance` | Review recorded SPX hotspots, callers and bounded graphs through MCP, preserving capture scope and measurement limits. |
 | `phpwarden-tests` | Review escaped mutants and CRAP hotspots, propose behavioral assertions, and improve and recheck tests when requested. |
+| `phpwarden-report` | Create a Markdown quality report from JSON evidence, with category totals, prioritized findings, source links and analysis limitations. |
 
 For example, ask `$phpwarden-tests review /path/to/mutation/report.json and /path/to/coverage/report.json` in Codex. To apply changes, ask it to improve the relevant tests and rerun them. The skill checks report freshness and completeness, distinguishes test gaps from suspected equivalent mutations, and preserves the configured thresholds. It runs mutation analysis separately from ordinary static checks and completion hooks.
+
+For a shareable report, ask `$phpwarden-report use check.json and save docs/quality-report.md`
+in Codex, or `/phpwarden-report` with the same request in Cursor/Claude. The agent
+uses a bundled template and writes in your requested language. It preserves native
+totals, advisory findings, skipped/failed checks and unknown freshness; supplied
+JSON alone cannot prove the analyzed HEAD or execution time. Existing optional
+update, coverage, mutation and performance evidence can be included without
+starting those collectors. The default destination is `phpwarden-report.md` in
+the project root; existing files are preserved using an unused timestamped name.
 
 Repeated installation reuses identical files and links. Different existing files, conflicting links and symlinked parent directories stop installation without overwriting them. Review customized skill files before updating them. A write failure can leave completed installation files; init reports the failure and a retry can finish it. Skill installation preserves project configuration, harness settings and hooks.
 

@@ -66,10 +66,12 @@ func TestSharedSkillAndClaudeLinkAreIdempotent(t *testing.T) {
 					if base == ".claude/skills" && !slices.Contains(clients, "claude") {
 						continue
 					}
-					data, err := os.ReadFile(filepath.Join(root, base, "phpwarden-tests/references/reports.md"))
-					want, _ := content.ReadFile("skills/phpwarden-tests/references/reports.md")
-					if err != nil || !bytes.Equal(data, want) {
-						t.Fatalf("test quality reference missing or corrupt through %s: %v", base, err)
+					for _, resource := range []string{"phpwarden-tests/references/reports.md", "phpwarden-report/references/evidence.md", "phpwarden-report/assets/report-template.md"} {
+						data, err := os.ReadFile(filepath.Join(root, base, resource))
+						want, _ := content.ReadFile("skills/" + resource)
+						if err != nil || !bytes.Equal(data, want) {
+							t.Fatalf("skill resource %s missing or corrupt through %s: %v", resource, base, err)
+						}
 					}
 				}
 				if slices.Contains(clients, "claude") {
@@ -111,6 +113,7 @@ func TestForeignSkillsAndSymlinkParentsArePreserved(t *testing.T) {
 	for _, name := range []string{
 		".agents/skills/" + Name + "/SKILL.md", ".agents/skills/" + Name + "/references/deptrac.md", ".claude/skills/" + Name,
 		".agents/skills/phpwarden-tests/SKILL.md", ".agents/skills/phpwarden-tests/references/reports.md", ".claude/skills/phpwarden-tests",
+		".agents/skills/phpwarden-report/SKILL.md", ".agents/skills/phpwarden-report/references/evidence.md", ".agents/skills/phpwarden-report/assets/report-template.md", ".claude/skills/phpwarden-report",
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
@@ -133,6 +136,15 @@ func TestForeignSkillsAndSymlinkParentsArePreserved(t *testing.T) {
 }
 
 func TestInstallAddsMissingSkillToExistingBundle(t *testing.T) {
+	for _, missing := range []string{"phpwarden-tests", "phpwarden-report"} {
+		t.Run(missing, func(t *testing.T) {
+			testBundleExtension(t, missing)
+		})
+	}
+}
+
+func testBundleExtension(t *testing.T, missing string) {
+	t.Helper()
 	root := t.TempDir()
 	plan, err := Prepare(root, clients)
 	if err != nil {
@@ -143,10 +155,10 @@ func TestInstallAddsMissingSkillToExistingBundle(t *testing.T) {
 	}
 	oldPath := filepath.Join(root, ".agents/skills", Name, "SKILL.md")
 	before, _ := os.ReadFile(oldPath)
-	if err := os.RemoveAll(filepath.Join(root, ".agents/skills/phpwarden-tests")); err != nil {
+	if err := os.RemoveAll(filepath.Join(root, ".agents/skills", missing)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(filepath.Join(root, ".claude/skills/phpwarden-tests")); err != nil {
+	if err := os.Remove(filepath.Join(root, ".claude/skills", missing)); err != nil {
 		t.Fatal(err)
 	}
 	plan, err = Prepare(root, clients)
@@ -162,6 +174,9 @@ func TestInstallAddsMissingSkillToExistingBundle(t *testing.T) {
 		t.Fatal("existing skill changed")
 	}
 	if _, err := os.ReadFile(filepath.Join(root, ".claude/skills/phpwarden-tests/references/reports.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.ReadFile(filepath.Join(root, ".claude/skills/phpwarden-report/assets/report-template.md")); err != nil {
 		t.Fatal(err)
 	}
 }

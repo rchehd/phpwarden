@@ -61,6 +61,11 @@ func TestInitMonorepoAgentSkillsUseGitRoot(t *testing.T) {
 		if err != nil || resolved != filepath.Join(root, ".agents/skills/phpwarden-tests/references/reports.md") {
 			t.Fatalf("test quality reference uses wrong project root: %s %v", resolved, err)
 		}
+		ref = filepath.Join(root, ".claude/skills/phpwarden-report/assets/report-template.md")
+		resolved, err = filepath.EvalSymlinks(ref)
+		if err != nil || resolved != filepath.Join(root, ".agents/skills/phpwarden-report/assets/report-template.md") {
+			t.Fatalf("Markdown report template uses wrong project root: %s %v", resolved, err)
+		}
 		if _, err := os.Lstat(filepath.Join(root, "platform/.agents")); !os.IsNotExist(err) {
 			t.Fatal("skills installed under Composer root")
 		}
@@ -71,7 +76,7 @@ func TestInitMonorepoAgentSkillsUseGitRoot(t *testing.T) {
 }
 
 func TestInitAgentConflictAndCancellationWriteNoConfiguration(t *testing.T) {
-	for _, conflict := range []string{"alias", "reference", "cancel"} {
+	for _, conflict := range []string{"alias", "reference", "report-template", "report-alias", "cancel"} {
 		root := drupalProject(t, ">=8.1", nil)
 		options := Options{CWD: root, Runtime: "8.4", Agents: []string{"claude"}}
 		cancel := conflict == "cancel"
@@ -79,6 +84,10 @@ func TestInitAgentConflictAndCancellationWriteNoConfiguration(t *testing.T) {
 			options.SelectAgents = func() ([]string, error) { return nil, context.Canceled }
 		} else if conflict == "reference" {
 			writeFile(t, root, ".agents/skills/phpwarden-tests/references/reports.md", "User's reference")
+		} else if conflict == "report-template" {
+			writeFile(t, root, ".agents/skills/phpwarden-report/assets/report-template.md", "User's template")
+		} else if conflict == "report-alias" {
+			writeFile(t, root, ".claude/skills/phpwarden-report/SKILL.md", "User's report skill")
 		} else {
 			writeFile(t, root, ".claude/skills/phpwarden-architecture/SKILL.md", "User's skill")
 		}

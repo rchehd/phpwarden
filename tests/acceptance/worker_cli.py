@@ -489,7 +489,7 @@ class WorkerCLITest(unittest.TestCase):
                 if agents:
                     self.assertEqual(alias.resolve(), skill_path, text)
                     self.assertTrue((skill_path / "SKILL.md").is_file(), text)
-                    for name in ("review", "doctor", "upgrade", "performance", "tests"):
+                    for name in ("review", "doctor", "upgrade", "performance", "tests", "report"):
                         shared = scenario.root / f".agents/skills/phpwarden-{name}"
                         linked = scenario.root / f".claude/skills/phpwarden-{name}"
                         self.assertTrue((shared / "SKILL.md").is_file(), text)
@@ -498,6 +498,10 @@ class WorkerCLITest(unittest.TestCase):
                         scenario.root / ".claude/skills/phpwarden-tests/references/reports.md"
                     )
                     self.assertTrue(reference.is_file(), text)
+                    template = (
+                        scenario.root / ".claude/skills/phpwarden-report/assets/report-template.md"
+                    )
+                    self.assertTrue(template.is_file(), text)
                 if code == 130:
                     self.assertFalse(config_path.exists(), text)
                     self.assertFalse((scenario.root / ".git/hooks/pre-commit").exists(), text)
