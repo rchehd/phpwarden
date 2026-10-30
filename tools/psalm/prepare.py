@@ -19,7 +19,7 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def prepare(bundle, sources, output, *, specification=ROOT):
+def installed_packages(bundle, *, specification=ROOT):
     lock_data = read(bundle / "composer.lock")
     if lock_data != read(specification / "composer.lock"):
         raise ValueError("Psalm bundle does not use the committed lock")
@@ -33,16 +33,22 @@ def prepare(bundle, sources, output, *, specification=ROOT):
         or actual.keys() != expected.keys()
     ):
         raise ValueError("Installed Psalm packages do not match the lock inventory")
-    policy = json.loads(read(specification / "sources.json"))
-    inventory = []
-    copies = {}
-    vendor = (bundle / "vendor").resolve(strict=True)
     for name, package in sorted(expected.items()):
         found = actual[name]
         if found["version"] != package["version"] or found.get("source", {}).get(
             "reference"
         ) != package.get("source", {}).get("reference"):
             raise ValueError(f"Installed Psalm package differs from the lock: {name}")
+    return lock_data, expected
+
+
+def prepare(bundle, sources, output, *, specification=ROOT):
+    lock_data, expected = installed_packages(bundle, specification=specification)
+    policy = json.loads(read(specification / "sources.json"))
+    inventory = []
+    copies = {}
+    vendor = (bundle / "vendor").resolve(strict=True)
+    for name, package in sorted(expected.items()):
         directory = vendor / name
         if not directory.resolve(strict=True).is_relative_to(vendor):
             raise ValueError(f"Psalm package escapes its vendor directory: {name}")

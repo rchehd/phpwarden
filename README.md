@@ -877,6 +877,8 @@ Semgrep findings expose `fingerprint` in JSON. To accept existing findings, firs
 Defaults are disabled, required,
 advisory (`fail_on: never`), 300 seconds and 1536 MiB. The supported candidate
 runtime is PHP 8.3.16+ in the 8.3 series; another runtime is not selected implicitly.
+An experimental PHP 8.4 probe found a property-hook taint false negative in the
+pinned engine; [the regression](tools/psalm/PHP84.md) keeps that runtime unsupported.
 `init` exposes these settings and an optional checker selection; `--only psalm`
 selects it for one check.
 

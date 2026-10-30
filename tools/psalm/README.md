@@ -28,5 +28,36 @@ and `sources/`.
 [actual LICENSE](https://github.com/mortenson/psalm-plugin-drupal/blob/073e7a4d5fc159fbf47decf16296edd7f8a545d1/LICENSE)
 adds Commons Clause to LGPL 2.1, despite the shorter Composer declaration.
 See [NOTICE.md](NOTICE.md). No image capability is advertised and no worker image
-is changed by this bundle candidate. Drupal preparation and the guarded analysis
-pipeline are documented in [drupal/README.md](drupal/README.md).
+is changed by this bundle candidate. Distribution alternatives and their support
+tradeoffs are recorded in [ALTERNATIVES.md](ALTERNATIVES.md). Drupal preparation
+and the guarded analysis pipeline are documented in [drupal/README.md](drupal/README.md).
+
+Run the native XML/baseline acceptance against the actual installed bundle:
+
+```sh
+go build -o /scratch/native-config ./tools/psalm-spike/nativeconfig
+python3 tools/psalm-spike/native_config.py --binary /scratch/native-config --bundle /scratch/psalm --image ddev/ddev-webserver:v1.25.5 --php /usr/bin/php8.3 --output /scratch/bundle-acceptance
+```
+
+This mode verifies the committed lock and installed package inventory, uses the
+bundle's own Psalm entrypoint/schema and checks that bundle contents are unchanged
+after all ten native-policy cases. It runs containers sequentially at 0.2 CPU,
+without network or image pulls, and removes fixture workspaces after checking for
+active mounts. Reports retain bundle identity and case results. `--phar` with
+`--schema` remains available for the original checksum-pinned PHAR comparison.
+These focused fixtures do not replace the full Drupal/runtime matrix.
+
+The harness records the actual PHP patch version, numeric version ID and loaded
+extensions. `--runtime 8.3` or `--runtime 8.4` asserts the requested minor runtime;
+a mismatch aborts the run instead of substituting another PHP. On PHP 8.4 it also
+runs unsafe and escaped property-hook controls after the ten common cases.
+
+For a PHP 8.4 execution experiment, use `--php /usr/bin/php8.4 --runtime 8.4` with
+the same installed candidate. Install that candidate with PHP 8.3, as required by
+its current Composer root constraint. The experiment tests execution separately
+from installation compatibility. It does not widen the public worker's PHP 8.3
+guard or establish Drupal 10/11 model compatibility on PHP 8.4.
+
+The PHP 8.4 gate currently fails an unsafe property-hook control: Psalm 6.20.3
+misses the flow while reporting the equivalent ordinary method. The guard remains
+closed; see [PHP84.md](PHP84.md) for the measured results and minimal reproducer.

@@ -225,6 +225,22 @@ python3 tools/psalm-spike/native_config.py \
   --php /usr/bin/php8.3 --output /tmp/phpwarden-psalm-native-policy
 ```
 
+For the installed Composer candidate, replace `--phar` and `--schema` with
+`--bundle /scratch/psalm`. This verifies the committed tool lock and installed
+inventory, uses its own entrypoint/schema, and snapshots the complete bundle to
+check preservation. The cases and isolation limits are identical; summary JSON
+records `engine: composer`, bundle lock SHA256 and package count. This gate covers
+native configuration behavior, separately from Drupal framework model coverage.
+
+The summary also records actual PHP version/ID/extensions. `--runtime 8.4` with
+`--php /usr/bin/php8.4` requires that exact minor runtime and adds unsafe/escaped
+property-hook controls. This is an execution experiment with the PHP 8.3-installed
+candidate; the public runtime guard, installation constraint and Drupal model
+support remain separately gated.
+
+The current PHP 8.4 gate fails the unsafe property-hook control with Psalm 6.20.3;
+the minimal ordinary-method/getter comparison is in [PHP84.md](../PHP84.md).
+
 Install the committed Drupal 10/11 sandbox locks and
 [`tools/psalm-spike/upstream`](../../psalm-spike/upstream) tool lock into disposable
 directories, then supply a locally built PHPWarden binary and existing PHP image:
