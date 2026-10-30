@@ -11,6 +11,7 @@ Choose the smallest relevant workflow below and read its linked skill before act
 
 | Requested outcome | Workflow |
 | --- | --- |
+| Install or initialize PHPWarden; plugin onboarding; inspect installation/project readiness | [Setup](../phpwarden-setup/SKILL.md). A status request alone makes no installation or project changes. |
 | Check or review code; validate authorized edits | [Review](../phpwarden-review/SKILL.md), including native checks and applicable agent checklist questions. An explicitly static-only request needs no extra manual audit. |
 | Diagnose setup or a check that could not run | [Doctor](../phpwarden-doctor/SKILL.md). |
 | Create or refine architecture boundaries | [Architecture](../phpwarden-architecture/SKILL.md). |

@@ -15,7 +15,7 @@ const Name = "phpwarden-architecture"
 
 const EntryName = "phpwarden"
 
-var Names = []string{EntryName, Name, "phpwarden-review", "phpwarden-doctor", "phpwarden-upgrade", "phpwarden-performance", "phpwarden-tests", "phpwarden-report"}
+var Names = []string{EntryName, "phpwarden-setup", Name, "phpwarden-review", "phpwarden-doctor", "phpwarden-upgrade", "phpwarden-performance", "phpwarden-tests", "phpwarden-report"}
 
 //go:embed skills
 var content embed.FS

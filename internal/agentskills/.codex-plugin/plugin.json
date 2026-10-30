@@ -3,6 +3,11 @@
     "name": "rchehd"
   },
   "description": "Project quality review, architecture, upgrades, tests and Markdown reports with PHPWarden",
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/phpwarden-setup/SKILL.md"
+    }
+  },
   "homepage": "https://github.com/rchehd/phpwarden",
   "keywords": [
     "php",

@@ -59,6 +59,13 @@ func TestPluginArchivesPreserveSharedSkillsAndResolveReferences(t *testing.T) {
 			if client == "codex" && manifest["skills"] != "./skills/" {
 				t.Fatal("Codex compatibility manifest does not declare skills")
 			}
+			if client == "codex" {
+				extensions := manifest["extensions"].(map[string]any)
+				openai := extensions["com.openai"].(map[string]any)
+				if openai["onboardingSkill"] != "./skills/phpwarden-setup/SKILL.md" || files["skills/phpwarden-setup/SKILL.md"] == nil || files["skills/phpwarden-setup/scripts/setup.sh"] == nil {
+					t.Fatal("Codex onboarding does not resolve the packaged setup workflow")
+				}
+			}
 			for _, field := range []string{"hooks", "mcpServers", "apps", "license"} {
 				if _, exists := manifest[field]; exists {
 					t.Fatalf("manifest unexpectedly declares %s", field)

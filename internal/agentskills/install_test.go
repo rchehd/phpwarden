@@ -66,7 +66,7 @@ func TestSharedSkillAndClaudeLinkAreIdempotent(t *testing.T) {
 					if base == ".claude/skills" && !slices.Contains(clients, "claude") {
 						continue
 					}
-					for _, resource := range []string{"phpwarden/references/scope.md", "phpwarden-review/references/checklist.md", "phpwarden-review/references/standards.md", "phpwarden-review/assets/review-checklist.md", "phpwarden-performance/references/connection.md", "phpwarden-tests/references/reports.md", "phpwarden-report/references/evidence.md", "phpwarden-report/assets/report-template.md"} {
+					for _, resource := range []string{"phpwarden/references/scope.md", "phpwarden-setup/scripts/setup.sh", "phpwarden-setup/scripts/install.sh", "phpwarden-review/references/checklist.md", "phpwarden-review/references/standards.md", "phpwarden-review/assets/review-checklist.md", "phpwarden-performance/references/connection.md", "phpwarden-tests/references/reports.md", "phpwarden-report/references/evidence.md", "phpwarden-report/assets/report-template.md"} {
 						data, err := os.ReadFile(filepath.Join(root, base, resource))
 						want, _ := content.ReadFile("skills/" + resource)
 						if err != nil || !bytes.Equal(data, want) {
@@ -117,6 +117,7 @@ func TestForeignSkillsAndSymlinkParentsArePreserved(t *testing.T) {
 		".agents/skills/phpwarden/SKILL.md", ".agents/skills/phpwarden/references/scope.md", ".claude/skills/phpwarden",
 		".agents/skills/phpwarden-review/SKILL.md", ".agents/skills/phpwarden-review/references/checklist.md", ".agents/skills/phpwarden-review/references/standards.md", ".agents/skills/phpwarden-review/assets/review-checklist.md",
 		".agents/skills/phpwarden-performance/SKILL.md", ".agents/skills/phpwarden-performance/references/connection.md", ".claude/skills/phpwarden-performance",
+		".agents/skills/phpwarden-setup/SKILL.md", ".agents/skills/phpwarden-setup/scripts/setup.sh", ".agents/skills/phpwarden-setup/scripts/install.sh", ".claude/skills/phpwarden-setup",
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
@@ -139,7 +140,7 @@ func TestForeignSkillsAndSymlinkParentsArePreserved(t *testing.T) {
 }
 
 func TestInstallAddsMissingSkillToExistingBundle(t *testing.T) {
-	for _, missing := range []string{EntryName, "phpwarden-tests", "phpwarden-report"} {
+	for _, missing := range []string{EntryName, "phpwarden-setup", "phpwarden-tests", "phpwarden-report"} {
 		t.Run(missing, func(t *testing.T) {
 			testBundleExtension(t, missing)
 		})

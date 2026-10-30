@@ -376,6 +376,7 @@ You can also invoke a specialist directly using the same convention:
 | Skill | Purpose |
 | --- | --- |
 | `phpwarden` | Select a task-scoped workflow; route checks, setup, architecture, upgrades, tests, performance or reports to the relevant specialist. |
+| `phpwarden-setup` | Locate or explicitly install the host CLI, initialize a project when requested, and separate CLI/config/worker readiness. |
 | `phpwarden-architecture` | Inspect the project and propose native Deptrac boundaries, then validate the complete graph. |
 | `phpwarden-review` | Combine native findings with an applicable agent checklist, project criteria and version-relevant standards. Category focus keeps configured checks intact. |
 | `phpwarden-doctor` | Explain environment failures using the native `doctor` report and propose concrete setup repairs. |
@@ -453,7 +454,24 @@ choice for an enforced gate.
 
 ### Agent plugin development packages
 
-The same eight skills can be packaged for Codex, Cursor and Claude Code through
+The `phpwarden-setup` skill handles new-machine/project setup and read-only status.
+Codex plugin metadata declares it as the onboarding skill; Claude Code and Cursor
+can invoke the same skill explicitly. For example, ask "Set up PHPWarden for this
+project" or "Show PHPWarden installation and worker status without changing anything".
+The plugin includes a small shell bootstrap and the canonical installer, not a CLI
+binary. No session-start hook or automatic installation runs merely by enabling it.
+
+Setup prefers a project-managed Composer/npm CLI, then PATH and the user-local
+installation. Missing CLI can be installed from an available published release,
+an explicitly chosen successful Build CI run, or a supplied verified offline
+archive. CI candidates must include a published worker manifest; `target: plugins`
+and CLI-only source builds cannot provide a clean-machine automatic worker setup.
+CI downloads need an already authenticated `gh`; releases need curl. Setup does
+not install these host prerequisites. Existing CLI files and managed packages are
+reused, and a version change requires an explicit update action. Project init,
+image download, hooks and MCP remain separately scoped operations.
+
+The same nine skills can be packaged for Codex, Cursor and Claude Code through
 **Actions → Build → Run workflow → target: plugins**. The development artifact
 contains three client ZIPs, a self-contained catalog ZIP and `SHA256SUMS`;
 it requires no CLI or worker image build. Repository catalogs for all three

@@ -1,6 +1,7 @@
 package distribution
 
 import (
+	"bytes"
 	"crypto/sha256"
 	_ "embed"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 
+	buildinfo "github.com/rchehd/phpwarden"
 	"github.com/rchehd/phpwarden/internal/agentskills"
 	"github.com/rchehd/phpwarden/internal/selfupdate"
 )
@@ -90,6 +92,9 @@ func pluginFiles(client, version, commit string) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !bytes.Equal(files["skills/phpwarden-setup/scripts/install.sh"], buildinfo.Installer) {
+		return nil, fmt.Errorf("setup installer differs from canonical install.sh; regenerate catalog sources before packaging")
+	}
 	data, err := pluginManifest(client, version)
 	if err != nil {
 		return nil, err
@@ -126,6 +131,7 @@ func pluginManifest(client, version string) ([]byte, error) {
 	}
 	if client == "codex" {
 		manifest["skills"] = "./skills/"
+		manifest["extensions"] = map[string]any{"com.openai": map[string]string{"onboardingSkill": "./skills/phpwarden-setup/SKILL.md"}}
 	}
 	data, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {

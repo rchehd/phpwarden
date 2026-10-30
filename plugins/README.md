@@ -1,8 +1,8 @@
 # PHPWarden agent plugin packages
 
-New development builds contain eight shared skills for Codex, Cursor and
-Claude Code. Installation does not register completion hooks or performance MCP, bundle
-the CLI or enforce CLI compatibility. Native catalogs are available in this
+New development builds contain nine shared skills plus shell bootstrap helpers
+for Codex, Cursor and Claude Code. Installation does not register completion hooks
+or performance MCP, bundle the CLI or enforce a CLI compatibility range. Native catalogs are available in this
 repository; public marketplace listings remain pending. Live client
 installation/discovery/update/uninstall acceptance belongs to the project owner.
 
@@ -48,15 +48,46 @@ no automatic-update guarantee is made. Versioned ZIPs always declare the supplie
 CLI build version and exact source commit. Do not add a fixed development version
 to the Git manifests without also defining how each change bumps it.
 
-Regenerate the six catalog/manifest source files into a new directory with
+Regenerate the catalog/manifest source files and the derived installer copy into a new directory with
 `go run ./cmd/phpwarden-dist catalogs --output /tmp/phpwarden-catalog-sources`,
-then review and copy them into the checkout. This generator emits metadata only;
-the checkout supplies the shared skills. CI rejects drift between the committed
-metadata and generator and resolves every catalog against the real shared tree.
+then review and copy them into the checkout. `install.sh` at repository root is
+the canonical installer; its embedded bytes generate the copy packaged with the
+setup skill. The checkout supplies the other shared resources. CI rejects drift
+between committed/generated files and resolves catalogs against the shared tree.
+
+## CLI onboarding and project status
+
+Use `phpwarden-setup` for a requested machine/project setup or read-only status.
+Codex's supported `extensions.com.openai.onboardingSkill` points to this packaged
+skill. Claude Code and Cursor use the same explicit skill command; this does not
+claim a universal install/enable callback or a custom native status dashboard.
+
+The skill's `scripts/setup.sh` runs with `sh`, without a preinstalled PHPWarden,
+Go, PHP, Composer, npm or Python. It locates explicit/project/PATH/user CLI,
+reports bounded build identity and basic project prerequisites, and delegates
+explicit installation to its bundled canonical `install.sh`. Both helpers use
+GNU shell utilities on Linux amd64. Release downloads need curl; exact CI run
+downloads need an authenticated gh. Offline installation needs neither.
+
+An exact CI source must be a successful official Build run. The bootstrap requires
+its CLI artifact and published worker manifest and verifies the executable's
+commit before installation. Plugin-only/CLI-only source builds fail this check.
+Existing selected CLI is reused; conflicting requested versions require an
+explicit supported update, rather than replacing a managed package or shadowing
+a project's choice. A source offline archive remains preloaded-worker-only.
+
+No hook, native MCP server or binary runs on plugin installation. A requested
+setup can install user CLI and run project init; status alone does neither.
+Resolve/doctor provide per-project runtime/image selection and verification;
+the bootstrap does not confuse Docker CLI presence with daemon/image readiness.
+Project instructions, image prepare, hooks and performance setup stay explicit.
+Updating the plugin changes its skills/helpers, not every project's CLI or config.
+Native client acceptance and a real published-worker candidate remain separate
+owner/release gates.
 
 ## Project workflow
 
-The `phpwarden` entry skill routes to seven specialist skills. It chooses the
+The `phpwarden` entry skill routes to eight specialist skills. It chooses the
 scope requested by the user: explicit files/directories, commits or a relevant
 diff. For code edits it uses the task's affected files rather than automatically
 including unrelated working-tree changes. Planning and formatting supplied

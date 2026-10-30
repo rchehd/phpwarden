@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	buildinfo "github.com/rchehd/phpwarden"
 )
 
 const pluginSource = "internal/agentskills"
@@ -33,6 +35,7 @@ func CatalogSources(output string) error {
 
 func catalogFiles(version string) (map[string][]byte, error) {
 	files := map[string][]byte{}
+	files[pluginSource+"/skills/phpwarden-setup/scripts/install.sh"] = buildinfo.Installer
 	for _, client := range pluginClients {
 		entry := map[string]any{
 			"name": "phpwarden", "source": "./" + pluginSource,

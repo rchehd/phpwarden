@@ -12,6 +12,7 @@ Install PHPWarden for Linux amd64 without sudo, PHP, Go or Docker.
 Default: latest stable GitHub release into $HOME/.local/bin.
 Local archives use the adjacent SHA256SUMS unless --checksums is given.
 --force atomically replaces an existing regular executable; symlinks and package directories are refused.
+--commit SHA requires the exact executable source commit; --require-published refuses source/dev archives.
 EOF
 }
 
@@ -23,6 +24,8 @@ archive=
 checksums=
 install_dir=
 force=false
+expected_commit=
+require_published=false
 work=
 staged=
 seen=' '
@@ -32,7 +35,8 @@ while [ "$#" -gt 0 ]; do
     case "$option" in
         --help|-h) usage; exit 0 ;;
         --force) value=true ;;
-        --version|--archive|--checksums|--dir)
+        --require-published) value=true ;;
+        --version|--archive|--checksums|--dir|--commit)
             [ "$#" -gt 0 ] && [ -n "$1" ] || invalid "$option requires a value"
             case "$1" in --*) invalid "$option requires a value" ;; esac
             value=$1
@@ -48,6 +52,8 @@ while [ "$#" -gt 0 ]; do
         --checksums) checksums=$value ;;
         --dir) install_dir=$value ;;
         --force) force=true ;;
+        --commit) expected_commit=$value ;;
+        --require-published) require_published=true ;;
     esac
 done
 
@@ -69,6 +75,9 @@ valid_version() {
 
 if [ -n "$version" ]; then
     valid_version "$version" || invalid "version must be MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-prerelease without leading zeroes"
+fi
+if [ -n "$expected_commit" ]; then
+    printf '%s\n' "$expected_commit" | awk 'NR != 1 || length($0) != 40 || /[^0-9a-f]/ {bad=1} END {exit bad}' || invalid "commit must be an exact lowercase Git SHA"
 fi
 [ -z "$checksums" ] || [ -n "$archive" ] || invalid "--checksums requires --archive"
 if [ -z "$install_dir" ]; then
@@ -150,6 +159,7 @@ commit=$(field commit)
 valid_version "$actual_version" || fail "CLI reports an invalid version"
 printf '%s\n' "$commit" | grep -Eq '^[0-9a-f]{40}$' || fail "CLI reports an invalid source commit"
 [ "$(cat "$work/COMMIT")" = "$commit" ] || fail "COMMIT differs from the executable identity"
+[ -z "$expected_commit" ] || [ "$commit" = "$expected_commit" ] || fail "archive source commit differs from the requested commit"
 [ -z "$version" ] || [ "$actual_version" = "$version" ] || fail "archive contains $actual_version, expected $version"
 manifest_hash=$(field manifest_sha256)
 case "$distribution" in
@@ -160,6 +170,7 @@ case "$distribution" in
         printf '%s  %s\n' "$manifest_hash" "$work/compatibility.json" | sha256sum --status -c - || fail "worker manifest checksum mismatch"
         ;;
     source)
+        [ "$require_published" = false ] || fail "a published worker manifest is required; this archive is a source/development CLI"
         [ -n "$archive" ] || fail "published releases must contain a standalone CLI"
         [ -z "$manifest_hash" ] && ! grep -qx compatibility.json "$work/entries" || fail "development archive claims standalone compatibility"
         ;;

@@ -1,11 +1,11 @@
 # PHPWarden skills for @@CLIENT@@
 
 Development plugin package @@VERSION@@, source commit @@COMMIT@@.
-Contains eight shared PHPWarden skills, their references, the review checklist
+Contains nine shared PHPWarden skills, their references, the review checklist
 starter and the Markdown report template. The skills are identical to those
 installed by `phpwarden init --agents`.
 
-This first package contains skills only. CLI binaries, worker images, completion
+This package contains skills and shell setup helpers. CLI binaries, worker images, completion
 hooks and performance MCP configuration are not included. Installing the package
 does not install PHPWarden, configure a project or change client settings.
 Use the CLI from the same version/commit when available; the recorded version is
@@ -32,12 +32,21 @@ skills are never removed by plugin packaging.
 ## Use the skills
 
 Start with the `phpwarden` routing skill, or invoke a specialist directly:
-`phpwarden-architecture`, `phpwarden-review`,
+`phpwarden-setup`, `phpwarden-architecture`, `phpwarden-review`,
 `phpwarden-doctor`, `phpwarden-upgrade`, `phpwarden-performance`,
 `phpwarden-tests` and `phpwarden-report`. Ask the agent to use a skill with the
 requested project and scope, for example to read `check.json` and save
 `docs/quality-report.md`. Checks use the project's configured PHPWarden executable
 and `.phpwarden.yaml`; this package introduces no account-wide project rules.
+
+Use `phpwarden-setup` for explicit new-machine/project setup or read-only status.
+Codex declares it as the onboarding skill; other clients can invoke it directly.
+It locates a project-managed or user CLI and can explicitly install through its
+packaged shell helper and canonical installer. Published releases, exact successful
+CI candidates with published workers, and verified offline archives are supported.
+A CLI-only development artifact does not imply automatic worker downloads.
+Existing CLI files are reused, project init is separate, and status performs no
+installation or image downloads. Host prerequisites are not installed automatically.
 
 For a project-specific agent review, supply a checklist path through your request
 or project instructions, or use the optional project-root `phpwarden-review.md`.
