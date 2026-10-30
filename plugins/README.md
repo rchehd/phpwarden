@@ -1,7 +1,7 @@
 # PHPWarden agent plugin packages
 
 New development builds contain eight shared skills for Codex, Cursor and
-Claude Code. They do not yet register completion hooks or performance MCP, bundle
+Claude Code. Installation does not register completion hooks or performance MCP, bundle
 the CLI or enforce CLI compatibility. Native catalogs are available in this
 repository; public marketplace listings remain pending. Live client
 installation/discovery/update/uninstall acceptance belongs to the project owner.
@@ -112,6 +112,29 @@ rules rather than silently replacing policy. Reports must distinguish native
 analyzer findings from agent observations and state coverage limits. This
 checklist workflow is included in new builds; live client invocation is still
 pending. Instruction setup is performed by the CLI, not by installing a ZIP alone.
+
+## Performance MCP through a skill
+
+The existing `phpwarden-performance` skill has separate connection and capture
+review workflows. An explicit request such as "Connect performance MCP for this
+project in Codex" follows its packaged `references/connection.md`: choose the
+exact checkout, host CLI, requested client and saved state base, inspect status
+when allowed, then run `performance connect --format json`. An explicit disconnect
+uses `performance disconnect`; it does not need to recreate a removed runtime.
+
+The skill reuses the CLI's project-scoped installer and conflict/ownership rules.
+It does not hand-write native settings or add a global server to the plugin
+manifest. Existing recordings can be read without an active profiler, including
+after teardown. Missing state does not trigger runtime installation. Codex/Cursor
+use local excluded config files; Claude uses its private project-local scope.
+Reload/trust/discovery can remain pending even after configuration succeeds.
+
+A review request follows the read-only capture workflow and does not authorize
+connection changes. SPX activation, Docker builds/restarts and recording require
+a separate explicit task. Installing/updating the plugin alone does not run setup.
+The package's `performance_mcp: false` describes the absence of a registered
+bundled MCP server, not the absence of the guided setup skill. Live client
+acceptance remains the owner's task.
 
 ## Build
 

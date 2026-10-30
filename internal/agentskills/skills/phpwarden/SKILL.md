@@ -16,6 +16,7 @@ Choose the smallest relevant workflow below and read its linked skill before act
 | Create or refine architecture boundaries | [Architecture](../phpwarden-architecture/SKILL.md). |
 | Assess updates or plan a migration | [Upgrade](../phpwarden-upgrade/SKILL.md). |
 | Inspect existing performance captures | [Performance](../phpwarden-performance/SKILL.md). |
+| Explicitly connect, reconnect or disconnect performance MCP for a project/client | [Performance setup](../phpwarden-performance/SKILL.md), using its connection reference. |
 | Review coverage, CRAP, mutants or improve tests | [Tests](../phpwarden-tests/SKILL.md). |
 | Save a Markdown report from supplied results | [Report](../phpwarden-report/SKILL.md); formatting supplied evidence needs no new check. |
 

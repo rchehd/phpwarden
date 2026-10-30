@@ -50,11 +50,20 @@ Install the host CLI separately using the repository's installation instructions
 Its supported worker images are resolved by the CLI. Heavy testing, mutation
 analysis and profiling remain separate operations requiring the user's task.
 
+For an explicit request to connect or disconnect project performance MCP, use
+`phpwarden-performance` and its packaged `references/connection.md`. The workflow
+reuses the host CLI's `performance connect/disconnect` with the exact checkout,
+requested client and saved setup/state base. It preserves other servers and
+reports configuration separately from actual tool availability after reload.
+Missing setup does not authorize installing SPX, starting Docker or recording.
+A capture review alone never changes client configuration.
+
 ## Current limits and next steps
 
-Completion hooks and project-specific performance MCP integration remain on the
-plugin roadmap. Existing `init --hooks` and `performance connect` integrations
-continue to work independently. Trust and client support still apply.
+Completion hook packaging remains on the plugin roadmap. Project-specific
+performance MCP uses the explicit skill workflow above or the host CLI directly;
+the plugin does not register a server during installation. Existing `init --hooks`
+remains independent. Trust and client support still apply.
 Do not enable duplicate hooks or install another MCP entry for the same runtime.
 
 Updating, rolling back and removing the plugin must use the client's supported

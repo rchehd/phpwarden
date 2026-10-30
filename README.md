@@ -47,6 +47,14 @@ phpwarden performance disconnect --project /path/to/project --client all
 
 Choose `codex`, `cursor`, `claude` or a comma-separated selection instead of `all`. Repeat `--state-dir` if setup used a custom state base. New Codex/Cursor config files are locally excluded from Git; tracked configs and existing unignored files are refused. Claude uses its private project-local configuration. Existing settings and servers are preserved; disconnect removes only unchanged owned entries and keeps captures. Reload the client after connecting and trust the project in Codex. [MCP setup details](tools/spx/MCP.md) include manual configuration. `init --agents all -n` installs the shared performance skill and the usual Claude alias separately.
 
+The `phpwarden-performance` skill also handles an explicit request such as
+"Connect PHPWarden performance MCP for this project in Codex" or "Disconnect it
+for Cursor". It selects the requested client and saved project setup, then uses
+the same host CLI commands above. Missing saved setup is reported as a prerequisite;
+connecting does not implicitly install SPX, build images or start recording.
+Configured connections and tools actually available in the current client are
+reported separately. A performance review alone does not change client settings.
+
 ### Local profiler setup (experimental)
 
 Prepare a local SPX integration, inspect it, then explicitly build and activate it:
@@ -372,7 +380,7 @@ You can also invoke a specialist directly using the same convention:
 | `phpwarden-review` | Combine native findings with an applicable agent checklist, project criteria and version-relevant standards. Category focus keeps configured checks intact. |
 | `phpwarden-doctor` | Explain environment failures using the native `doctor` report and propose concrete setup repairs. |
 | `phpwarden-upgrade` | Plan package/PHP upgrades from `updates`, identify dependency blockers, and use upstream Rector sets in dry-run mode. |
-| `phpwarden-performance` | Review recorded SPX hotspots, callers and bounded graphs through MCP, preserving capture scope and measurement limits. |
+| `phpwarden-performance` | Explicitly connect/disconnect project performance MCP, or review recorded SPX hotspots, callers and bounded graphs while preserving scope and measurement limits. |
 | `phpwarden-tests` | Review escaped mutants and CRAP hotspots, propose behavioral assertions, and improve and recheck tests when requested. |
 | `phpwarden-report` | Create a Markdown quality report from JSON evidence, with category totals, prioritized findings, source links and analysis limitations. |
 

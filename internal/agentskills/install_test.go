@@ -66,7 +66,7 @@ func TestSharedSkillAndClaudeLinkAreIdempotent(t *testing.T) {
 					if base == ".claude/skills" && !slices.Contains(clients, "claude") {
 						continue
 					}
-					for _, resource := range []string{"phpwarden/references/scope.md", "phpwarden-review/references/checklist.md", "phpwarden-review/references/standards.md", "phpwarden-review/assets/review-checklist.md", "phpwarden-tests/references/reports.md", "phpwarden-report/references/evidence.md", "phpwarden-report/assets/report-template.md"} {
+					for _, resource := range []string{"phpwarden/references/scope.md", "phpwarden-review/references/checklist.md", "phpwarden-review/references/standards.md", "phpwarden-review/assets/review-checklist.md", "phpwarden-performance/references/connection.md", "phpwarden-tests/references/reports.md", "phpwarden-report/references/evidence.md", "phpwarden-report/assets/report-template.md"} {
 						data, err := os.ReadFile(filepath.Join(root, base, resource))
 						want, _ := content.ReadFile("skills/" + resource)
 						if err != nil || !bytes.Equal(data, want) {
@@ -116,6 +116,7 @@ func TestForeignSkillsAndSymlinkParentsArePreserved(t *testing.T) {
 		".agents/skills/phpwarden-report/SKILL.md", ".agents/skills/phpwarden-report/references/evidence.md", ".agents/skills/phpwarden-report/assets/report-template.md", ".claude/skills/phpwarden-report",
 		".agents/skills/phpwarden/SKILL.md", ".agents/skills/phpwarden/references/scope.md", ".claude/skills/phpwarden",
 		".agents/skills/phpwarden-review/SKILL.md", ".agents/skills/phpwarden-review/references/checklist.md", ".agents/skills/phpwarden-review/references/standards.md", ".agents/skills/phpwarden-review/assets/review-checklist.md",
+		".agents/skills/phpwarden-performance/SKILL.md", ".agents/skills/phpwarden-performance/references/connection.md", ".claude/skills/phpwarden-performance",
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()

@@ -68,6 +68,12 @@ Reload the selected clients to discover the tools. Codex additionally requires
 trusting the project; connection installation does not change trust settings.
 The commands configure the connection, not client approval or enablement UI.
 
+The shared `phpwarden-performance` skill can perform this flow on an explicit
+connect/disconnect request for the selected project and client. It reads its
+packaged connection reference, reuses these commands and reports configuration
+and actual tool availability separately. Reading captures alone does not request
+configuration changes; missing setup never triggers automatic SPX installation.
+
 ### Manual configuration
 
 Replace the executable, reports and project paths below with absolute paths on
