@@ -42,6 +42,12 @@
 {Only requested/supplied updates, test/coverage/CRAP, mutation or performance evidence.
 Keep each source's identity, scope, status, completeness, freshness and limitations.}
 
+## Agent review
+
+{Include only supplied agent observations. State reviewer scope and freshness;
+keep question IDs, status, source evidence, standards/version and verification
+gaps separate from native analyzer totals and verdict. Omit when not supplied.}
+
 ## Execution and limitations
 
 {Required/optional execution failures, skipped checks, diagnostics, stale or

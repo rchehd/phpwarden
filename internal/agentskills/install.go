@@ -13,12 +13,18 @@ import (
 
 const Name = "phpwarden-architecture"
 
-var Names = []string{Name, "phpwarden-review", "phpwarden-doctor", "phpwarden-upgrade", "phpwarden-performance", "phpwarden-tests", "phpwarden-report"}
+const EntryName = "phpwarden"
+
+var Names = []string{EntryName, Name, "phpwarden-review", "phpwarden-doctor", "phpwarden-upgrade", "phpwarden-performance", "phpwarden-tests", "phpwarden-report"}
 
 //go:embed skills
 var content embed.FS
 
 var clients = []string{"codex", "cursor", "claude"}
+
+func Resources() fs.FS {
+	return content
+}
 
 type Installation struct {
 	Path          string   `json:"path"`

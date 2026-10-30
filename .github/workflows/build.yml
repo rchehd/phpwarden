@@ -8,7 +8,7 @@ on:
       target:
         description: What to build after checks pass
         type: choice
-        options: [all, cli, images]
+        options: [all, cli, images, plugins]
         default: all
       publish_images:
         description: Publish tested development images to GHCR (main, images/all only)
@@ -38,11 +38,11 @@ jobs:
         run: |
           if [ "$EVENT_NAME" = workflow_dispatch ]; then
             case "$BUILD_TARGET" in
-              all|cli|images) ;;
-              *) echo "Build target must be all, cli, or images." >&2; exit 1 ;;
+              all|cli|images|plugins) ;;
+              *) echo "Build target must be all, cli, images, or plugins." >&2; exit 1 ;;
             esac
             if [ "$PUBLISH_IMAGES" = true ]; then
-              if [ "$BUILD_TARGET" = cli ]; then
+              if [[ "$BUILD_TARGET" != images && "$BUILD_TARGET" != all ]]; then
                 echo "Image publication requires the images or all target." >&2
                 exit 1
               fi
@@ -238,6 +238,35 @@ jobs:
             dist/phpwarden-npm-linux-amd64.tgz
             dist/phpwarden-compose-php*.tar.gz
             dist/install.sh
+          if-no-files-found: error
+
+  agent-plugins:
+    name: Agent plugins · package shared skills
+    if: github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'plugins'
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Package versioned agent skills
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version="v0.0.0-dev.${GITHUB_SHA::7}"
+          if [ "$REF_TYPE" = tag ]; then version="$REF_NAME"; fi
+          go run ./cmd/phpwarden-dist plugins --version "$version" --commit "$GITHUB_SHA" --output agent-plugins
+          cd agent-plugins
+          sha256sum -c SHA256SUMS
+      - name: Upload development plugin archives
+        uses: actions/upload-artifact@v7
+        with:
+          name: phpwarden-agent-plugins-${{ github.sha }}
+          path: agent-plugins/
           if-no-files-found: error
 
   release:

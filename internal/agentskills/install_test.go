@@ -66,7 +66,7 @@ func TestSharedSkillAndClaudeLinkAreIdempotent(t *testing.T) {
 					if base == ".claude/skills" && !slices.Contains(clients, "claude") {
 						continue
 					}
-					for _, resource := range []string{"phpwarden-tests/references/reports.md", "phpwarden-report/references/evidence.md", "phpwarden-report/assets/report-template.md"} {
+					for _, resource := range []string{"phpwarden/references/scope.md", "phpwarden-review/references/checklist.md", "phpwarden-review/references/standards.md", "phpwarden-review/assets/review-checklist.md", "phpwarden-tests/references/reports.md", "phpwarden-report/references/evidence.md", "phpwarden-report/assets/report-template.md"} {
 						data, err := os.ReadFile(filepath.Join(root, base, resource))
 						want, _ := content.ReadFile("skills/" + resource)
 						if err != nil || !bytes.Equal(data, want) {
@@ -114,6 +114,8 @@ func TestForeignSkillsAndSymlinkParentsArePreserved(t *testing.T) {
 		".agents/skills/" + Name + "/SKILL.md", ".agents/skills/" + Name + "/references/deptrac.md", ".claude/skills/" + Name,
 		".agents/skills/phpwarden-tests/SKILL.md", ".agents/skills/phpwarden-tests/references/reports.md", ".claude/skills/phpwarden-tests",
 		".agents/skills/phpwarden-report/SKILL.md", ".agents/skills/phpwarden-report/references/evidence.md", ".agents/skills/phpwarden-report/assets/report-template.md", ".claude/skills/phpwarden-report",
+		".agents/skills/phpwarden/SKILL.md", ".agents/skills/phpwarden/references/scope.md", ".claude/skills/phpwarden",
+		".agents/skills/phpwarden-review/SKILL.md", ".agents/skills/phpwarden-review/references/checklist.md", ".agents/skills/phpwarden-review/references/standards.md", ".agents/skills/phpwarden-review/assets/review-checklist.md",
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
@@ -136,7 +138,7 @@ func TestForeignSkillsAndSymlinkParentsArePreserved(t *testing.T) {
 }
 
 func TestInstallAddsMissingSkillToExistingBundle(t *testing.T) {
-	for _, missing := range []string{"phpwarden-tests", "phpwarden-report"} {
+	for _, missing := range []string{EntryName, "phpwarden-tests", "phpwarden-report"} {
 		t.Run(missing, func(t *testing.T) {
 			testBundleExtension(t, missing)
 		})
@@ -178,6 +180,31 @@ func testBundleExtension(t *testing.T, missing string) {
 	}
 	if _, err := os.ReadFile(filepath.Join(root, ".claude/skills/phpwarden-report/assets/report-template.md")); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := os.ReadFile(filepath.Join(root, ".claude/skills/phpwarden/references/scope.md")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSkillInstallationPreservesProjectCriteriaAndInstructions(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"AGENTS.md", "CLAUDE.md", "phpwarden-review.md", ".phpwarden.yaml"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("project-owned "+name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	plan, err := Prepare(root, clients)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := plan.Install(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"AGENTS.md", "CLAUDE.md", "phpwarden-review.md", ".phpwarden.yaml"} {
+		data, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil || string(data) != "project-owned "+name {
+			t.Fatalf("project file changed: %s: %v", name, err)
+		}
 	}
 }
 

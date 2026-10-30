@@ -170,6 +170,37 @@ class GitComparisonTest(unittest.TestCase):
 
 
 class CheckGateTest(unittest.TestCase):
+    def test_plugin_only_build_accepts_no_image_publication(self):
+        workflow = (ROOT / ".github/workflows/build.yml").read_text()
+        script = textwrap.dedent(
+            workflow.split("- name: Validate target and publication settings", 1)[1]
+            .split("run: |", 1)[1]
+            .split("\n  checks:", 1)[0]
+        )
+        for target, publish, branch, allowed in (
+            ("plugins", "false", "main", True),
+            ("plugins", "false", "feature/plugins", True),
+            ("plugins", "true", "main", False),
+            ("cli", "true", "main", False),
+            ("images", "true", "main", True),
+            ("all", "true", "feature/plugins", False),
+            ("unknown", "false", "main", False),
+        ):
+            with self.subTest(target=target, publish=publish, branch=branch):
+                result = subprocess.run(
+                    ["bash", "-e", "-c", script],
+                    capture_output=True,
+                    env=os.environ
+                    | {
+                        "EVENT_NAME": "workflow_dispatch",
+                        "REF_TYPE": "branch",
+                        "REF_NAME": branch,
+                        "BUILD_TARGET": target,
+                        "PUBLISH_IMAGES": publish,
+                    },
+                )
+                self.assertEqual(result.returncode == 0, allowed, result.stderr)
+
     def test_gate_accepts_intentional_skips_and_rejects_selected_failures(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         script = textwrap.dedent(

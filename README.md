@@ -355,12 +355,15 @@ Choose specific clients with `--agents codex,cursor` or `--agents claude`; `--ag
 
 The installer writes standard Agent Skills packages to `.agents/skills/`. [Codex](https://learn.chatgpt.com/docs/build-skills) and [Cursor](https://cursor.com/docs/skills) discover that directory directly. For [Claude Code](https://code.claude.com/docs/en/skills#choose-where-skills-load), it adds relative directory symlinks under `.claude/skills/` pointing to the same packages. Commit the packages and Claude links to share them with the project. Clients that discover the shared directory can see the skills regardless of which client originally requested installation.
 
-Invoke `$phpwarden-architecture` in Codex or `/phpwarden-architecture` in Cursor and Claude Code. The same invocation convention applies to all bundled skills:
+Start with `$phpwarden` in Codex or `/phpwarden` in Cursor and Claude Code, for example
+`$phpwarden review path/to/file.php`. It chooses the relevant workflow and scope.
+You can also invoke a specialist directly using the same convention:
 
 | Skill | Purpose |
 | --- | --- |
+| `phpwarden` | Select a task-scoped workflow; route checks, setup, architecture, upgrades, tests, performance or reports to the relevant specialist. |
 | `phpwarden-architecture` | Inspect the project and propose native Deptrac boundaries, then validate the complete graph. |
-| `phpwarden-review` | Review the check report and relevant code, prioritizing evidence and security context. Optional category focus keeps the configured checks intact. |
+| `phpwarden-review` | Combine native findings with an applicable agent checklist, project criteria and version-relevant standards. Category focus keeps configured checks intact. |
 | `phpwarden-doctor` | Explain environment failures using the native `doctor` report and propose concrete setup repairs. |
 | `phpwarden-upgrade` | Plan package/PHP upgrades from `updates`, identify dependency blockers, and use upstream Rector sets in dry-run mode. |
 | `phpwarden-performance` | Review recorded SPX hotspots, callers and bounded graphs through MCP, preserving capture scope and measurement limits. |
@@ -368,6 +371,16 @@ Invoke `$phpwarden-architecture` in Codex or `/phpwarden-architecture` in Cursor
 | `phpwarden-report` | Create a Markdown quality report from JSON evidence, with category totals, prioritized findings, source links and analysis limitations. |
 
 For example, ask `$phpwarden-tests review /path/to/mutation/report.json and /path/to/coverage/report.json` in Codex. To apply changes, ask it to improve the relevant tests and rerun them. The skill checks report freshness and completeness, distinguishes test gaps from suspected equivalent mutations, and preserves the configured thresholds. It runs mutation analysis separately from ordinary static checks and completion hooks.
+
+The review skill accepts a checklist explicitly named in the task/project
+instructions, or the optional project-root `phpwarden-review.md`. A starter is
+bundled at `phpwarden-review/assets/review-checklist.md` inside the installed
+skills. Copy it only when setting up your own project criteria; init does not
+create or overwrite that project file. No new YAML option is needed.
+Context7 can supply standards when available; official documentation or supplied
+project resources are alternatives. The skill verifies version applicability,
+reports missing evidence and distinguishes agent observations from native
+findings. It does not install Context7 or run a full audit for every small change.
 
 For a shareable report, ask `$phpwarden-report use check.json and save docs/quality-report.md`
 in Codex, or `/phpwarden-report` with the same request in Cursor/Claude. The agent
@@ -379,6 +392,17 @@ starting those collectors. The default destination is `phpwarden-report.md` in
 the project root; existing files are preserved using an unused timestamped name.
 
 Repeated installation reuses identical files and links. Different existing files, conflicting links and symlinked parent directories stop installation without overwriting them. Review customized skill files before updating them. A write failure can leave completed installation files; init reports the failure and a retry can finish it. Skill installation preserves project configuration, harness settings and hooks.
+
+### Agent plugin development packages
+
+The same eight skills can be packaged for Codex, Cursor and Claude Code through
+**Actions → Build → Run workflow → target: plugins**. The development artifact
+contains three ZIP archives with client manifests, shared skills/references and
+`SHA256SUMS`; it requires no CLI or worker image build. These initial packages
+contain skills only. Plugin hooks, performance MCP wiring, live client acceptance
+and marketplace publication remain pending. The existing `init --agents` route
+continues to provide project installation. See [plugin packaging](plugins/README.md)
+for local builds, package contents and current installation limits.
 
 ### Agent completion hooks
 

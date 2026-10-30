@@ -66,6 +66,12 @@ func TestInitMonorepoAgentSkillsUseGitRoot(t *testing.T) {
 		if err != nil || resolved != filepath.Join(root, ".agents/skills/phpwarden-report/assets/report-template.md") {
 			t.Fatalf("Markdown report template uses wrong project root: %s %v", resolved, err)
 		}
+		for _, resource := range []string{"phpwarden/references/scope.md", "phpwarden-review/assets/review-checklist.md"} {
+			resolved, err := filepath.EvalSymlinks(filepath.Join(root, ".claude/skills", resource))
+			if err != nil || resolved != filepath.Join(root, ".agents/skills", resource) {
+				t.Fatalf("entry/review resource uses wrong project root: %s %v", resolved, err)
+			}
+		}
 		if _, err := os.Lstat(filepath.Join(root, "platform/.agents")); !os.IsNotExist(err) {
 			t.Fatal("skills installed under Composer root")
 		}
@@ -76,7 +82,7 @@ func TestInitMonorepoAgentSkillsUseGitRoot(t *testing.T) {
 }
 
 func TestInitAgentConflictAndCancellationWriteNoConfiguration(t *testing.T) {
-	for _, conflict := range []string{"alias", "reference", "report-template", "report-alias", "cancel"} {
+	for _, conflict := range []string{"alias", "reference", "report-template", "report-alias", "entry-alias", "review-checklist", "cancel"} {
 		root := drupalProject(t, ">=8.1", nil)
 		options := Options{CWD: root, Runtime: "8.4", Agents: []string{"claude"}}
 		cancel := conflict == "cancel"
@@ -88,6 +94,10 @@ func TestInitAgentConflictAndCancellationWriteNoConfiguration(t *testing.T) {
 			writeFile(t, root, ".agents/skills/phpwarden-report/assets/report-template.md", "User's template")
 		} else if conflict == "report-alias" {
 			writeFile(t, root, ".claude/skills/phpwarden-report/SKILL.md", "User's report skill")
+		} else if conflict == "entry-alias" {
+			writeFile(t, root, ".claude/skills/phpwarden/SKILL.md", "User's entry skill")
+		} else if conflict == "review-checklist" {
+			writeFile(t, root, ".agents/skills/phpwarden-review/assets/review-checklist.md", "User's checklist")
 		} else {
 			writeFile(t, root, ".claude/skills/phpwarden-architecture/SKILL.md", "User's skill")
 		}

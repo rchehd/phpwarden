@@ -502,6 +502,12 @@ class WorkerCLITest(unittest.TestCase):
                         scenario.root / ".claude/skills/phpwarden-report/assets/report-template.md"
                     )
                     self.assertTrue(template.is_file(), text)
+                    entry = scenario.root / ".claude/skills/phpwarden/SKILL.md"
+                    checklist = (
+                        scenario.root / ".claude/skills/phpwarden-review/assets/review-checklist.md"
+                    )
+                    self.assertTrue(entry.is_file(), text)
+                    self.assertTrue(checklist.is_file(), text)
                 if code == 130:
                     self.assertFalse(config_path.exists(), text)
                     self.assertFalse((scenario.root / ".git/hooks/pre-commit").exists(), text)
