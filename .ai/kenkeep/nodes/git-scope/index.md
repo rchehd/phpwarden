@@ -33,8 +33,8 @@ _None yet._
 - Open [**Pre-commit hook checks staged files and never rewrites the tree**](practice-pre-commit-hook-checks-staged-content.md) — Hook checks whole staged files, aborts on mismatch with the working tree, and never stashes, fixes or stages.
 ### #checkers
 - Open [**Expose only common options; leave detailed rules in native tool configs**](../configuration/practice-keep-native-tool-options-in-native-configs.md) — PHPWarden fields cover typical needs; special rules stay in the tool's own NEON/XML/PHP/JS config.
+- Open [**PHPWarden checker inventory and defaults**](../checkers/map-checker-inventory.md) — Checker IDs, which are opt-in, advisory, networked or config-dependent, and per-checker prerequisites.
 - Open [**Decide per checker whether diff mode reports the whole file or changed lines**](practice-diff-mode-scope-per-checker.md) — Syntax-like checkers report any line of a selected file; style and cross-file checkers filter to changed lines.
-- Open [**Exakat CE is deliberately not integrated into the image or default pipeline**](../checkers/practice-exakat-ce-deliberately-not-integrated.md) — Exakat CE needs a Gremlin/Java graph runtime, has AGPL obligations and unconfirmed PHP 8.1-8.4 support; revisit only with concrete need.
 ### #diff
 - Open [**Decide per checker whether diff mode reports the whole file or changed lines**](practice-diff-mode-scope-per-checker.md) — Syntax-like checkers report any line of a selected file; style and cross-file checkers filter to changed lines.
 ### #findings

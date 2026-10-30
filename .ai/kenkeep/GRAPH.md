@@ -1,11 +1,20 @@
 ---
 schema_version: 3
-nodes_hash: 'sha256:8608b358d2b0f9dd7a9ace7c48f248bfb1270e32710560e802460004356b7815'
-node_count: 46
+nodes_hash: 'sha256:e44f70b68b2d74b72e8c8ece09e98752796db10fa3236acfd7438db25cb0e1b4'
+node_count: 51
 ---
 # kenkeep Graph
 
-Total nodes: 46
+Total nodes: 51
+
+## map-agent-plugin-catalogs-and-shared-skill-delivery
+
+- **kind:** map
+- **title:** Agent plugin catalogs and shared skill delivery
+- **path:** architecture/map-agent-plugin-catalogs-and-shared-skill-delivery.md
+- **tags:** plugins, agents, distribution
+- **relates_to:** map-component-boundaries-and-profile-contract, map-core-profile-checker-architecture, map-ci-workflow-triggers-and-jobs, practice-project-config-owns-rules, map-report-v1-json-contract
+- **derived_from:** 493ac963-5aa2-4755-ad08-dc6a1dad21d3:map:7
 
 ## map-checker-inventory
 
@@ -13,8 +22,8 @@ Total nodes: 46
 - **title:** PHPWarden checker inventory and defaults
 - **path:** checkers/map-checker-inventory.md
 - **tags:** checkers, config, defaults
-- **relates_to:** practice-separate-failure-policy-from-findings, practice-keep-native-tool-options-in-native-configs, practice-analyze-with-project-dependencies
-- **derived_from:** README.md, 01a1693d-cb80-7003-ae47-1468fd6435b0:map:1, 601a78f3-e255-490c-8737-633bc77202bd-1:user-resolution:map
+- **relates_to:** practice-separate-failure-policy-from-findings, practice-keep-native-tool-options-in-native-configs, practice-analyze-with-project-dependencies, map-semgrep-engine-bundle-and-rule-limits, map-drupal-config-checker-semantics, map-deptrac-bundle-integration-surface, practice-rector-runs-from-composer-root, practice-phpstan-trait-context-and-non-ignorable-errors
+- **derived_from:** README.md, 01a1693d-cb80-7003-ae47-1468fd6435b0:map:1, 601a78f3-e255-490c-8737-633bc77202bd-1:user-resolution:map, 493ac963-5aa2-4755-ad08-dc6a1dad21d3:map:5
 
 ## map-ci-workflow-triggers-and-jobs
 
@@ -22,8 +31,17 @@ Total nodes: 46
 - **title:** CI workflow triggers and jobs
 - **path:** testing-ci/map-ci-workflow-triggers-and-jobs.md
 - **tags:** ci, docker, release
-- **relates_to:** practice-run-docker-integration-suites
-- **derived_from:** README.md, 01a1693d-cb80-7003-ae47-1468fd6435b0:map:0
+- **relates_to:** practice-run-docker-integration-suites, practice-run-python-and-go-test-suites, map-test-levels-and-acceptance-suites, map-scenario-fixture-harness
+- **derived_from:** README.md, 01a1693d-cb80-7003-ae47-1468fd6435b0:map:0, 493ac963-5aa2-4755-ad08-dc6a1dad21d3:map:6
+
+## map-cli-bootstrap-and-per-project-setup-status
+
+- **kind:** map
+- **title:** CLI bootstrap and per-project setup status
+- **path:** configuration/map-cli-bootstrap-and-per-project-setup-status.md
+- **tags:** config, agents, cli
+- **relates_to:** map-project-config-v1-schema, map-config-and-image-selection, practice-strict-config-parsing-and-no-silent-defaults, practice-project-config-owns-rules, map-cli-surface-and-exit-codes
+- **derived_from:** 493ac963-5aa2-4755-ad08-dc6a1dad21d3:map:8
 
 ## map-cli-surface-and-exit-codes
 
@@ -31,7 +49,8 @@ Total nodes: 46
 - **title:** PHPWarden CLI commands and exit-code contract
 - **path:** reporting/map-cli-surface-and-exit-codes.md
 - **tags:** cli, exit-codes, ci
-- **derived_from:** README.md
+- **relates_to:** map-report-v1-json-contract, map-text-output-rule-groups-layout, practice-exit-codes-and-completeness-semantics, practice-scope-computation-and-reporting-rules
+- **derived_from:** README.md, 493ac963-5aa2-4755-ad08-dc6a1dad21d3:map:3
 
 ## map-component-boundaries-and-profile-contract
 
@@ -47,7 +66,8 @@ Total nodes: 46
 - **title:** php.runtime detection, image naming and monorepo composer_root
 - **path:** configuration/map-config-and-image-selection.md
 - **tags:** config, docker, php-version
-- **derived_from:** README.md
+- **relates_to:** map-project-config-v1-schema, map-profile-version-image-model, practice-analyze-with-project-dependencies
+- **derived_from:** README.md, 493ac963-5aa2-4755-ad08-dc6a1dad21d3:map:1
 
 ## map-core-profile-checker-architecture
 
@@ -81,6 +101,15 @@ Total nodes: 46
 - **tags:** architecture, docker, launcher, worker
 - **derived_from:** docs/CONCEPT.md
 
+## map-local-spx-runtime-and-project-mcp-connections
+
+- **kind:** map
+- **title:** Local SPX runtime and project MCP connections
+- **path:** runtime/map-local-spx-runtime-and-project-mcp-connections.md
+- **tags:** performance, mcp, docker
+- **relates_to:** map-recorded-spx-performance-reader-and-mcp-queries, practice-project-config-owns-rules, practice-mount-read-only-apply-fixes-on-host, map-agent-plugin-catalogs-and-shared-skill-delivery
+- **derived_from:** 493ac963-5aa2-4755-ad08-dc6a1dad21d3:map:10
+
 ## map-profile-version-image-model
 
 - **kind:** map
@@ -95,7 +124,26 @@ Total nodes: 46
 - **title:** .phpwarden.yaml v1 fields and checker settings
 - **path:** configuration/map-project-config-v1-schema.md
 - **tags:** config, schema
-- **derived_from:** docs/CORE-CONTRACTS.md
+- **relates_to:** practice-let-projects-configure-analyzer-concurrency, practice-project-config-owns-rules, practice-config-root-paths-and-precedence, map-cli-surface-and-exit-codes
+- **derived_from:** docs/CORE-CONTRACTS.md, 493ac963-5aa2-4755-ad08-dc6a1dad21d3:map:0
+
+## map-project-phpunit-coverage-crap-and-mutation-commands
+
+- **kind:** map
+- **title:** Project PHPUnit coverage CRAP and mutation commands
+- **path:** testing-ci/map-project-phpunit-coverage-crap-and-mutation-commands.md
+- **tags:** testing, coverage, mutation
+- **relates_to:** map-cli-surface-and-exit-codes, map-test-levels-and-acceptance-suites, map-ci-workflow-triggers-and-jobs, map-agent-plugin-catalogs-and-shared-skill-delivery
+- **derived_from:** 493ac963-5aa2-4755-ad08-dc6a1dad21d3:map:11
+
+## map-recorded-spx-performance-reader-and-mcp-queries
+
+- **kind:** map
+- **title:** Recorded SPX performance reader and MCP queries
+- **path:** runtime/map-recorded-spx-performance-reader-and-mcp-queries.md
+- **tags:** performance, mcp, report
+- **relates_to:** map-cli-surface-and-exit-codes, map-report-v1-json-contract, map-agent-plugin-catalogs-and-shared-skill-delivery
+- **derived_from:** 493ac963-5aa2-4755-ad08-dc6a1dad21d3:map:9
 
 ## map-report-v1-json-contract
 
@@ -103,7 +151,8 @@ Total nodes: 46
 - **title:** Report v1 JSON structure and evolution rules
 - **path:** reporting/map-report-v1-json-contract.md
 - **tags:** report, json, schema
-- **derived_from:** docs/CORE-CONTRACTS.md
+- **relates_to:** map-text-output-rule-groups-layout, practice-separate-failure-policy-from-findings, practice-exit-codes-and-completeness-semantics
+- **derived_from:** docs/CORE-CONTRACTS.md, 493ac963-5aa2-4755-ad08-dc6a1dad21d3:map:4
 
 ## map-result-cache
 
@@ -135,8 +184,8 @@ Total nodes: 46
 - **title:** Shared development toolset compatibility metadata
 - **path:** runtime/map-shared-development-toolset-compatibility-metadata.md
 - **tags:** toolset, docker, build
-- **relates_to:** practice-image-resolution-and-run-isolation, practice-select-image-before-container-start, practice-run-docker-integration-suites, map-profile-version-image-model
-- **derived_from:** 01a1693d-cb80-7003-ae47-1468fd6435b0:map:0
+- **relates_to:** practice-image-resolution-and-run-isolation, practice-select-image-before-container-start, practice-run-docker-integration-suites, map-profile-version-image-model, map-checker-inventory, map-launcher-worker-execution-model
+- **derived_from:** 01a1693d-cb80-7003-ae47-1468fd6435b0:map:0, 493ac963-5aa2-4755-ad08-dc6a1dad21d3:map:2
 
 ## map-test-levels-and-acceptance-suites
 

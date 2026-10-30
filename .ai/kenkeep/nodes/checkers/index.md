@@ -10,14 +10,14 @@
 _None._
 
 ## Conventions (how we build)
+- Open [**PHPStan trait context suffix and non-ignorable errors**](practice-phpstan-trait-context-and-non-ignorable-errors.md) to learn about: Normalize only a validated trait context suffix; ignorable:false is a code finding, not an analyzer failure. #phpstan #adapter #diagnostics
+- Open [**Rector runs from composer_root, not the repo root**](practice-rector-runs-from-composer-root.md) to learn about: Rector resolves installed packages from its working directory, so monorepo runs must start in composer_root. #rector #monorepo #composer-root
 - Open [**Run checkers through the shared lifecycle with strict process handling**](practice-checker-lifecycle-and-process-execution.md) to learn about: Checkers register a descriptor and run argv-only with validated native exit codes and report structure. #checker #process #adapters
 - Open [**Criteria a new third-party tool must meet before becoming a checker**](practice-criteria-for-adding-a-new-checker.md) to learn about: New checkers need their own settings shape, license review, a defined diff scope and own verdict/completeness; opt-in advisory first. #checkers #integration #licensing
 - Open [**Deptrac adapter aborts the report when any file fails to parse**](practice-deptrac-adapter-aborts-on-parser-failures.md) to learn about: Deptrac continues after parser errors; the adapter must abort on syntax-error events and verify the parsed AST graph. #deptrac #checker #adapter
 - Open [**Exakat CE is deliberately not integrated into the image or default pipeline**](practice-exakat-ce-deliberately-not-integrated.md) to learn about: Exakat CE needs a Gremlin/Java graph runtime, has AGPL obligations and unconfirmed PHP 8.1-8.4 support; revisit only with concrete need. #exakat #checkers #scope
 - Open [**JSCPD clones must come from consecutive reference windows**](practice-jscpd-matches-consecutive-reference-windows-only.md) to learn about: The adapter constrains JSCPD matching to consecutive windows; it never clamps ranges or drops invalid clones. #jscpd #adapter #duplication
 - Open [**Keep Deptrac at 4.4.0 and Rector at 2.6.1 while their constraints hold**](practice-tool-version-pins-and-rationale.md) to learn about: Deptrac 4.5+ needs PHP 8.2 and Drupal Rector 1.1.3 conflicts with Rector 2.6.2+, so both stay pinned. #pins #deptrac #rector #docker
-- Open [**PHPStan trait context suffix and non-ignorable errors**](practice-phpstan-trait-context-and-non-ignorable-errors.md) to learn about: Normalize only a validated trait context suffix; ignorable:false is a code finding, not an analyzer failure. #phpstan #adapter #diagnostics
-- Open [**Rector runs from composer_root, not the repo root**](practice-rector-runs-from-composer-root.md) to learn about: Rector resolves installed packages from its working directory, so monorepo runs must start in composer_root. #rector #monorepo #composer-root
 
 ## Components (what exists)
 - Open [**Deptrac bundle integration surface and supported project config**](map-deptrac-bundle-integration-surface.md) to learn about: How tools/deptrac drives Deptrac through its PHP APIs and which project config features it accepts or rejects. #deptrac #config #bundle
@@ -28,20 +28,20 @@ _None._
 ## By topic
 
 ### #adapter
+- Open [**PHPStan trait context suffix and non-ignorable errors**](practice-phpstan-trait-context-and-non-ignorable-errors.md) — Normalize only a validated trait context suffix; ignorable:false is a code finding, not an analyzer failure.
 - Open [**Deptrac adapter aborts the report when any file fails to parse**](practice-deptrac-adapter-aborts-on-parser-failures.md) — Deptrac continues after parser errors; the adapter must abort on syntax-error events and verify the parsed AST graph.
 - Open [**JSCPD clones must come from consecutive reference windows**](practice-jscpd-matches-consecutive-reference-windows-only.md) — The adapter constrains JSCPD matching to consecutive windows; it never clamps ranges or drops invalid clones.
-- Open [**PHPStan trait context suffix and non-ignorable errors**](practice-phpstan-trait-context-and-non-ignorable-errors.md) — Normalize only a validated trait context suffix; ignorable:false is a code finding, not an analyzer failure.
 ### #checker
+- Open [**Drupal module config checker: top-level uuid/_core rules**](map-drupal-config-checker-semantics.md) — The drupal-config checker flags top-level uuid/_core in module config only, whole-file, natively in Go; site exports are excluded.
 - Open [**Run checkers through the shared lifecycle with strict process handling**](practice-checker-lifecycle-and-process-execution.md) — Checkers register a descriptor and run argv-only with validated native exit codes and report structure.
 - Open [**Deptrac adapter aborts the report when any file fails to parse**](practice-deptrac-adapter-aborts-on-parser-failures.md) — Deptrac continues after parser errors; the adapter must abort on syntax-error events and verify the parsed AST graph.
-- Open [**Drupal module config checker: top-level uuid/_core rules**](map-drupal-config-checker-semantics.md) — The drupal-config checker flags top-level uuid/_core in module config only, whole-file, natively in Go; site exports are excluded.
 ### #checkers
 - Open [**Expose only common options; leave detailed rules in native tool configs**](../configuration/practice-keep-native-tool-options-in-native-configs.md) — PHPWarden fields cover typical needs; special rules stay in the tool's own NEON/XML/PHP/JS config.
+- Open [**PHPWarden checker inventory and defaults**](map-checker-inventory.md) — Checker IDs, which are opt-in, advisory, networked or config-dependent, and per-checker prerequisites.
 - Open [**Decide per checker whether diff mode reports the whole file or changed lines**](../git-scope/practice-diff-mode-scope-per-checker.md) — Syntax-like checkers report any line of a selected file; style and cross-file checkers filter to changed lines.
-- Open [**Exakat CE is deliberately not integrated into the image or default pipeline**](practice-exakat-ce-deliberately-not-integrated.md) — Exakat CE needs a Gremlin/Java graph runtime, has AGPL obligations and unconfirmed PHP 8.1-8.4 support; revisit only with concrete need.
 ### #deptrac
-- Open [**Deptrac adapter aborts the report when any file fails to parse**](practice-deptrac-adapter-aborts-on-parser-failures.md) — Deptrac continues after parser errors; the adapter must abort on syntax-error events and verify the parsed AST graph.
 - Open [**Deptrac bundle integration surface and supported project config**](map-deptrac-bundle-integration-surface.md) — How tools/deptrac drives Deptrac through its PHP APIs and which project config features it accepts or rejects.
+- Open [**Deptrac adapter aborts the report when any file fails to parse**](practice-deptrac-adapter-aborts-on-parser-failures.md) — Deptrac continues after parser errors; the adapter must abort on syntax-error events and verify the parsed AST graph.
 - Open [**Keep Deptrac at 4.4.0 and Rector at 2.6.1 while their constraints hold**](practice-tool-version-pins-and-rationale.md) — Deptrac 4.5+ needs PHP 8.2 and Drupal Rector 1.1.3 conflicts with Rector 2.6.2+, so both stay pinned.
 ### #bundle
 - Open [**Deptrac bundle integration surface and supported project config**](map-deptrac-bundle-integration-surface.md) — How tools/deptrac drives Deptrac through its PHP APIs and which project config features it accepts or rejects.
@@ -51,11 +51,11 @@ _None._
 - Open [**Reject ambiguous config input instead of guessing**](../configuration/practice-strict-config-parsing-and-no-silent-defaults.md) — Config parsing is strict and never silently infers versions, ranges or base refs.
 - Open [**PHPWarden checker inventory and defaults**](map-checker-inventory.md) — Checker IDs, which are opt-in, advisory, networked or config-dependent, and per-checker prerequisites.
 ### #licensing
-- Open [**Criteria a new third-party tool must meet before becoming a checker**](practice-criteria-for-adding-a-new-checker.md) — New checkers need their own settings shape, license review, a defined diff scope and own verdict/completeness; opt-in advisory first.
 - Open [**Semgrep CE engine bundle: preparation, invocation and supported rules**](map-semgrep-engine-bundle-and-rule-limits.md) — tools/semgrep/prepare.py builds a checksum-locked semgrep-core bundle; PHPWarden calls it directly and accepts only local PHP rules.
+- Open [**Criteria a new third-party tool must meet before becoming a checker**](practice-criteria-for-adding-a-new-checker.md) — New checkers need their own settings shape, license review, a defined diff scope and own verdict/completeness; opt-in advisory first.
 ### #rector
-- Open [**Keep Deptrac at 4.4.0 and Rector at 2.6.1 while their constraints hold**](practice-tool-version-pins-and-rationale.md) — Deptrac 4.5+ needs PHP 8.2 and Drupal Rector 1.1.3 conflicts with Rector 2.6.2+, so both stay pinned.
 - Open [**Rector runs from composer_root, not the repo root**](practice-rector-runs-from-composer-root.md) — Rector resolves installed packages from its working directory, so monorepo runs must start in composer_root.
+- Open [**Keep Deptrac at 4.4.0 and Rector at 2.6.1 while their constraints hold**](practice-tool-version-pins-and-rationale.md) — Deptrac 4.5+ needs PHP 8.2 and Drupal Rector 1.1.3 conflicts with Rector 2.6.2+, so both stay pinned.
 ### #adapters
 - Open [**Run checkers through the shared lifecycle with strict process handling**](practice-checker-lifecycle-and-process-execution.md) — Checkers register a descriptor and run argv-only with validated native exit codes and report structure.
 ### #composer-root
@@ -66,7 +66,7 @@ _None._
 - Open [**PHPStan trait context suffix and non-ignorable errors**](practice-phpstan-trait-context-and-non-ignorable-errors.md) — Normalize only a validated trait context suffix; ignorable:false is a code finding, not an analyzer failure.
 ### #docker
 - Open [**Build all PHP images before running Docker acceptance suites**](../testing-ci/practice-run-docker-integration-suites.md) — Run docker buildx bake, then docker_worker per runtime and launcher_cli; rebuild the image together with the CLI.
-- Open [**CI workflow triggers and jobs**](../testing-ci/map-ci-workflow-triggers-and-jobs.md) — Checks validates branches and PRs; Build runs manually or on v* tags with CLI, images or all targets after the same commit passes checks.
+- Open [**CI workflow triggers and jobs**](../testing-ci/map-ci-workflow-triggers-and-jobs.md) — Path-filtered Checks, PR/manual Sandbox and Mutation, manual/tag Build targets and tag-only release publication.
 - Open [**Resolve the image before the container exists, never from inside it**](../runtime/practice-select-image-before-container-start.md) — PHP runtime or toolset changes need a different container, so image selection happens outside it (launcher, resolve step, or pinned image).
 ### #drupal-config
 - Open [**Drupal module config checker: top-level uuid/_core rules**](map-drupal-config-checker-semantics.md) — The drupal-config checker flags top-level uuid/_core in module config only, whole-file, natively in Go; site exports are excluded.

@@ -13,6 +13,7 @@ _None._
 _None yet._
 
 ## Components (what exists)
+- Open [**Agent plugin catalogs and shared skill delivery**](map-agent-plugin-catalogs-and-shared-skill-delivery.md) to learn about: Nine shared skills for Codex, Cursor and Claude; Git catalogs, reproducible ZIPs, setup onboarding and separate CLI delivery. #plugins #agents #distribution
 - Open [**Launcher and worker execution layers**](map-launcher-worker-execution-model.md) to learn about: PHPWarden splits execution into a host-side Go launcher and an in-image Go worker that runs the checks. #architecture #docker #launcher #worker
 - Open [**Go single-module layout and profile contract**](map-component-boundaries-and-profile-contract.md) to learn about: One Go module holds launcher, worker and shared packages; profiles own framework knowledge, core stays framework-agnostic. #architecture #profile #go
 - Open [**Modular architecture: core, profiles, checkers, runners, integrations**](map-core-profile-checker-architecture.md) to learn about: Core components, the profile and checker layers, and the rule that core stays framework-agnostic. #architecture #modules #profiles #checkers
@@ -23,13 +24,18 @@ _None yet._
 - Open [**Go single-module layout and profile contract**](map-component-boundaries-and-profile-contract.md) — One Go module holds launcher, worker and shared packages; profiles own framework knowledge, core stays framework-agnostic.
 - Open [**Launcher and worker execution layers**](map-launcher-worker-execution-model.md) — PHPWarden splits execution into a host-side Go launcher and an in-image Go worker that runs the checks.
 - Open [**Modular architecture: core, profiles, checkers, runners, integrations**](map-core-profile-checker-architecture.md) — Core components, the profile and checker layers, and the rule that core stays framework-agnostic.
+### #agents
+- Open [**Agent plugin catalogs and shared skill delivery**](map-agent-plugin-catalogs-and-shared-skill-delivery.md) — Nine shared skills for Codex, Cursor and Claude; Git catalogs, reproducible ZIPs, setup onboarding and separate CLI delivery.
+- Open [**CLI bootstrap and per-project setup status**](../configuration/map-cli-bootstrap-and-per-project-setup-status.md) — Setup skill discovers managed or user CLI, installs verified artifacts on request and separates config, Docker and worker readiness.
 ### #checkers
 - Open [**Expose only common options; leave detailed rules in native tool configs**](../configuration/practice-keep-native-tool-options-in-native-configs.md) — PHPWarden fields cover typical needs; special rules stay in the tool's own NEON/XML/PHP/JS config.
+- Open [**PHPWarden checker inventory and defaults**](../checkers/map-checker-inventory.md) — Checker IDs, which are opt-in, advisory, networked or config-dependent, and per-checker prerequisites.
 - Open [**Decide per checker whether diff mode reports the whole file or changed lines**](../git-scope/practice-diff-mode-scope-per-checker.md) — Syntax-like checkers report any line of a selected file; style and cross-file checkers filter to changed lines.
-- Open [**Exakat CE is deliberately not integrated into the image or default pipeline**](../checkers/practice-exakat-ce-deliberately-not-integrated.md) — Exakat CE needs a Gremlin/Java graph runtime, has AGPL obligations and unconfirmed PHP 8.1-8.4 support; revisit only with concrete need.
+### #distribution
+- Open [**Agent plugin catalogs and shared skill delivery**](map-agent-plugin-catalogs-and-shared-skill-delivery.md) — Nine shared skills for Codex, Cursor and Claude; Git catalogs, reproducible ZIPs, setup onboarding and separate CLI delivery.
 ### #docker
 - Open [**Build all PHP images before running Docker acceptance suites**](../testing-ci/practice-run-docker-integration-suites.md) — Run docker buildx bake, then docker_worker per runtime and launcher_cli; rebuild the image together with the CLI.
-- Open [**CI workflow triggers and jobs**](../testing-ci/map-ci-workflow-triggers-and-jobs.md) — Checks validates branches and PRs; Build runs manually or on v* tags with CLI, images or all targets after the same commit passes checks.
+- Open [**CI workflow triggers and jobs**](../testing-ci/map-ci-workflow-triggers-and-jobs.md) — Path-filtered Checks, PR/manual Sandbox and Mutation, manual/tag Build targets and tag-only release publication.
 - Open [**Resolve the image before the container exists, never from inside it**](../runtime/practice-select-image-before-container-start.md) — PHP runtime or toolset changes need a different container, so image selection happens outside it (launcher, resolve step, or pinned image).
 ### #go
 - Open [**Go single-module layout and profile contract**](map-component-boundaries-and-profile-contract.md) — One Go module holds launcher, worker and shared packages; profiles own framework knowledge, core stays framework-agnostic.
@@ -37,6 +43,8 @@ _None yet._
 - Open [**Launcher and worker execution layers**](map-launcher-worker-execution-model.md) — PHPWarden splits execution into a host-side Go launcher and an in-image Go worker that runs the checks.
 ### #modules
 - Open [**Modular architecture: core, profiles, checkers, runners, integrations**](map-core-profile-checker-architecture.md) — Core components, the profile and checker layers, and the rule that core stays framework-agnostic.
+### #plugins
+- Open [**Agent plugin catalogs and shared skill delivery**](map-agent-plugin-catalogs-and-shared-skill-delivery.md) — Nine shared skills for Codex, Cursor and Claude; Git catalogs, reproducible ZIPs, setup onboarding and separate CLI delivery.
 ### #profile
 - Open [**Store profile and rules in the project's .phpwarden.yaml, not account settings**](../configuration/practice-project-config-owns-rules.md) — Profile, PHP target, rules and blocking policy live in the project-root config; native client settings are only adapters.
 - Open [**Go single-module layout and profile contract**](map-component-boundaries-and-profile-contract.md) — One Go module holds launcher, worker and shared packages; profiles own framework knowledge, core stays framework-agnostic.

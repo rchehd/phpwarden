@@ -10,14 +10,16 @@
 _None._
 
 ## Conventions (how we build)
-- Open [**Resolve the image before the container exists, never from inside it**](practice-select-image-before-container-start.md) to learn about: PHP runtime or toolset changes need a different container, so image selection happens outside it (launcher, resolve step, or pinned image). #docker #ci #image #runtime
 - Open [**Run image tools against the project's own vendor, never install dependencies**](practice-analyze-with-project-dependencies.md) to learn about: Tools come from the image, but analyzers read the project's core, contrib and autoload; missing deps are reported, not auto-installed. #dependencies #phpstan #docker
-- Open [**Select images by digest or ID and keep runs isolated and fingerprinted**](practice-image-resolution-and-run-isolation.md) to learn about: Image selection is offline and exact, runs are read-only and sandboxed, and drift during a run makes results stale. #runner #docker #images
 - Open [**Keep project mounts read-only and apply fixes on the host**](practice-mount-read-only-apply-fixes-on-host.md) to learn about: Checkers never write to the project; formatters emit edits that the launcher hash-validates and applies on the host. #safety #fix #docker
 - Open [**Let projects configure analyzer concurrency**](practice-let-projects-configure-analyzer-concurrency.md) to learn about: Projects choose sequential, bounded or unrestricted worker concurrency according to available resources. #runner #config #concurrency
+- Open [**Resolve the image before the container exists, never from inside it**](practice-select-image-before-container-start.md) to learn about: PHP runtime or toolset changes need a different container, so image selection happens outside it (launcher, resolve step, or pinned image). #docker #ci #image #runtime
+- Open [**Select images by digest or ID and keep runs isolated and fingerprinted**](practice-image-resolution-and-run-isolation.md) to learn about: Image selection is offline and exact, runs are read-only and sandboxed, and drift during a run makes results stale. #runner #docker #images
 
 ## Components (what exists)
 - Open [**Profile, framework version, PHP runtime/target, toolset and image model**](map-profile-version-image-model.md) to learn about: One profile per framework; versions, runtime and tool sets are resolved via a compatibility table to a digest-pinned image. #profile #image #versions #docker
+- Open [**Recorded SPX performance reader and MCP queries**](map-recorded-spx-performance-reader-and-mcp-queries.md) to learn about: Bounded native SPX reader and five read-only MCP tools share verified capture snapshots without requiring a running app or Docker. #performance #mcp #report
+- Open [**Local SPX runtime and project MCP connections**](map-local-spx-runtime-and-project-mcp-connections.md) to learn about: Opt-in profiler adapters for DDEV, Compose and Docker preserve tracked project files and keep private state outside the checkout. #performance #mcp #docker
 - Open [**PHPWarden result cache scope and keys**](map-result-cache.md) to learn about: Opt-in cache of complete file-only check results, keyed on content, config, toolset and image digest, 24h TTL. #cache #runner #ci
 - Open [**Shared development toolset compatibility metadata**](map-shared-development-toolset-compatibility-metadata.md) to learn about: docker-bake.json supplies the shared development toolset revision to the CLI, manifest entries and Docker image labels. #toolset #docker #build
 
@@ -25,19 +27,25 @@ _None._
 
 ### #docker
 - Open [**Build all PHP images before running Docker acceptance suites**](../testing-ci/practice-run-docker-integration-suites.md) — Run docker buildx bake, then docker_worker per runtime and launcher_cli; rebuild the image together with the CLI.
-- Open [**CI workflow triggers and jobs**](../testing-ci/map-ci-workflow-triggers-and-jobs.md) — Checks validates branches and PRs; Build runs manually or on v* tags with CLI, images or all targets after the same commit passes checks.
+- Open [**CI workflow triggers and jobs**](../testing-ci/map-ci-workflow-triggers-and-jobs.md) — Path-filtered Checks, PR/manual Sandbox and Mutation, manual/tag Build targets and tag-only release publication.
 - Open [**Resolve the image before the container exists, never from inside it**](practice-select-image-before-container-start.md) — PHP runtime or toolset changes need a different container, so image selection happens outside it (launcher, resolve step, or pinned image).
 ### #runner
-- Open [**Select images by digest or ID and keep runs isolated and fingerprinted**](practice-image-resolution-and-run-isolation.md) — Image selection is offline and exact, runs are read-only and sandboxed, and drift during a run makes results stale.
 - Open [**Let projects configure analyzer concurrency**](practice-let-projects-configure-analyzer-concurrency.md) — Projects choose sequential, bounded or unrestricted worker concurrency according to available resources.
+- Open [**Select images by digest or ID and keep runs isolated and fingerprinted**](practice-image-resolution-and-run-isolation.md) — Image selection is offline and exact, runs are read-only and sandboxed, and drift during a run makes results stale.
 - Open [**PHPWarden result cache scope and keys**](map-result-cache.md) — Opt-in cache of complete file-only check results, keyed on content, config, toolset and image digest, 24h TTL.
 ### #ci
 - Open [**Build all PHP images before running Docker acceptance suites**](../testing-ci/practice-run-docker-integration-suites.md) — Run docker buildx bake, then docker_worker per runtime and launcher_cli; rebuild the image together with the CLI.
-- Open [**CI workflow triggers and jobs**](../testing-ci/map-ci-workflow-triggers-and-jobs.md) — Checks validates branches and PRs; Build runs manually or on v* tags with CLI, images or all targets after the same commit passes checks.
+- Open [**CI workflow triggers and jobs**](../testing-ci/map-ci-workflow-triggers-and-jobs.md) — Path-filtered Checks, PR/manual Sandbox and Mutation, manual/tag Build targets and tag-only release publication.
 - Open [**Resolve the image before the container exists, never from inside it**](practice-select-image-before-container-start.md) — PHP runtime or toolset changes need a different container, so image selection happens outside it (launcher, resolve step, or pinned image).
 ### #image
 - Open [**Profile, framework version, PHP runtime/target, toolset and image model**](map-profile-version-image-model.md) — One profile per framework; versions, runtime and tool sets are resolved via a compatibility table to a digest-pinned image.
 - Open [**Resolve the image before the container exists, never from inside it**](practice-select-image-before-container-start.md) — PHP runtime or toolset changes need a different container, so image selection happens outside it (launcher, resolve step, or pinned image).
+### #mcp
+- Open [**Recorded SPX performance reader and MCP queries**](map-recorded-spx-performance-reader-and-mcp-queries.md) — Bounded native SPX reader and five read-only MCP tools share verified capture snapshots without requiring a running app or Docker.
+- Open [**Local SPX runtime and project MCP connections**](map-local-spx-runtime-and-project-mcp-connections.md) — Opt-in profiler adapters for DDEV, Compose and Docker preserve tracked project files and keep private state outside the checkout.
+### #performance
+- Open [**Recorded SPX performance reader and MCP queries**](map-recorded-spx-performance-reader-and-mcp-queries.md) — Bounded native SPX reader and five read-only MCP tools share verified capture snapshots without requiring a running app or Docker.
+- Open [**Local SPX runtime and project MCP connections**](map-local-spx-runtime-and-project-mcp-connections.md) — Opt-in profiler adapters for DDEV, Compose and Docker preserve tracked project files and keep private state outside the checkout.
 ### #build
 - Open [**Shared development toolset compatibility metadata**](map-shared-development-toolset-compatibility-metadata.md) — docker-bake.json supplies the shared development toolset revision to the CLI, manifest entries and Docker image labels.
 ### #cache
@@ -61,6 +69,10 @@ _None._
 - Open [**Store profile and rules in the project's .phpwarden.yaml, not account settings**](../configuration/practice-project-config-owns-rules.md) — Profile, PHP target, rules and blocking policy live in the project-root config; native client settings are only adapters.
 - Open [**Go single-module layout and profile contract**](../architecture/map-component-boundaries-and-profile-contract.md) — One Go module holds launcher, worker and shared packages; profiles own framework knowledge, core stays framework-agnostic.
 - Open [**Profile, framework version, PHP runtime/target, toolset and image model**](map-profile-version-image-model.md) — One profile per framework; versions, runtime and tool sets are resolved via a compatibility table to a digest-pinned image.
+### #report
+- Open [**Map results to exit codes by fixed priority and track completeness**](../reporting/practice-exit-codes-and-completeness-semantics.md) — Exit 0/1/2/3/130 follow a strict priority; optional failures keep exit 0 but set complete=false.
+- Open [**Report v1 JSON structure and evolution rules**](../reporting/map-report-v1-json-contract.md) — Shape of the check report v1: top-level keys, finding and diagnostic fields, ordering and compatibility rules.
+- Open [**Recorded SPX performance reader and MCP queries**](map-recorded-spx-performance-reader-and-mcp-queries.md) — Bounded native SPX reader and five read-only MCP tools share verified capture snapshots without requiring a running app or Docker.
 ### #runtime
 - Open [**Resolve the image before the container exists, never from inside it**](practice-select-image-before-container-start.md) — PHP runtime or toolset changes need a different container, so image selection happens outside it (launcher, resolve step, or pinned image).
 ### #safety
