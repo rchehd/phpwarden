@@ -1,0 +1,17 @@
+{
+  "name": "phpwarden/psalm-tools",
+  "description": "Isolated pinned Psalm and Drupal taint-analysis dependencies for PHPWarden",
+  "require": {
+    "php": "~8.3.16",
+    "symfony/yaml": "7.4.21",
+    "vimeo/psalm": "6.20.3",
+    "mortenson/psalm-plugin-drupal": "dev-master#073e7a4d5fc159fbf47decf16296edd7f8a545d1"
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "config": {
+    "allow-plugins": false,
+    "sort-packages": true
+  },
+  "type": "project"
+}

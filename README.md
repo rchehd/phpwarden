@@ -887,6 +887,11 @@ pinned development bundle; image packaging, notices and the remaining runtime
 matrix are separate gates. Existing workers
 must be rebuilt together with this CLI because its checker/config contract changed.
 
+The isolated bundle candidate and notice verification are in `tools/psalm`.
+The pinned Drupal plugin's actual LICENSE includes Commons Clause in addition to
+its Composer LGPL declaration; public image integration awaits a distribution
+decision. See [bundle notices](tools/psalm/NOTICE.md).
+
 Native XML discovery checks `psalm.xml`, `psalm.xml.dist`, then `psalm.dist.xml`,
 first at the repository root, then at `composer_root`. `config` chooses a file
 explicitly; `discover_config: false` disables discovery. Supported XML settings

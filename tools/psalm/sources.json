@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "runtime": "8.3",
+  "sources": [
+    {
+      "name": "mortenson/psalm-plugin-drupal",
+      "reference": "073e7a4d5fc159fbf47decf16296edd7f8a545d1",
+      "url": "https://codeload.github.com/mortenson/psalm-plugin-drupal/tar.gz/073e7a4d5fc159fbf47decf16296edd7f8a545d1",
+      "sha256": "f798de6f61e29bb44ae8c824221544d2c479b6ed1706b70fa240dc3f552ab682",
+      "license": "LGPL 2.1 plus Commons Clause License Condition v1.0 (upstream LICENSE)",
+      "declared_license": [
+        "LGPL-2.1-only"
+      ],
+      "file": "drupal-source.tar.gz"
+    },
+    {
+      "name": "netresearch/jsonmapper",
+      "reference": "980674efdda65913492d29a8fd51c82270dd37bb",
+      "url": "https://codeload.github.com/cweiske/jsonmapper/tar.gz/980674efdda65913492d29a8fd51c82270dd37bb",
+      "sha256": "fffc323fed2cb13307329c5b61d8661cfa1cdde4c1cb9f05163efea98d18af7e",
+      "license": "OSL-3.0",
+      "declared_license": [
+        "OSL-3.0"
+      ],
+      "file": "jsonmapper-source.tar.gz"
+    }
+  ],
+  "publication": "pending-license-decision",
+  "additional_notices": [
+    {
+      "file": "licenses/LGPL-2.1.txt",
+      "url": "https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt",
+      "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95"
+    }
+  ]
+}

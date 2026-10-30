@@ -31,7 +31,7 @@ from tests.support.phpcs import (
     check_phpcs_project_rules,
     check_phpcs_settings,
 )
-from tests.support.phpmd import check_phpmd_fixtures, check_phpmd_settings
+from tests.support.phpmd import TOOLS, check_phpmd_fixtures, check_phpmd_settings
 from tests.support.phpstan import (
     check_phpstan_dependency_mismatch,
     check_phpstan_fixtures,
@@ -180,6 +180,22 @@ class WorkerCLITest(unittest.TestCase):
                         )
                         self.assertEqual(actual, expected)
                         self.assertFalse((scenario.root / "vendor").exists())
+
+    def test_disabled_checker_inventory(self):
+        with materialize(FIXTURES / "clean-debug") as scenario:
+            self.configure(scenario)
+            filename = scenario.root / ".phpwarden.yaml"
+            config = json.loads(filename.read_text())
+            config["tools"] = {name: {"enabled": False} for name in TOOLS}
+            filename.write_text(json.dumps(config))
+            report = self.run_worker(scenario, ["--mode", "full"])
+            self.assertEqual([row["id"] for row in report["checks"]], list(TOOLS))
+            self.assertEqual(report["exit_code"], 0, report)
+            self.assertTrue(report["complete"], report)
+            self.assertEqual(report["findings"], [])
+            self.assertEqual(report["diagnostics"], [])
+            for row in report["checks"]:
+                self.assertEqual((row["status"], row["reason"]), ("skipped", "disabled"))
 
     def test_parallel_analyzers_preserve_real_results(self):
         for directory in sorted(FIXTURES.iterdir()):

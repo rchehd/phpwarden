@@ -8,6 +8,11 @@ bundle. Psalm is registered as an opt-in checker with strict project settings.
 The launcher requires a declared Psalm toolset capability; current images do not
 package the bundle, so public dispatch remains gated on that packaging step.
 
+The canonical bundle candidate is now in [`tools/psalm`](../README.md).
+Its notices verification preserves actual license conditions and pinned source
+archives. The Drupal plugin's Commons Clause condition leaves public image
+packaging pending a distribution decision; Composer metadata alone says LGPL.
+
 `prepare.php REQUEST.json EMPTY_OUTPUT_DIRECTORY [TOOL_VENDOR]` defaults to the
 isolated tool vendor at `/tool-vendor`. The request contains `root` (absolute repository
 root), `composer_root`, `web_root`, `source_roots`, `include` and `exclude` (paths

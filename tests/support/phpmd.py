@@ -20,6 +20,7 @@ TOOLS = (
     "phpcs",
     "phpmd",
     "phpstan",
+    "psalm",
     "rector",
     "semgrep",
     "stylelint",
