@@ -39,7 +39,7 @@ def check_rector_profile_preset(test, configure, run):
 
         metadata.unlink()
         result = run(scenario, arguments)
-        test.assertEqual(result["exit_code"], 3, result)
+        test.assertEqual(result["exit_code"], 0, result)
         test.assertFalse(result["complete"], result)
         test.assertEqual(result["diagnostics"][0]["code"], "dependencies_missing", result)
         test.assertIn("composer install", result["diagnostics"][0]["message"])
@@ -86,6 +86,7 @@ def check_rector(test, configure, run):
             test.assertEqual(filename.read_text(), source)
         config["tools"]["rector"]["enabled"] = True
         config["tools"]["rector"]["fail_on"] = "warning"
+        config["tools"]["rector"]["required"] = True
         config_path.write_text(json.dumps(config))
         result = run(scenario, [filename.relative_to(scenario.root).as_posix()])
         test.assertEqual(result["exit_code"], 1, result)

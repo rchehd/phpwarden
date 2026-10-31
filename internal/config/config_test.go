@@ -62,7 +62,7 @@ func TestDeadCodeDefaultsAndOptOut(t *testing.T) {
 			t.Fatal(err)
 		}
 		settings := effective.Config.Tools.DeadCode
-		if !settings.Enabled || !settings.Required || settings.FailOn != "error" || settings.TimeoutSeconds != 600 || settings.MemoryLimitMB != 1024 || effective.Provenance["tools.dead-code.enabled"] != "profile_default" {
+		if !settings.Enabled || settings.Required || settings.FailOn != "error" || settings.TimeoutSeconds != 600 || settings.MemoryLimitMB != 1024 || effective.Provenance["tools.dead-code.enabled"] != "profile_default" {
 			t.Fatalf("Dead code defaults: %+v", settings)
 		}
 	}
@@ -116,7 +116,7 @@ func TestEventHorizonDefaultsAndConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings := effective.Config.Tools.EventHorizon
-	if !settings.Enabled || !settings.Required || settings.FailOn != "never" || !settings.Caching || settings.ConfigSync == nil || settings.ExcludeRules == nil || effective.Provenance["tools.eventhorizon.enabled"] != "profile_default" || effective.Provenance["tools.eventhorizon.caching"] != "core_default" {
+	if !settings.Enabled || settings.Required || settings.FailOn != "never" || !settings.Caching || settings.ConfigSync == nil || settings.ExcludeRules == nil || effective.Provenance["tools.eventhorizon.enabled"] != "profile_default" || effective.Provenance["tools.eventhorizon.caching"] != "core_default" {
 		t.Fatalf("EventHorizon defaults: %+v", settings)
 	}
 	disabled, err := Parse([]byte(minimal + "tools: {eventhorizon: {enabled: false}}\n"))
@@ -544,7 +544,7 @@ func TestRectorUpgradeSettingsAreSeparateAndDryRunOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	defaults := effective.Config.Tools.Rector
-	if !defaults.Enabled || !defaults.DryRun || defaults.FailOn != "never" || !defaults.Required || defaults.TargetPHP != "" || defaults.TargetDrupal != "" || effective.Provenance["tools.rector.dry_run"] != "core_default" {
+	if !defaults.Enabled || !defaults.DryRun || defaults.FailOn != "never" || defaults.Required || defaults.TargetPHP != "" || defaults.TargetDrupal != "" || effective.Provenance["tools.rector.dry_run"] != "core_default" {
 		t.Fatalf("Rector defaults: %+v", defaults)
 	}
 	effective, err = Parse([]byte(minimal + "tools: {rector: {enabled: true, target_php: '8.5', target_drupal: '11.1', sets: [drupal-11.0], skip_rules: ['Rector\\Renaming\\Rector\\FuncCall\\RenameFunctionRector']}}\n"))

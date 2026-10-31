@@ -87,6 +87,6 @@ def check_eventhorizon_config(test, configure, run):
             test.assertIsNone(finding["path"], result)
         (directory / "broken.yml").write_text("broken: [\n")
         result = run(scenario, [filename.relative_to(scenario.root).as_posix()])
-        test.assertEqual(result["exit_code"], 3, result)
+        test.assertEqual(result["exit_code"], 0, result)
         test.assertFalse(result["complete"], result)
         test.assertEqual(result["findings"], [], result)

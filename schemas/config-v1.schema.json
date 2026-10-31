@@ -633,7 +633,7 @@
             },
             "required": {
               "type": "boolean",
-              "default": true
+              "default": false
             },
             "fail_on": {
               "type": "string",
@@ -861,7 +861,7 @@
             },
             "required": {
               "type": "boolean",
-              "default": true
+              "default": false
             },
             "fail_on": {
               "enum": [
@@ -1002,7 +1002,7 @@
             },
             "required": {
               "type": "boolean",
-              "default": true
+              "default": false
             },
             "fail_on": {
               "type": "string",
@@ -1043,7 +1043,7 @@
             },
             "required": {
               "type": "boolean",
-              "default": true
+              "default": false
             },
             "fail_on": {
               "type": "string",
@@ -1490,7 +1490,7 @@
             },
             "required": {
               "type": "boolean",
-              "default": true
+              "default": false
             },
             "fail_on": {
               "enum": [

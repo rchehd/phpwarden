@@ -66,7 +66,7 @@ tools:
     fail_on: error
   eventhorizon:
     enabled: true
-    required: true
+    required: false
     fail_on: never
     caching: true
     config_sync: []
@@ -107,7 +107,7 @@ tools:
   # When enabled, use upstream sets for the current Drupal version unless overridden.
   rector:
     enabled: true
-    required: true
+    required: false
     fail_on: never
     timeout_seconds: 600
     config: ""
@@ -175,7 +175,7 @@ tools:
     extra_inputs: []
   phpmd:
     enabled: true
-    required: true
+    required: false
     fail_on: error
     discover_config: true
     rulesets: [unusedcode, codesize]

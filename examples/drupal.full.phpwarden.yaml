@@ -103,7 +103,7 @@ tools:
 
   dead-code:
     enabled: true
-    required: true
+    required: false
     fail_on: error
     # timeout_seconds: 600
     # include: [web/modules/custom]
@@ -173,7 +173,7 @@ tools:
 
   eventhorizon:
     enabled: true
-    required: true
+    required: false
     fail_on: never
     # timeout_seconds: 120
     # include: [web/modules/custom]
@@ -204,7 +204,7 @@ tools:
 
   jscpd:
     enabled: true
-    required: true
+    required: false
     fail_on: error
     # timeout_seconds: 300
     # include: [web/modules/custom]
@@ -245,7 +245,7 @@ tools:
 
   phpmd:
     enabled: true
-    required: true
+    required: false
     fail_on: error
     # timeout_seconds: 120
     # include: [web/modules/custom]
@@ -295,7 +295,7 @@ tools:
   # When enabled, use upstream sets for the current Drupal version unless overridden.
   rector:
     enabled: true
-    required: true
+    required: false
     fail_on: never
     # timeout_seconds: 600
     # include: [web/modules/custom]
