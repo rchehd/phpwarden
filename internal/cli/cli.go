@@ -168,7 +168,7 @@ func runContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 		return testCLI(ctx, arguments[1:], cwd, stdout, stderr, arguments[0] == "mutation")
 	}
 	if len(arguments) > 0 && arguments[0] == "--licenses" {
-		data := legal.Notices
+		data := slices.Concat(buildinfo.License, []byte("\nThird-party notices\n\n"), legal.Notices)
 		if len(arguments) == 2 && arguments[1] == "--format=json" || len(arguments) == 3 && arguments[1] == "--format" && arguments[2] == "json" {
 			data = legal.Dependencies
 		} else if len(arguments) != 1 {

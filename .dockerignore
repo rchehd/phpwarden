@@ -3,6 +3,8 @@
 !go.sum
 !buildinfo.go
 !distribution_assets.go
+!license_asset.go
+!LICENSE
 !spx.go
 !examples/
 !examples/compose/

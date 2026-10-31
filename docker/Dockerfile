@@ -9,7 +9,7 @@ ARG BUILD_COMMIT=unknown
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
-COPY buildinfo.go distribution_assets.go spx.go docker-bake.json ./
+COPY buildinfo.go distribution_assets.go license_asset.go LICENSE spx.go docker-bake.json ./
 COPY tools/spx/sources.json ./tools/spx/sources.json
 COPY examples/compose ./examples/compose
 COPY cmd ./cmd

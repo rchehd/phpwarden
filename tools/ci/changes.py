@@ -55,7 +55,7 @@ def classify(paths, force=False):
         if name in ("requirements-dev.txt", "pyproject.toml", "ruff.toml", ".ruff.toml"):
             select("python")
             continue
-        if name.startswith(("docs/", ".ai/", ".agents/")) or (
+        if name.startswith(("docs/", "guide/", ".ai/", ".agents/")) or (
             name.endswith(".md")
             and (
                 "/" not in name
