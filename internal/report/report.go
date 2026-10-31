@@ -58,6 +58,8 @@ type Check struct {
 	Required bool    `json:"required"`
 	FailOn   string  `json:"fail_on"`
 	Reason   *string `json:"reason"`
+	// Wall time of this checker; absent when it was skipped or the report came from the cache.
+	DurationMS *int64 `json:"duration_ms,omitempty"`
 }
 
 type Finding struct {

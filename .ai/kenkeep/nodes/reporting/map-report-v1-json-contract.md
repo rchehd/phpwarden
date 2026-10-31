@@ -20,7 +20,7 @@ kk_relates_to:
 kk_depends_on: []
 kk_confidence: high
 ---
-Top-level keys: `version: 1`, `run_id`, `verdict` (`pass|fail|error`), `complete`, `exit_code`, `profile`, `scope`, `environment`, `checks`, `findings`, `diagnostics`, plus optional `fixed_files` listing files actually changed by an explicit fix. `profile`, `scope` and `environment` may be null when an input error occurs before discovery. `checks` carry ID, status, required, fail_on and reason or null.
+Top-level keys: `version: 1`, `run_id`, `verdict` (`pass|fail|error`), `complete`, `exit_code`, `profile`, `scope`, `environment`, `checks`, `findings`, `diagnostics`, plus optional `fixed_files` listing files actually changed by an explicit fix. `profile`, `scope` and `environment` may be null when an input error occurs before discovery. `checks` carry ID, status, required, fail_on, reason or null, and an optional `duration_ms` for checkers that ran live.
 
 A finding has `checker`, `rule`, `kind` (`code|syntax|global`), `severity` (`error|warning|info`), `message`, `path`, `line`, `column`. Global findings have null path/line/column; code and syntax findings need a non-empty project-relative path, a positive line and a positive-or-null column. Line 0 is never invented. Diagnostics have a stable `code`, `stage`, `message` and checker ID or null, so execution problems never masquerade as code findings.
 

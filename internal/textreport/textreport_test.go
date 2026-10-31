@@ -248,3 +248,16 @@ func TestRepeatedMessageWrappingPreservesWordsAndLinks(t *testing.T) {
 		t.Fatalf("wrapping lost details: %s", text)
 	}
 }
+
+func TestSlowestChecksShowsTopThreeMeasured(t *testing.T) {
+	timed := func(id string, milliseconds int64) report.Check {
+		return report.Check{ID: id, Status: "passed", FailOn: "error", DurationMS: &milliseconds}
+	}
+	checks := []report.Check{timed("debug", 100), timed("phpstan", 28100), {ID: "yaml", Status: "skipped", FailOn: "error"}, timed("phpcs", 2000), timed("rector", 12050)}
+	if got, want := slowestChecks(checks), "phpstan 28.1s · rector 12.1s · phpcs 2.0s"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if got := slowestChecks(checks[2:3]); got != "" {
+		t.Fatalf("unmeasured checks: %q", got)
+	}
+}

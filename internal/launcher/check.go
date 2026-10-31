@@ -133,7 +133,11 @@ func check(ctx context.Context, location config.Location, effective config.Effec
 		if check.ID == "composer-audit" && check.Reason != nil && *check.Reason == "delegated" {
 			progress.Stage(ctx, "Checking Composer security advisories")
 			cacheDir, _ := composeraudit.CacheDir()
+			started := time.Now()
 			outcome := composeraudit.Run(ctx, config.ComposerDir(location.Root, request.Config), auditSettings(request.Config, only), dockerFetcher(image, process), cacheDir, time.Now())
+			if outcome.Check.Status != "skipped" {
+				outcome.Check.DurationMS = new(time.Since(started).Milliseconds())
+			}
 			result.Checks[i] = outcome.Check
 			result.Findings = append(result.Findings, outcome.Findings...)
 			result.Diagnostics = append(result.Diagnostics, outcome.Diagnostics...)

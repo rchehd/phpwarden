@@ -74,7 +74,7 @@ Within a category, each rule group shows the first 10 findings by default, with 
 
 `--format compact` retains technical checker/rule identifiers and prints every finding on one `path:line:col` line, which editors and terminals can open directly, followed by its summary. If the check stops before any checker runs, the output says so instead of reporting zero findings. Colors are used only in a terminal; `--color always|never` overrides that, and `NO_COLOR` disables it.
 
-`--format json` prints one report that follows [schemas/report-v1.schema.json](../schemas/report-v1.schema.json). Its content and the exit codes do not depend on the text format.
+`--format json` prints one report that follows [schemas/report-v1.schema.json](../schemas/report-v1.schema.json). Its content and the exit codes do not depend on the text format. Each checker that ran live has an optional `duration_ms`, and the text output lists the three slowest.
 
 | Exit code | Meaning |
 |---|---|

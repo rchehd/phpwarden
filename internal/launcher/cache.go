@@ -156,6 +156,9 @@ func (c *resultCache) Read(request runrequest.Request, now time.Time) (report.Re
 	if err != nil {
 		return report.Report{}, false
 	}
+	for i := range result.Checks {
+		result.Checks[i].DurationMS = nil
+	}
 	c.info.Status = "hit"
 	return result, true
 }

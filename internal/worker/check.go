@@ -125,6 +125,7 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 		return report.InputError("selection", err)
 	}
 	outcomes := runCheckers(ctx, checker.Requested(only), cfg.Runner.Concurrency, func(id string) checker.Outcome {
+		started := time.Now()
 		var outcome checker.Outcome
 		if id == "phpstan" {
 			settings := cfg.Tools.PHPStan
@@ -241,6 +242,9 @@ func analyze(ctx context.Context, location config.Location, cfg config.Config, p
 			settings := cfg.Tools.Debug
 			settings.Enabled = checker.Enabled(id, settings.Enabled, only)
 			outcome = debug.Run(ctx, location.Root, debug.Select(selection, settings, cfg.Profile), settings, process)
+		}
+		if outcome.Check.Status != "skipped" {
+			outcome.Check.DurationMS = new(time.Since(started).Milliseconds())
 		}
 		return outcome
 	})

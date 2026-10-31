@@ -1,6 +1,7 @@
 package textreport
 
 import (
+	"cmp"
 	"fmt"
 	"io"
 	"regexp"
@@ -109,6 +110,9 @@ func Write(out io.Writer, result report.Report, options Options) error {
 	} else {
 		w.categoryDetails(categories)
 		w.categoryChecks(categories)
+	}
+	if slowest := slowestChecks(result.Checks); slowest != "" {
+		w.line("  Slowest: %s", slowest)
 	}
 	if options.Compact {
 		w.line("")
@@ -412,4 +416,14 @@ func display(name string) string {
 		return strconv.Quote(name)
 	}
 	return name
+}
+
+func slowestChecks(checks []report.Check) string {
+	timed := slices.DeleteFunc(slices.Clone(checks), func(check report.Check) bool { return check.DurationMS == nil })
+	slices.SortStableFunc(timed, func(a, b report.Check) int { return cmp.Compare(*b.DurationMS, *a.DurationMS) })
+	parts := []string{}
+	for _, check := range timed[:min(3, len(timed))] {
+		parts = append(parts, fmt.Sprintf("%s %.1fs", check.ID, float64(*check.DurationMS)/1000))
+	}
+	return strings.Join(parts, " · ")
 }
