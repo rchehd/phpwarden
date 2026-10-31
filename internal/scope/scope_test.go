@@ -441,3 +441,49 @@ func TestLastCommits(t *testing.T) {
 		t.Fatal("commits accepted outside diff")
 	}
 }
+
+func TestStagedDiffLimitsSelectionToPathsAndChangedLines(t *testing.T) {
+	root := t.TempDir()
+	git(t, root, "init", "-q")
+	git(t, root, "config", "user.email", "test@example.com")
+	git(t, root, "config", "user.name", "Test")
+	write := func(name, text string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, name), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("src/first.php", "one\ntwo\n")
+	write("src/other.php", "one\n")
+	options := Options{Root: root, Mode: "diff", Staged: true, Include: []string{"src"}, Paths: []string{"src/first.php"}}
+	selection, err := Build(context.Background(), options)
+	if err != nil || !reflect.DeepEqual(selection.Files, []string{"src/first.php"}) || selection.LineMap["src/first.php"] != nil {
+		t.Fatalf("first commit must select the whole new file: %+v %v", selection, err)
+	}
+	git(t, root, "add", "src")
+	git(t, root, "commit", "-qm", "base")
+	write("src/first.php", "one\nchanged\nthree\n")
+	write("src/other.php", "changed\n")
+	write("src/new.php", "new\n")
+	selection, err = Build(context.Background(), options)
+	if err != nil || selection.Mode != "diff" || !reflect.DeepEqual(selection.Files, []string{"src/first.php"}) || !reflect.DeepEqual(selection.LineMap["src/first.php"], []Range{{Start: 2, End: 3}}) {
+		t.Fatalf("staged lines: %+v %v", selection, err)
+	}
+	options.WholeFiles = true
+	selection, err = Build(context.Background(), options)
+	if err != nil || selection.LineMap["src/first.php"] != nil {
+		t.Fatalf("whole files: %+v %v", selection, err)
+	}
+	for _, invalid := range []Options{
+		{Root: root, Mode: "paths", Staged: true, Include: []string{"src"}, Paths: []string{"src/first.php"}},
+		{Root: root, Mode: "diff", Staged: true, Include: []string{"src"}},
+		{Root: root, Mode: "diff", Staged: true, Base: "main", Include: []string{"src"}, Paths: []string{"src/first.php"}},
+	} {
+		if _, err := Build(context.Background(), invalid); err == nil {
+			t.Fatalf("accepted invalid staged options: %+v", invalid)
+		}
+	}
+}

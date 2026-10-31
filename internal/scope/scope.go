@@ -24,6 +24,8 @@ type Options struct {
 	WholeFiles bool
 	// Commits > 0 diffs against HEAD~Commits instead of Base.
 	Commits int
+	// Staged limits a diff to Paths against HEAD; the caller guarantees those files match the index.
+	Staged bool
 	// Project-level files outside the source roots, such as composer.json, reported when changed or requested.
 	ProjectFiles []string
 }
@@ -85,7 +87,11 @@ func Build(ctx context.Context, options Options) (Selection, error) {
 	if options.Commits > 0 && (result.Mode != "diff" || options.Base != "") {
 		return result, fmt.Errorf("commits apply only to diff and cannot be combined with a base")
 	}
-	if (result.Mode == "paths") != (len(options.Paths) > 0) {
+	if options.Staged {
+		if result.Mode != "diff" || len(options.Paths) == 0 || options.Base != "" || options.Commits > 0 {
+			return result, fmt.Errorf("staged selection requires diff mode, paths and no other base")
+		}
+	} else if (result.Mode == "paths") != (len(options.Paths) > 0) {
 		return result, fmt.Errorf("explicit paths require paths mode")
 	}
 	root, err := filepath.Abs(options.Root)
@@ -160,22 +166,30 @@ func Build(ctx context.Context, options Options) (Selection, error) {
 				return result, fmt.Errorf("cannot check the last %d commits: HEAD has %d commits; use --mode full for the whole history", options.Commits, count)
 			}
 			base = fmt.Sprintf("HEAD~%d", options.Commits)
-		} else if base == "" {
+		} else if base == "" && !options.Staged {
 			output, err := repo.git("symbolic-ref", "--quiet", "refs/remotes/origin/HEAD")
 			if err != nil {
 				return result, fmt.Errorf("base ref is unavailable; pass --base or fetch origin/HEAD: %w", err)
 			}
 			base = strings.TrimSpace(string(output))
 		}
-		output, err := repo.git("rev-parse", "--verify", "--end-of-options", base+"^{commit}")
-		if err != nil {
-			return result, fmt.Errorf("invalid base ref %q; fetch it or pass --base: %w", base, err)
+		var mergeBase string
+		if options.Staged {
+			base = "HEAD"
+			if mergeBase, err = repo.headOrEmptyTree(); err != nil {
+				return result, err
+			}
+		} else {
+			output, err := repo.git("rev-parse", "--verify", "--end-of-options", base+"^{commit}")
+			if err != nil {
+				return result, fmt.Errorf("invalid base ref %q; fetch it or pass --base: %w", base, err)
+			}
+			output, err = repo.git("merge-base", strings.TrimSpace(string(output)), "HEAD")
+			if err != nil {
+				return result, fmt.Errorf("merge base unavailable; fetch the required history: %w", err)
+			}
+			mergeBase = strings.TrimSpace(string(output))
 		}
-		output, err = repo.git("merge-base", strings.TrimSpace(string(output)), "HEAD")
-		if err != nil {
-			return result, fmt.Errorf("merge base unavailable; fetch the required history: %w", err)
-		}
-		mergeBase := strings.TrimSpace(string(output))
 		result.BaseRef, result.MergeBase = &base, &mergeBase
 		changed, err = repo.changed(mergeBase)
 		if err != nil {

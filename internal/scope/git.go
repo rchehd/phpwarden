@@ -97,6 +97,18 @@ func (repo repository) inventory() (map[string]bool, error) {
 	return files, nil
 }
 
+// A first commit has no HEAD, so its files are compared with the empty tree.
+func (repo repository) headOrEmptyTree() (string, error) {
+	output, err := repo.git("rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+	if err != nil {
+		output, err = repo.git("hash-object", "-t", "tree", os.DevNull)
+	}
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
 func (repo repository) changed(base string) (map[string]bool, error) {
 	output, err := repo.git("diff", "--name-status", "-z", "--no-renames", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all", base, "--", repo.pathspec())
 	if err != nil {

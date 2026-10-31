@@ -62,7 +62,7 @@ phpwarden init --pre-commit
 
 This also works when `.phpwarden.yaml` already exists. Repeating the command keeps the configuration and reports whether the hook was newly installed or already present. Plain `init` does not install a hook.
 
-The hook checks whole staged files within the configured source roots and project-file scope, using the project's enabled checks and policies. It does not compare against a remote branch, so it works for a first commit and honors Git's temporary index for `git commit -a`. Blocking findings or a required runner/checker failure abort the commit. Deleted files and staged files outside the configured scope are skipped.
+The hook checks the staged changes against `HEAD` within the configured source roots and project-file scope, using the project's enabled checks and policies. New files are checked in full; in other files only changed lines are reported, so older findings do not block a commit. Set `scope.whole_files: true` to check whole staged files. It does not compare against a remote branch, so it works for a first commit and honors Git's temporary index for `git commit -a`. Blocking findings or a required runner/checker failure abort the commit. Deleted files and staged files outside the configured scope are skipped.
 
 Selected files must match their staged versions. If one also has unstaged edits or was deleted only from the working tree, the hook stops and explains how to resolve the mismatch. It does not stash, fix, stage or rewrite project files. Tool configs, dependencies and cross-file analysis use the current working-tree context. Changes to the index during checking invalidate the result.
 

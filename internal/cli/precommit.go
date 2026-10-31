@@ -101,8 +101,12 @@ func preCommit(ctx context.Context, args options, cwd string, stdout, stderr io.
 	if err := snapshot.Check(ctx, selected); err != nil {
 		return failure(err)
 	}
-	options.Mode, options.Paths = "paths", selected
-	fmt.Fprintf(stdout, "PHPWarden pre-commit · %d staged file(s) · whole files\n", len(selected))
+	options.Mode, options.Paths, options.Staged, options.WholeFiles = "diff", selected, true, effective.Config.Scope.WholeFiles
+	coverage := "changed lines"
+	if options.WholeFiles {
+		coverage = "whole files"
+	}
+	fmt.Fprintf(stdout, "PHPWarden pre-commit · %d staged file(s) · %s\n", len(selected), coverage)
 	ctx, display := startProgress(ctx, "text", stdout, stderr)
 	defer display.Stop()
 	check := launcher.Check
