@@ -22,6 +22,7 @@ type releaseTerm struct {
 }
 type projectRelease struct {
 	Version  string        `xml:"version"`
+	Tag      string        `xml:"tag"`
 	Status   string        `xml:"status"`
 	Link     string        `xml:"release_link"`
 	Terms    []releaseTerm `xml:"terms>term"`
@@ -63,7 +64,12 @@ func parseReleaseHistory(data []byte, id string) (releaseHistory, error) {
 		return history, fmt.Errorf("unknown Drupal project status")
 	}
 	seen := map[string]bool{}
-	for _, item := range history.Releases {
+	for i := range history.Releases {
+		item := &history.Releases[i]
+		// Drupal.org publishes some releases with an empty version and only a tag.
+		if item.Version == "" {
+			item.Version = item.Tag
+		}
 		if item.Version == "" || seen[item.Version] || !slices.Contains([]string{"published", "unpublished", "revoked"}, item.Status) || !slices.Contains([]string{"", "0", "1"}, item.Security.Covered) {
 			return history, fmt.Errorf("invalid or duplicate Drupal release")
 		}

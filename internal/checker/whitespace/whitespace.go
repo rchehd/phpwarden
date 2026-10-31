@@ -52,6 +52,7 @@ func Run(ctx context.Context, root string, selection scope.Selection, cfg config
 		if bytes.IndexByte(data, 0) >= 0 {
 			continue
 		}
+		opened := false
 		for line := 1; len(data) > 0; line++ {
 			if ctx.Err() != nil {
 				return fail("checker_timeout", "Whitespace checker did not complete within its execution context")
@@ -61,6 +62,7 @@ func Run(ctx context.Context, root string, selection scope.Selection, cfg config
 			if newline && len(content) > 0 && content[len(content)-1] == '\r' {
 				content = content[:len(content)-1]
 			}
+			opened = opened || bytes.HasPrefix(content, []byte("<")) && conflictMarker(content, false)
 			if !selection.Contains(filename, line) {
 				continue
 			}
@@ -74,7 +76,7 @@ func Run(ctx context.Context, root string, selection scope.Selection, cfg config
 					add("whitespace.trailing", "Trailing spaces or tabs", end+1)
 				}
 			}
-			if checkConflicts && conflictMarker(content) {
+			if checkConflicts && conflictMarker(content, opened) {
 				add("conflict.marker", "Unresolved merge conflict marker", 1)
 			}
 		}
@@ -88,13 +90,17 @@ func Run(ctx context.Context, root string, selection scope.Selection, cfg config
 	return result
 }
 
-func conflictMarker(line []byte) bool {
+// A bare "=" run is also a Markdown heading underline, so it counts only after an opening marker.
+func conflictMarker(line []byte, opened bool) bool {
 	if len(line) < 7 || !bytes.ContainsAny(line[:1], "<|=>") {
 		return false
 	}
 	end := 1
 	for end < len(line) && line[end] == line[0] {
 		end++
+	}
+	if line[0] == '=' {
+		return opened && end >= 7 && end == len(line)
 	}
 	return end >= 7 && (end == len(line) || line[end] == ' ' || line[end] == '\t')
 }

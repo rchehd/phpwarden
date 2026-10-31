@@ -111,6 +111,9 @@ final class PHPWardenDrupalUsageProvider extends ReflectionBasedMemberUsageProvi
                 } catch (Throwable) {
                     continue;
                 }
+                if (!is_array($data)) {
+                    continue;
+                }
                 if (str_ends_with($yaml, '.services.yml')) {
                     foreach ($data['services'] ?? [] as $id => $service) {
                         if (is_array($service) && is_string($service['class'] ?? null)) {

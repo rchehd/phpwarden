@@ -68,6 +68,19 @@ func TestMalformedReleaseHistoryDoesNotEstablishSupport(t *testing.T) {
 	}
 }
 
+func TestReleaseHistoryFallsBackToTagForEmptyVersion(t *testing.T) {
+	valid := string(historyFixture("token", "published", "8.x-1.", "8.x-1.2", "published", ""))
+	tagged := strings.Replace(valid, "</releases>", "<release><version></version><tag>8.x-1.1</tag><status>published</status></release></releases>", 1)
+	history, err := parseReleaseHistory([]byte(tagged), "token")
+	if err != nil || len(history.Releases) != 2 || history.Releases[1].Version != "8.x-1.1" {
+		t.Fatalf("empty version must use the release tag: %+v %v", history.Releases, err)
+	}
+	unidentified := strings.Replace(valid, "</releases>", "<release><version></version><status>published</status></release></releases>", 1)
+	if _, err := parseReleaseHistory([]byte(unidentified), "token"); err == nil {
+		t.Fatal("accepted a release without version or tag")
+	}
+}
+
 func TestReleasePolicyCoverageAndCoreBranchBoundaries(t *testing.T) {
 	for _, test := range []struct{ version, branch, coverage, status string }{
 		{"11.4.1", "11.4.", "", "supported"},
