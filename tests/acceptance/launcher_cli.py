@@ -448,7 +448,9 @@ class LauncherCLITest(unittest.TestCase):
             allowed = git("commit", "--quiet", "-m", "ignore unchanged legacy line")
             self.assertEqual(allowed.returncode, 0, allowed.stdout + allowed.stderr)
             self.assertIn("changed lines", allowed.stdout + allowed.stderr)
-            filename.write_text("console.log('legacy');\nconst cleanChange = 1;\nconsole.log('new');\n")
+            filename.write_text(
+                "console.log('legacy');\nconst cleanChange = 1;\nconsole.log('new');\n"
+            )
             self.assertEqual(git("add", "--", name).returncode, 0)
             blocked = git("commit", "--quiet", "-m", "check staged line")
             self.assertNotEqual(blocked.returncode, 0)

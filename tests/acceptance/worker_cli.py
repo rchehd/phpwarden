@@ -208,6 +208,8 @@ class WorkerCLITest(unittest.TestCase):
                     config["runner"] = {"concurrency": concurrency}
                     path.write_text(json.dumps(config))
                     report = self.run_worker(scenario, ["--mode", "full"])
+                    for check in report["checks"]:
+                        self.assertGreaterEqual(check.pop("duration_ms", 0), 0)
                     actual = {
                         key: report[key]
                         for key in (
