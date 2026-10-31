@@ -30,6 +30,8 @@ type Selection struct {
 	Capabilities     []string          `json:"capabilities"`
 	Development      bool              `json:"development"`
 	PHPVersion       string            `json:"php_version"`
+	// The framework is a newer minor release than this toolset was verified against.
+	UnverifiedFramework bool `json:"unverified_framework,omitempty"`
 }
 
 // Runtimes lists the PHP runtimes the bundled manifest provides for a profile, lowest first.
@@ -86,13 +88,19 @@ func (catalog Catalog) Resolve(effective config.Effective, platform string) (Sel
 		if !covers || !complete {
 			continue
 		}
+		unverified := false
 		if item.Framework != nil {
 			if framework == "" || framework == "auto" {
 				continue
 			}
 			allows, err := item.framework.Allows(framework)
-			if err != nil || !allows {
+			if err != nil {
 				continue
+			}
+			if !allows {
+				if unverified, _ = item.framework.NewerMinor(framework); !unverified {
+					continue
+				}
 			}
 		}
 		for _, image := range item.Images {
@@ -105,12 +113,15 @@ func (catalog Catalog) Resolve(effective config.Effective, platform string) (Sel
 			}
 			selected := Selection{Release: catalog.release, Entry: item.ID, Preset: item.Preset, Tools: maps.Clone(item.Tools),
 				ID: item.Toolset, Image: image.Reference, Platform: platform, Protocol: catalog.protocol,
-				Capabilities: slices.Clone(item.Capabilities), Development: item.Development, PHPVersion: item.PHP.Version}
+				Capabilities: slices.Clone(item.Capabilities), Development: item.Development, PHPVersion: item.PHP.Version, UnverifiedFramework: unverified}
 			if framework != "" && framework != "auto" {
 				selected.FrameworkVersion = new(framework)
 			}
 			matches = append(matches, selected)
 		}
+	}
+	if verified := slices.DeleteFunc(slices.Clone(matches), func(selected Selection) bool { return selected.UnverifiedFramework }); len(verified) > 0 {
+		matches = verified
 	}
 	if len(matches) == 1 {
 		return matches[0], nil

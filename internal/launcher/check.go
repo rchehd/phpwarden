@@ -64,6 +64,12 @@ func check(ctx context.Context, location config.Location, effective config.Effec
 	if err != nil {
 		return report.InputError("compatibility", err)
 	}
+	markUnverified := func(result report.Report) report.Report {
+		if selected.UnverifiedFramework && result.Environment != nil {
+			result.Environment.CompatibilityPending = append(result.Environment.CompatibilityPending, fmt.Sprintf("framework %s is newer than the range verified for this PHPWarden release", *selected.FrameworkVersion))
+		}
+		return result
+	}
 	progress.Stage(ctx, "Reading Git changes")
 	selection, err := scope.Build(ctx, options)
 	if err != nil {
@@ -77,7 +83,7 @@ func check(ctx context.Context, location config.Location, effective config.Effec
 	}
 	audits := composeraudit.Delegated(config.ComposerDir(location.Root, effective.Config), auditSettings(effective.Config, only))
 	if len(selection.Files) == 0 && len(selection.ProjectFiles) == 0 && *audits.Check.Reason != "delegated" || !checker.AnyEnabled(effective.Config, only) {
-		return worker.Check(ctx, location, effective, options, only, process)
+		return markUnverified(worker.Check(ctx, location, effective, options, only, process))
 	}
 	if err := discovery.Unchanged(location, effective); err != nil {
 		return failure("stale", err)
@@ -162,7 +168,7 @@ func check(ctx context.Context, location config.Location, effective config.Effec
 	if result.Environment != nil {
 		result.Environment.Cache = cacheState.info
 	}
-	return result
+	return markUnverified(result)
 }
 
 func runWorker(ctx context.Context, location config.Location, request runrequest.Request, input []byte, process runner.Process) (report.Report, error) {

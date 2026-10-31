@@ -136,7 +136,7 @@ An explicit `config` takes precedence over discovered `rector.php` / `rector.dis
 
 The automatic Drupal preset needs Composer-installed package metadata in the selected `composer_root` (including a custom `vendor-dir`). Restore project dependencies with `composer install` before checking. Missing metadata reports `unavailable: dependencies_missing`; PHPWarden does not install dependencies.
 
-With applicable PHP files, an unresolved or unsupported automatic preset produces `error: config_invalid`. With its default `required: false`, this makes the run incomplete with exit code 0; `required: true` gives exit code 3. With no applicable files, it reports `skipped: no_files`.
+With applicable PHP files, an unresolved automatic preset produces `error: config_invalid`. A Drupal release newer than the pinned sets produces `unavailable: preset_unavailable`, and the other checkers still run. With its default `required: false`, this makes the run incomplete with exit code 0; `required: true` gives exit code 3. With no applicable files, it reports `skipped: no_files`.
 
 `target_php` enables cumulative PHP sets through the chosen version (8.1–8.5). `target_drupal` selects the pinned minor deprecation sets through the chosen target, including older Drupal sets. Supported targets are 10.0–10.6, 11.0–11.4, and 12.0. This sets Drupal Rector's assumed destination and minimum supported version; suggested code may drop compatibility with older Drupal. The tool's rule coverage is incomplete and a successful check does not prove upgrade readiness. Future minor sets and the upstream opt-in breaking sets are not enabled automatically.
 

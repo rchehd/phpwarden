@@ -1,6 +1,7 @@
 package profile
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,5 +39,18 @@ func TestRectorPresetUsesPinnedSetsThroughCurrentMinor(t *testing.T) {
 	}
 	if _, err := RectorPresetFor("laravel", "11.4.0"); err == nil {
 		t.Fatal("unknown profile fell back to Drupal")
+	}
+}
+
+func TestNewerDrupalIsDistinctFromInvalidVersion(t *testing.T) {
+	for _, version := range []string{"10.7.0", "11.5.0", "12.1.0", "13.0.0"} {
+		if _, err := RectorPresetFor("drupal", version); !errors.Is(err, ErrNoRectorPreset) {
+			t.Errorf("%s: %v", version, err)
+		}
+	}
+	for _, version := range []string{"", "auto", "9.5.0", "11.4.0-dev", "v11.4.0"} {
+		if _, err := RectorPresetFor("drupal", version); err == nil || errors.Is(err, ErrNoRectorPreset) {
+			t.Errorf("%q: %v", version, err)
+		}
 	}
 }

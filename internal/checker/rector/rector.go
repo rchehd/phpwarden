@@ -18,6 +18,7 @@ import (
 	"github.com/rchehd/phpwarden/internal/checker"
 	"github.com/rchehd/phpwarden/internal/config"
 	"github.com/rchehd/phpwarden/internal/edit"
+	"github.com/rchehd/phpwarden/internal/profile"
 	"github.com/rchehd/phpwarden/internal/report"
 	"github.com/rchehd/phpwarden/internal/runner"
 	"github.com/rchehd/phpwarden/internal/scope"
@@ -66,6 +67,9 @@ func run(ctx context.Context, root string, selected scope.Selection, project con
 	if err != nil {
 		if errors.Is(err, errDependencies) {
 			return fail("unavailable", "dependencies_missing", err.Error())
+		}
+		if errors.Is(err, profile.ErrNoRectorPreset) {
+			return fail("unavailable", "preset_unavailable", err.Error())
 		}
 		return fail("error", "config_invalid", err.Error())
 	}

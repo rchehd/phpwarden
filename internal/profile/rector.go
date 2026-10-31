@@ -1,11 +1,17 @@
 package profile
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 )
+
+// ErrNoRectorPreset marks a valid framework release newer than the pinned upstream sets.
+var ErrNoRectorPreset = errors.New("no pinned Drupal Rector preset")
+
+var newerRectorVersion = regexp.MustCompile(`^(1[3-9]|[2-9][0-9])\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
 type RectorPreset struct {
 	Sets          []string
@@ -19,13 +25,16 @@ func RectorPresetFor(id, version string) (RectorPreset, error) {
 		return RectorPreset{}, fmt.Errorf("no Rector preset for profile %q; supply a project Rector config or explicit targets/rules", id)
 	}
 	parts := rectorVersion.FindStringSubmatch(version)
+	if newerRectorVersion.MatchString(version) {
+		return RectorPreset{}, fmt.Errorf("%w for %s; supply a project Rector config or explicit targets/rules", ErrNoRectorPreset, version)
+	}
 	if parts == nil {
 		return RectorPreset{}, fmt.Errorf("Drupal Rector preset needs an exact framework.version; supply a project Rector config or explicit targets/rules")
 	}
 	major, _ := strconv.Atoi(parts[1])
 	minor, err := strconv.Atoi(parts[2])
 	if err != nil || major == 10 && minor > 6 || major == 11 && minor > 4 || major == 12 && minor > 0 {
-		return RectorPreset{}, fmt.Errorf("no pinned Drupal Rector preset for %s; supply a project Rector config or explicit targets/rules", version)
+		return RectorPreset{}, fmt.Errorf("%w for %s; supply a project Rector config or explicit targets/rules", ErrNoRectorPreset, version)
 	}
 	result := RectorPreset{Sets: []string{}, DrupalVersion: version}
 	for _, candidate := range DrupalRectorVersions() {

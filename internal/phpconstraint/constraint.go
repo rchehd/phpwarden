@@ -177,6 +177,25 @@ func (set Set) Allows(text string) (bool, error) {
 	return false, nil
 }
 
+// NewerMinor reports whether text is above every range of its major version, such as 11.5.0 for ">=11.0 <11.5".
+func (set Set) NewerMinor(text string) (bool, error) {
+	value, _, wildcard, err := parseVersion(text)
+	if err != nil || wildcard {
+		return false, fmt.Errorf("cannot evaluate non-stable PHP version %q", text)
+	}
+	found := false
+	for _, interval := range set.ranges {
+		if interval.low[0] != value[0] {
+			continue
+		}
+		if interval.high == nil || compare(value, *interval.high) < 0 {
+			return false, nil
+		}
+		found = true
+	}
+	return found, nil
+}
+
 func (set Set) Intersect(other Set) Set {
 	result := Set{}
 	for _, left := range set.ranges {

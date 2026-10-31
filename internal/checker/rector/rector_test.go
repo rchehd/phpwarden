@@ -382,3 +382,20 @@ func TestNativeChangedFileListMayIncludeUnchangedVisitedFile(t *testing.T) {
 		t.Fatal("unknown visited path accepted")
 	}
 }
+
+func TestAutomaticPresetForNewerDrupalIsUnavailable(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "demo.module", original)
+	cfg := settings(t)
+	cfg.Rules = []string{}
+	project := projectConfig(cfg, ".", "8.4")
+	project.Framework.Version = "11.5.0"
+	unused := processFunc(func(context.Context, runner.Command) runner.Result {
+		t.Fatal("unexpected Rector process")
+		return runner.Result{}
+	})
+	result := run(context.Background(), root, selection(nil), project, t.TempDir(), unused)
+	if result.Check.Status != "unavailable" || *result.Check.Reason != "preset_unavailable" {
+		t.Fatalf("newer Drupal preset: %+v", result)
+	}
+}

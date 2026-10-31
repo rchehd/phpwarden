@@ -463,3 +463,28 @@ func TestRequireCheckerLocksForEveryRuntime(t *testing.T) {
 		}
 	}
 }
+
+func TestNewerMinorFrameworkIsAllowedAsUnverified(t *testing.T) {
+	catalog := parseFixture(t, fixtureEntry("published", ">=10.0.0 <10.7.0 || >=11.0.0 <11.5.0", "8.4", "8.4.26", "8.3", "8.4"))
+	for _, tc := range []struct {
+		framework  string
+		selected   bool
+		unverified bool
+	}{
+		{"11.4.10", true, false},
+		{"10.6.0", true, false},
+		{"11.5.0", true, true},
+		{"11.6.2", true, true},
+		{"10.7.1", true, true},
+		{"12.0.0", false, false},
+		{"9.5.0", false, false},
+		{"11.5.0-rc1", false, false},
+	} {
+		t.Run(tc.framework, func(t *testing.T) {
+			selected, err := catalog.Resolve(effectiveVersion(tc.framework, "8.4", "8.3", "8.4"), "linux/amd64")
+			if (err == nil) != tc.selected || selected.UnverifiedFramework != tc.unverified {
+				t.Fatalf("selected=%+v err=%v", selected, err)
+			}
+		})
+	}
+}
