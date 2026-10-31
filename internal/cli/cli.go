@@ -49,7 +49,7 @@ const usage = `Usage: phpwarden init [--composer-root DIR] [--php-runtime X.Y] [
        phpwarden hook stop --client codex|cursor|claude [--project PATH]
        phpwarden instructions remove --client all|codex,cursor,claude [--project PATH]
        phpwarden doctor [options]
-       phpwarden updates [--security] [--direct] [--no-dev] [--offline] [--runtime-version X.Y.Z] [options]
+       phpwarden updates [--security] [--direct] [--no-dev] [--offline] [--runtime-version X.Y.Z] [--fail-on security] [options]
        phpwarden update [--check] [--to VERSION] [--format text|json]
        phpwarden performance --reports DIR --producer COMMIT [--report KEY] [--format text|json]
        phpwarden performance setup|status|teardown [options]
@@ -83,6 +83,7 @@ Updates options:
   --no-dev             Exclude development packages from the update report
   --offline            Use cached update metadata without fetching
   --runtime-version V  Verified application PHP patch version (X.Y.Z)
+  --fail-on security   Exit 1 on unaccepted advisories and insecure or revoked releases
 
 Scope options:
   --mode diff|full     Override configured mode (default config: diff)
@@ -132,6 +133,7 @@ type options struct {
 	noDev          bool
 	offline        bool
 	runtimeVersion string
+	failOn         string
 	commits        int
 	fix            bool
 }
@@ -235,7 +237,7 @@ func runContext(ctx context.Context, arguments []string, cwd string, stdin io.Re
 	if len(args.command) == 1 && (args.command[0] == "doctor" || args.command[0] == "updates") {
 		return projectMaintenance(ctx, args, cwd, stdout, stderr)
 	}
-	if args.security || args.direct || args.noDev || args.offline || args.runtimeVersion != "" {
+	if args.security || args.direct || args.noDev || args.offline || args.runtimeVersion != "" || args.failOn != "" {
 		return fail(stdout, stderr, args, "usage", fmt.Errorf("update filters require updates"))
 	}
 	if args.noInteraction && !(len(args.command) == 1 && args.command[0] == "init") {
@@ -489,7 +491,7 @@ func parse(arguments []string) (options, error) {
 			continue
 		}
 		name, value, inline := strings.Cut(argument, "=")
-		if !slices.Contains([]string{"--project", "--config", "--format", "--mode", "--base", "--only", "--color", "--php-runtime", "--php-target", "--commits", "--composer-root", "--agents", "--instructions", "--hooks", "--runtime-version"}, name) {
+		if !slices.Contains([]string{"--fail-on", "--project", "--config", "--format", "--mode", "--base", "--only", "--color", "--php-runtime", "--php-target", "--commits", "--composer-root", "--agents", "--instructions", "--hooks", "--runtime-version"}, name) {
 			return result, fmt.Errorf("unknown option %q", name)
 		}
 		if seen[name] {
@@ -513,6 +515,8 @@ func parse(arguments []string) (options, error) {
 			result.hooks = value
 		case "--runtime-version":
 			result.runtimeVersion = value
+		case "--fail-on":
+			result.failOn = value
 		case "--agents":
 			result.agents = value
 		case "--only":

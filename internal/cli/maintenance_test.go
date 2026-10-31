@@ -56,7 +56,7 @@ func TestOfflineUpdatesAreExplicitlyIncompleteAndDoNotInvokeDocker(t *testing.T)
 }
 
 func TestMaintenanceFlagsCannotLeakIntoOtherCommands(t *testing.T) {
-	for _, args := range [][]string{{"check", "--security"}, {"init", "--offline"}, {"doctor", "--direct"}, {"updates", "--mode=full"}, {"updates", "--format=compact"}, {"updates", "--hooks=all"}, {"config", "show", "--hooks=all"}, {"updates", "--runtime-version=8.4.1"}} {
+	for _, args := range [][]string{{"check", "--fail-on=security"}, {"doctor", "--fail-on=security"}, {"updates", "--fail-on=warning"}, {"check", "--security"}, {"init", "--offline"}, {"doctor", "--direct"}, {"updates", "--mode=full"}, {"updates", "--format=compact"}, {"updates", "--hooks=all"}, {"config", "show", "--hooks=all"}, {"updates", "--runtime-version=8.4.1"}} {
 		var stdout, stderr bytes.Buffer
 		if code := Run(args, project(t), &stdout, &stderr); code != 2 {
 			t.Fatalf("%v: exit %d %s %s", args, code, &stdout, &stderr)
@@ -100,5 +100,26 @@ func TestCompletionWithCleanScopedDiffNeedsNoWorker(t *testing.T) {
 		if code != 0 || strings.TrimSpace(stdout.String()) != "{}" || stderr.Len() != 0 {
 			t.Fatalf("%s exit %d stdout=%s stderr=%s", client, code, &stdout, &stderr)
 		}
+	}
+}
+
+func TestUpdatesTextListsOnlyProjectsNeedingAttention(t *testing.T) {
+	covered, uncovered := true, false
+	var output bytes.Buffer
+	writeUpdates(&output, projectupdates.Report{Complete: true,
+		Packages: []projectupdates.Package{{Name: "acme/lib", Current: "1.0.0", Latest: "1.0.1", Advisories: []projectupdates.Advisory{{ID: "PKSA-1", Title: "Bug", Affected: "<1.0.1", Severity: "high"}}}},
+		Projects: []projectupdates.Project{
+			{Ecosystem: "drupal", ID: "fine", Status: "supported", SecurityCovered: &covered},
+			{Ecosystem: "drupal", ID: "uncovered", Status: "supported", SecurityCovered: &uncovered},
+			{Ecosystem: "drupal", ID: "old", Status: "unsupported"},
+		}})
+	text := output.String()
+	for _, want := range []string{"PKSA-1 [high]: Bug", "drupal/uncovered", "drupal/old", "1 supported project(s) not listed"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q in:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "drupal/fine") {
+		t.Fatalf("supported project listed:\n%s", text)
 	}
 }

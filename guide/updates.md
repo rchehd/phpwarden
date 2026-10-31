@@ -9,6 +9,7 @@ phpwarden updates
 phpwarden updates --security --no-dev
 phpwarden updates --direct --runtime-version 8.3.26 --format json
 phpwarden updates --offline
+phpwarden updates --fail-on security
 ```
 
 `doctor` reads project configuration, Git access, Composer/Drupal dependency metadata, explicit native config paths and local worker compatibility. JSON/YAML configs receive syntax checks; other native configs are checked for readability. Semantic validation still requires their analyzer. It runs no analyzers, installs no dependencies and pulls/builds no images. Setup errors return exit 3; warnings alone return 0.
@@ -31,4 +32,4 @@ updates:
   offline: false
 ```
 
-Metadata is stored in a private user cache, keyed by source and Composer input/toolset identity. Fresh cached data avoids network and worker startup; offline mode never fetches. A failed refresh can use dated stale data up to `max_stale_hours` but returns incomplete status. Missing sources, malformed metadata, changed inputs and incomplete repository coverage return exit 3, never a clean claim that everything is current. Complete assessments return 0, even when updates are available; invalid input returns 2. Text and JSON are supported. `updates` assesses project dependencies; it does not update the PHPWarden executable.
+Metadata is stored in a private user cache, keyed by source and Composer input/toolset identity. Fresh cached data avoids network and worker startup; offline mode never fetches. A failed refresh can use dated stale data up to `max_stale_hours` but returns incomplete status. Missing sources, malformed metadata, changed inputs and incomplete repository coverage return exit 3, never a clean claim that everything is current. Complete assessments return 0, even when updates are available; invalid input returns 2. `--fail-on security` returns 1 for advisories the project has not accepted and for insecure or revoked releases; incomplete data still returns 3. Text output lists only projects that need attention, and JSON keeps all of them. Text and JSON are supported. `updates` assesses project dependencies; it does not update the PHPWarden executable.

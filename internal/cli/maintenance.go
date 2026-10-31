@@ -25,7 +25,7 @@ func projectMaintenance(ctx context.Context, args options, cwd string, stdout, s
 	}
 	locationOptions := config.LocationOptions{CWD: cwd, Project: args.project, Config: args.config}
 	if args.command[0] == "doctor" {
-		if args.security || args.direct || args.noDev || args.offline || args.runtimeVersion != "" {
+		if args.security || args.direct || args.noDev || args.offline || args.runtimeVersion != "" || args.failOn != "" {
 			return fail(stdout, stderr, args, "usage", fmt.Errorf("update filters require updates"))
 		}
 		result := doctor.Run(ctx, locationOptions, runner.Exec{})
@@ -51,6 +51,9 @@ func projectMaintenance(ctx context.Context, args options, cwd string, stdout, s
 			}
 		}
 		return result.ExitCode
+	}
+	if args.failOn != "" && args.failOn != "security" {
+		return fail(stdout, stderr, args, "usage", fmt.Errorf("--fail-on accepts only security"))
 	}
 	location, err := config.Resolve(locationOptions)
 	if err != nil {
@@ -80,6 +83,10 @@ func projectMaintenance(ctx context.Context, args options, cwd string, stdout, s
 		result.Complete, result.ExitCode = false, 3
 		result.Notes = append(result.Notes, "Project configuration or dependency metadata changed during update assessment; rerun it.")
 	}
+	if issues := result.SecurityIssues(); args.failOn == "security" && issues > 0 && result.ExitCode == 0 {
+		result.ExitCode = 1
+		result.Notes = append(result.Notes, fmt.Sprintf("Blocking: %d security issue(s) with --fail-on security.", issues))
+	}
 	if args.format == "json" {
 		if err := writeJSON(stdout, result); err != nil {
 			fmt.Fprintln(stderr, err)
@@ -107,8 +114,13 @@ func writeUpdates(output io.Writer, result projectupdates.Report) {
 	}
 	fmt.Fprintln(output, "  "+result.PHP.Note)
 	if len(result.Projects) > 0 {
+		hidden := 0
 		fmt.Fprintln(output, "\nProject release status")
 		for _, item := range result.Projects {
+			if item.Status == "supported" && (item.SecurityCovered == nil || *item.SecurityCovered) {
+				hidden++
+				continue
+			}
 			fmt.Fprintf(output, "  %s/%s %s · %s\n", item.Ecosystem, item.ID, item.Current, item.Status)
 			if item.SecurityCovered != nil && !*item.SecurityCovered {
 				fmt.Fprintln(output, "    Not covered by the upstream security advisory policy; this alone does not establish a vulnerability.")
@@ -119,6 +131,9 @@ func writeUpdates(output io.Writer, result projectupdates.Report) {
 			if item.ReleaseURL != "" {
 				fmt.Fprintln(output, "    "+item.ReleaseURL)
 			}
+		}
+		if hidden > 0 {
+			fmt.Fprintf(output, "  %d supported project(s) not listed; use --format json for all.\n", hidden)
 		}
 	}
 	for _, item := range result.Packages {
@@ -135,7 +150,11 @@ func writeUpdates(output io.Writer, result projectupdates.Report) {
 		}
 		fmt.Fprintf(output, "\n%s  %s → %s · %s\n", item.Name, item.Current, latest, label)
 		for _, advisory := range item.Advisories {
-			fmt.Fprintf(output, "  %s: %s\n  Affected: %s\n", advisory.ID, advisory.Title, advisory.Affected)
+			severity := ""
+			if advisory.Severity != "" {
+				severity = " [" + advisory.Severity + "]"
+			}
+			fmt.Fprintf(output, "  %s%s: %s\n  Affected: %s\n", advisory.ID, severity, advisory.Title, advisory.Affected)
 			if advisory.Ignored {
 				fmt.Fprintln(output, "  Ignored by project Composer policy; shown for upgrade planning.")
 			}

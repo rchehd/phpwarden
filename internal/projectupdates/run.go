@@ -1,6 +1,7 @@
 package projectupdates
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"fmt"
@@ -10,6 +11,32 @@ import (
 	"strings"
 	"time"
 )
+
+func severityRank(item Package) int {
+	highest := 0
+	for _, advisory := range item.Advisories {
+		highest = max(highest, map[string]int{"low": 1, "medium": 2, "high": 3, "critical": 4}[strings.ToLower(advisory.Severity)])
+	}
+	return highest
+}
+
+// SecurityIssues counts advisories the project has not accepted and releases Drupal.org marks insecure or revoked.
+func (report Report) SecurityIssues() int {
+	total := 0
+	for _, item := range report.Packages {
+		for _, advisory := range item.Advisories {
+			if !advisory.Ignored {
+				total++
+			}
+		}
+	}
+	for _, item := range report.Projects {
+		if item.Status == "insecure" || item.Status == "revoked" {
+			total++
+		}
+	}
+	return total
+}
 
 func ValidateRuntime(version, branch string) error {
 	if version != "" && (!exactVersion.MatchString(version) || !strings.HasPrefix(version, branch+".")) {
@@ -147,6 +174,9 @@ func Run(ctx context.Context, request Request) Report {
 		}
 		if len(b.Advisories) > 0 && len(a.Advisories) == 0 {
 			return 1
+		}
+		if order := cmp.Compare(severityRank(b), severityRank(a)); order != 0 {
+			return order
 		}
 		return strings.Compare(a.Name, b.Name)
 	})

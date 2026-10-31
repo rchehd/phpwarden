@@ -55,8 +55,8 @@ func TestUpdateInventoryFiltersAndRuntimeCertainty(t *testing.T) {
 		options Options
 		names   []string
 	}{
-		{Options{}, []string{"acme/dev", "drupal/core", "acme/direct", "acme/transitive"}},
-		{Options{Security: true}, []string{"acme/dev", "drupal/core"}},
+		{Options{}, []string{"drupal/core", "acme/dev", "acme/direct", "acme/transitive"}},
+		{Options{Security: true}, []string{"drupal/core", "acme/dev"}},
 		{Options{Direct: true, NoDev: true}, []string{"drupal/core", "acme/direct"}},
 		{Options{Security: true, NoDev: true, RuntimeVersion: "8.3.20"}, []string{"drupal/core"}},
 	} {
@@ -362,5 +362,21 @@ func TestLivePublicMetadataAndComposer(t *testing.T) {
 	t.Log(string(encoded))
 	if !result.Complete || result.ExitCode != 0 || result.PHP.Latest == "" || result.PHP.Support == "unknown" || len(result.Packages) != 1 || result.Packages[0].Name != "psr/log" || result.Packages[0].UpdateType != "patch" {
 		t.Fatalf("live assessment incomplete: %s", encoded)
+	}
+}
+
+func TestSecurityIssuesAndSeverityOrder(t *testing.T) {
+	report := Report{
+		Packages: []Package{
+			{Name: "ignored", Advisories: []Advisory{{ID: "a", Ignored: true}}},
+			{Name: "open", Advisories: []Advisory{{ID: "b", Severity: "medium"}, {ID: "c", Ignored: true}}},
+		},
+		Projects: []Project{{ID: "supported", Status: "supported"}, {ID: "old", Status: "unsupported"}, {ID: "bad", Status: "insecure"}, {ID: "gone", Status: "revoked"}},
+	}
+	if got := report.SecurityIssues(); got != 3 {
+		t.Fatalf("security issues: %d", got)
+	}
+	if severityRank(Package{Advisories: []Advisory{{Severity: "low"}, {Severity: "CRITICAL"}}}) <= severityRank(Package{Advisories: []Advisory{{Severity: "high"}}}) {
+		t.Fatal("critical must rank above high")
 	}
 }
