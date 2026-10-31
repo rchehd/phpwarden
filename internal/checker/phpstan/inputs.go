@@ -42,6 +42,13 @@ func ContextHash(root string) string {
 func contextDigest(root string) (string, error) {
 	hash := sha256.New()
 	err := filepath.WalkDir(root, func(current string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil && current != root && (os.IsPermission(walkErr) || os.IsNotExist(walkErr)) {
+			fmt.Fprintf(hash, "unavailable:%s\x00", filepath.ToSlash(strings.TrimPrefix(current, root)))
+			if entry != nil && entry.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
 		if walkErr != nil {
 			return fmt.Errorf("cannot inspect PHPStan context %q", current)
 		}
@@ -56,12 +63,21 @@ func contextDigest(root string) (string, error) {
 		}
 		name, _ := filepath.Rel(root, current)
 		name = filepath.ToSlash(name)
+		if projectpath.Volatile(name) {
+			if entry.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
 		fmt.Fprintf(hash, "%d:%s:%s", len(name), name, entry.Type())
 		if entry.IsDir() {
 			hash.Write([]byte{0})
 			return nil
 		}
 		info, err := entry.Info()
+		if os.IsNotExist(err) {
+			return nil
+		}
 		if err != nil {
 			return fmt.Errorf("cannot inspect PHPStan context %q", name)
 		}

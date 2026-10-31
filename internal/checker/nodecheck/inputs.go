@@ -78,6 +78,12 @@ func ContextHash(root string) string {
 			return nil
 		}
 		name, _ := filepath.Rel(root, current)
+		if projectpath.Volatile(name) {
+			if entry.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
 		info, err := entry.Info()
 		if err != nil {
 			return err

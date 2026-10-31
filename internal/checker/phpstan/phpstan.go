@@ -113,9 +113,6 @@ func analyse(ctx context.Context, root, composerRoot string, selection scope.Sel
 	if ctx.Err() != nil {
 		return fail("error", "checker_timeout", "PHPStan execution context expired")
 	}
-	if _, err := contextDigest(root); err != nil {
-		return fail("error", "context_invalid", err.Error())
-	}
 	selected, autoload, err := prepare(root, composerRoot, cfg)
 	if err != nil {
 		return fail("error", "config_invalid", err.Error())

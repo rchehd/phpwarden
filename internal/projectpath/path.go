@@ -4,8 +4,24 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
+
+var volatileNames = []string{".idea", ".vscode", ".ddev", ".cache", ".phpunit.cache", ".phpunit.result.cache", ".DS_Store"}
+
+// Volatile reports editor, environment and site runtime data that analyzers do not read, so writes there must not invalidate a run.
+func Volatile(relative string) bool {
+	parts := strings.Split(filepath.ToSlash(relative), "/")
+	last := len(parts) - 1
+	if slices.Contains(volatileNames, parts[last]) {
+		return true
+	}
+	if last >= 1 && parts[last] == "simpletest" && parts[last-1] == "sites" {
+		return true
+	}
+	return last >= 2 && parts[last-2] == "sites" && (parts[last] == "files" || parts[last] == "private")
+}
 
 func Validate(value string) error {
 	if value == "" || strings.ContainsAny(value, "\\\x00") || strings.HasPrefix(value, "/") ||

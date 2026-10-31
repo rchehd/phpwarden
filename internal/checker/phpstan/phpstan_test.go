@@ -185,3 +185,44 @@ func TestCustomVendorAutoloadFunctionsAreLoadedOnce(t *testing.T) {
 		t.Fatalf("custom vendor autoload failed: %+v", result)
 	}
 }
+
+func TestContextIgnoresRuntimeDataButNotAnalysisInputs(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "web/modules/custom/demo/demo.module", "<?php\n")
+	write(t, root, "vendor/autoload.php", "<?php\n")
+	runtime := []string{"web/sites/default/files/css/a.css", ".idea/workspace.xml", ".ddev/db_snapshots/a", "node_modules/.cache/a"}
+	for _, name := range runtime {
+		write(t, root, name, "old")
+	}
+	before := ContextHash(root)
+	for _, name := range runtime {
+		write(t, root, name, "changed")
+		write(t, root, name+".new", "new")
+	}
+	if ContextHash(root) != before {
+		t.Fatal("runtime data invalidated the analysis context")
+	}
+	for _, name := range []string{"vendor/new.php", "web/modules/custom/demo/new.php", "web/.htaccess"} {
+		current := ContextHash(root)
+		write(t, root, name, "changed")
+		if ContextHash(root) == current {
+			t.Fatalf("%s did not invalidate the analysis context", name)
+		}
+	}
+}
+
+func TestContextToleratesUnreadableDirectories(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	root := t.TempDir()
+	write(t, root, "web/uploads/a.txt", "data")
+	locked := filepath.Join(root, "web/uploads")
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(locked, 0o755)
+	if _, err := contextDigest(root); err != nil {
+		t.Fatalf("unreadable directory failed the analysis context: %v", err)
+	}
+}

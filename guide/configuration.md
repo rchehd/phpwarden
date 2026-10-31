@@ -114,7 +114,7 @@ Rebuild or pull matching worker images together with the CLI to use this setting
 
 ## Repeated and concurrent runs
 
-Checks use separate temporary directories and analyzer caches for every run. Shared Composer advisories use a private cache, an interprocess lock, and atomic replacement. A cancelled process releases its locks; checker subprocess groups and Docker containers are cleaned up on exit. Fixes on the same project wait for one another without creating lock files in the source tree. Input hashes and the selected Git scope are checked again before accepting a result.
+Checks use separate temporary directories and analyzer caches for every run. Shared Composer advisories use a private cache, an interprocess lock, and atomic replacement. A cancelled process releases its locks; checker subprocess groups and Docker containers are cleaned up on exit. Fixes on the same project wait for one another without creating lock files in the source tree. Input hashes and the selected Git scope are checked again before accepting a result. Editor, environment and site runtime data such as `.idea`, `.ddev` and `sites/*/files` are not treated as inputs, so a running site or an open editor does not invalidate a check.
 
 The public `check` command can reuse complete results for selected file-only checks. Enable this explicitly:
 
