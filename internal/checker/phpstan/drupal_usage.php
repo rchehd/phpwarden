@@ -19,10 +19,22 @@ final class PHPWardenDrupalUsageProvider extends ReflectionBasedMemberUsageProvi
     /** @var array<string, array<string, array<string, true>>> */
     private array $yamlReferences = [];
 
+    /** @var list<string> */
+    private array $customRoots;
+
+    /** @param list<string> $customRoots */
+    public function __construct(array $customRoots)
+    {
+        $this->customRoots = array_map(static fn(string $root): string => (realpath($root) ?: $root) . '/', $customRoots);
+    }
+
     public function shouldMarkMethodAsUsed(ReflectionMethod $method): ?VirtualUsageData
     {
         if ($method->isConstructor()) {
             return VirtualUsageData::withNote('Drupal builds services, plugins, forms and controllers');
+        }
+        if ($this->overridesForeign($method->getDeclaringClass(), static fn(ReflectionClass $class): bool => $class->hasMethod($method->getName()))) {
+            return VirtualUsageData::withNote('Overrides code outside the custom roots, such as Drupal core or contrib');
         }
         foreach ($method->getAttributes() as $attribute) {
             if ($this->drupalAttribute($attribute->getName())) {
@@ -51,6 +63,56 @@ final class PHPWardenDrupalUsageProvider extends ReflectionBasedMemberUsageProvi
             return VirtualUsageData::withNote('Referenced from module YAML');
         }
         return null;
+    }
+
+    protected function shouldMarkConstantAsUsed(ReflectionClassConstant $constant): ?VirtualUsageData
+    {
+        return $this->foreignUsage($constant->getDeclaringClass(), static fn(ReflectionClass $class): bool => $class->hasConstant($constant->getName()));
+    }
+
+    protected function shouldMarkPropertyAsRead(ReflectionProperty $property): ?VirtualUsageData
+    {
+        return $this->foreignUsage($property->getDeclaringClass(), static fn(ReflectionClass $class): bool => $class->hasProperty($property->getName()));
+    }
+
+    protected function shouldMarkPropertyAsWritten(ReflectionProperty $property): ?VirtualUsageData
+    {
+        return $this->foreignUsage($property->getDeclaringClass(), static fn(ReflectionClass $class): bool => $class->hasProperty($property->getName()));
+    }
+
+    private function foreignUsage(ReflectionClass $class, callable $declares): ?VirtualUsageData
+    {
+        return $this->overridesForeign($class, $declares) ? VirtualUsageData::withNote('Overrides code outside the custom roots, such as Drupal core or contrib') : null;
+    }
+
+    // The detector's vendor provider misses Drupal core and contrib, which Composer installs outside vendor.
+    private function overridesForeign(ReflectionClass $class, callable $declares): bool
+    {
+        foreach ([...$class->getInterfaces(), ...$class->getTraits()] as $ancestor) {
+            if ($declares($ancestor) && $this->foreignFile($ancestor)) {
+                return true;
+            }
+        }
+        for ($parent = $class->getParentClass(); $parent !== false; $parent = $parent->getParentClass()) {
+            if ($declares($parent) && $this->foreignFile($parent)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function foreignFile(ReflectionClass $class): bool
+    {
+        $file = $class->getFileName();
+        if ($file === false) {
+            return false;
+        }
+        foreach ($this->customRoots as $root) {
+            if (str_starts_with($file, $root)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private function drupalAttribute(string $name): bool

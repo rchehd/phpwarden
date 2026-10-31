@@ -102,3 +102,59 @@ final class Hook {
 		t.Fatalf("Drupal entry points reported as dead: %+v %+v", result.Findings, result.Diagnostics)
 	}
 }
+
+func TestActualDeadCodeKeepsMembersOverridingCodeOutsideRoots(t *testing.T) {
+	root := t.TempDir()
+	bundle, _ := filepath.Abs("../../../tools/phpstan")
+	write(t, root, "web/core/lib/Core.php", `<?php
+
+namespace Core;
+
+interface FormInterface {
+  public function getFormId(): string;
+}
+
+abstract class BlockBase {
+  public const LABEL = 'base';
+  protected array $settings = [];
+
+  abstract public function build(): array;
+}
+`)
+	write(t, root, "src/demo/src/Block.php", `<?php
+
+namespace Acme;
+
+final class Block extends \Core\BlockBase implements \Core\FormInterface {
+  public const LABEL = 'demo';
+  protected array $settings = ['a'];
+
+  public function build(): array { return []; }
+
+  public function getFormId(): string { return 'demo'; }
+
+  public function forgotten(): void {}
+}
+
+class CustomBase {
+  public function helper(): void {}
+}
+
+final class CustomChild extends CustomBase {
+  public function helper(): void {}
+}
+`)
+	cfg := deadCodeConfig(t)
+	cfg.Tools.PHPStan.BootstrapFiles = []string{"web/core/lib/Core.php"}
+	file := "src/demo/src/Block.php"
+	selection := scope.Selection{Mode: "full", Files: []string{file}, LineMap: map[string][]scope.Range{file: nil}}
+	result := deadCode(context.Background(), root, selection, cfg, "", bundle, runner.Exec{})
+	got := []int{}
+	for _, finding := range result.Findings {
+		got = append(got, *finding.Line)
+	}
+	slices.Sort(got)
+	if len(result.Diagnostics) > 0 || !slices.Equal(got, []int{13, 17, 21}) {
+		t.Fatalf("got lines %v: %+v %+v", got, result.Findings, result.Diagnostics)
+	}
+}

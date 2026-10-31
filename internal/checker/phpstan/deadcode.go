@@ -3,7 +3,9 @@ package phpstan
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -17,12 +19,21 @@ import (
 //go:embed drupal_usage.php
 var drupalUsage []byte
 
-const drupalUsageNeon = `services:
+func drupalUsageNeon(root string, includes []string) []byte {
+	roots := []string{}
+	for _, name := range includes {
+		roots = append(roots, filepath.Join(root, filepath.FromSlash(name)))
+	}
+	encoded, _ := json.Marshal(roots)
+	return []byte(`services:
     -
         class: PHPWardenDrupalUsageProvider
+        arguments:
+            - ` + strings.ReplaceAll(string(encoded), "%", "%%") + `
         tags:
             - shipmonk.deadCode.memberUsageProvider
-`
+`)
+}
 
 func SelectDeadCode(selection scope.Selection, cfg config.DeadCode, profileID string) scope.Selection {
 	defaults, _ := profile.Lookup(profileID)
@@ -53,6 +64,6 @@ func deadCode(ctx context.Context, root string, selection scope.Selection, cfg c
 	return analyse(ctx, root, cfg.ComposerRoot, SelectDeadCode(selection, dead, cfg.Profile), settings, cfg.PHP.Target, dependencies, bundle, process, analysis{
 		id: "dead-code", paths: slices.Clone(cfg.Scope.Include), extensions: extensions, includes: []string{"vendor/shipmonk/dead-code-detector/rules.neon"},
 		identifier: "shipmonk.dead", severity: "warning", level: new(0), exclude: []string{"*/vendor/*", "*/node_modules/*"},
-		files: map[string][]byte{"drupal-usage.php": drupalUsage, "drupal-usage.neon": []byte(drupalUsageNeon)},
+		files: map[string][]byte{"drupal-usage.php": drupalUsage, "drupal-usage.neon": drupalUsageNeon(root, cfg.Scope.Include)},
 	})
 }
